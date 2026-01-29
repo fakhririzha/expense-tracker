@@ -13,7 +13,7 @@ interface RetirementProgressProps {
 export function RetirementProgress({
   currentNetWorth,
   targetAmount,
-  currency = "USD",
+  currency = "IDR",
 }: RetirementProgressProps) {
   if (!targetAmount || targetAmount <= 0) {
     return (
@@ -81,7 +81,7 @@ interface RetirementMilestoneProps {
 export function RetirementMilestones({
   currentNetWorth,
   targetAmount,
-  currency = "USD",
+  currency = "IDR",
 }: RetirementMilestoneProps) {
   const milestones = [
     { percent: 25, label: "25%" },

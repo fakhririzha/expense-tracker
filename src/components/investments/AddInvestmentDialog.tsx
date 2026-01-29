@@ -51,7 +51,7 @@ export function AddInvestmentDialog({ onSuccess }: AddInvestmentDialogProps) {
       name: "",
       quantity: 0,
       avgBuyPrice: 0,
-      currency: "USD",
+      currency: "IDR",
     },
   });
 
@@ -174,7 +174,7 @@ export function AddInvestmentDialog({ onSuccess }: AddInvestmentDialogProps) {
                 <FormItem>
                   <FormLabel>Currency</FormLabel>
                   <FormControl>
-                    <Input placeholder="USD" {...field} />
+                    <Input placeholder="IDR" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

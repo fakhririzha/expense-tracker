@@ -29,7 +29,7 @@ export default function RegisterPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [mainCurrency, setMainCurrency] = useState("USD");
+  const [mainCurrency, setMainCurrency] = useState("IDR");
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();

@@ -47,7 +47,7 @@ interface PortfolioTableProps {
 
 export function PortfolioTable({
   assets,
-  displayCurrency = "USD",
+  displayCurrency = "IDR",
 }: PortfolioTableProps) {
   const [sorting, setSorting] = useState<SortingState>([]);
 

@@ -57,7 +57,7 @@ export function AddAccountDialog({ onSuccess }: AddAccountDialogProps) {
     defaultValues: {
       name: "",
       type: "BANK",
-      currency: "USD",
+      currency: "IDR",
       balance: 0,
       description: "",
       isActive: true,
@@ -154,7 +154,7 @@ export function AddAccountDialog({ onSuccess }: AddAccountDialogProps) {
                   <FormItem>
                     <FormLabel>Currency</FormLabel>
                     <FormControl>
-                      <Input placeholder="USD" {...field} />
+                      <Input placeholder="IDR" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

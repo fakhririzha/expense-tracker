@@ -50,7 +50,7 @@ export default async function DashboardLayout({
     select: { mainCurrency: true },
   });
 
-  const mainCurrency = user?.mainCurrency || "USD";
+  const mainCurrency = user?.mainCurrency || "IDR";
 
   return (
     <CurrencyProvider mainCurrency={mainCurrency}>

@@ -10,7 +10,7 @@ import { z } from "zod";
 const recurringRuleSchema = z.object({
   name: z.string().min(1, "Name is required"),
   amount: z.number().positive("Amount must be positive"),
-  currency: z.string().default("USD"),
+  currency: z.string().default("IDR"),
   type: z.enum(["INCOME", "EXPENSE", "TRANSFER"]),
   interval: z.enum(["DAILY", "WEEKLY", "BIWEEKLY", "MONTHLY", "QUARTERLY", "YEARLY"]),
   nextDueDate: z.date(),

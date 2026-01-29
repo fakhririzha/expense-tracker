@@ -86,7 +86,7 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
       date: new Date(),
       accountId: "",
       categoryId: "",
-      currency: "USD",
+      currency: "IDR",
       exchangeRate: 1,
     },
   });

@@ -7,8 +7,8 @@ export function cn(...inputs: ClassValue[]) {
 
 export function formatCurrency(
   amount: number,
-  currency: string = "USD",
-  locale: string = "en-US"
+  currency: string = "IDR",
+  locale: string = "id-ID"
 ): string {
   return new Intl.NumberFormat(locale, {
     style: "currency",
@@ -24,7 +24,7 @@ export function formatPercentage(value: number, decimals: number = 2): string {
 
 export function formatNumber(
   value: number,
-  locale: string = "en-US"
+  locale: string = "id-ID"
 ): string {
   return new Intl.NumberFormat(locale, {
     minimumFractionDigits: 2,
@@ -41,7 +41,7 @@ export function formatDate(
   }
 ): string {
   const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleDateString("en-US", options);
+  return d.toLocaleDateString("id-ID", options);
 }
 
 export function getInitials(name: string): string {

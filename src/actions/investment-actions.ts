@@ -16,7 +16,7 @@ const investmentAssetSchema = z.object({
   name: z.string().optional(),
   quantity: z.number().positive("Quantity must be positive"),
   avgBuyPrice: z.number().positive("Average buy price must be positive"),
-  currency: z.string().default("USD"),
+  currency: z.string().default("IDR"),
 });
 
 const tradeSchema = z.object({

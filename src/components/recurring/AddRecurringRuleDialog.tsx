@@ -75,7 +75,7 @@ export function AddRecurringRuleDialog({ onSuccess }: AddRecurringRuleDialogProp
     defaultValues: {
       name: "",
       amount: 0,
-      currency: "USD",
+      currency: "IDR",
       type: "EXPENSE",
       interval: "MONTHLY",
       nextDueDate: new Date(),
