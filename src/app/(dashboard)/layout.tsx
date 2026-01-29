@@ -34,6 +34,16 @@ const navItems = [
   { href: "/dashboard/recurring", label: "Recurring", icon: RefreshCw },
 ];
 
+/**
+ * Render the authenticated dashboard layout and top navigation.
+ *
+ * Redirects to "/login" if there is no authenticated user. Wraps `children` in a CurrencyProvider
+ * using the user's `mainCurrency` (defaults to "IDR") and renders the header with branding,
+ * primary navigation, currency switcher, and user menu.
+ *
+ * @param children - Content to render inside the layout's main area
+ * @returns The dashboard layout React node containing the header and main content
+ */
 export default async function DashboardLayout({
   children,
 }: {

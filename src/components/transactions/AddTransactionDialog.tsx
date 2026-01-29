@@ -71,6 +71,14 @@ interface AddTransactionDialogProps {
   onSuccess?: () => void;
 }
 
+/**
+ * Render a dialog that lets the user create a new transaction (income, expense, or transfer) and handles its submission lifecycle.
+ *
+ * The dialog loads account and category options when opened, creates a transaction on submit, closes and resets on success, and surfaces errors to the form on failure.
+ *
+ * @param onSuccess - Optional callback invoked after a transaction is successfully created
+ * @returns The rendered Add Transaction dialog React element
+ */
 export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);

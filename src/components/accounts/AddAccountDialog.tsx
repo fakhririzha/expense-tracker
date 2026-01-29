@@ -48,6 +48,15 @@ interface AddAccountDialogProps {
   onSuccess?: () => void;
 }
 
+/**
+ * Renders a dialog containing a form to create a new financial account.
+ *
+ * The dialog includes fields for name, type, currency, initial balance, description,
+ * and an active flag. On successful submission the dialog closes and the form resets.
+ *
+ * @param onSuccess - Optional callback invoked after an account is successfully created
+ * @returns The Add Account dialog React element containing the account creation form
+ */
 export function AddAccountDialog({ onSuccess }: AddAccountDialogProps) {
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
