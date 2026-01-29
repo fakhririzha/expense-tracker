@@ -56,7 +56,7 @@ export default async function DashboardLayout({
     <CurrencyProvider mainCurrency={mainCurrency}>
       <div className="min-h-screen bg-background">
         {/* Top Navigation */}
-        <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60 mx-auto">
+        <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60">
           <div className="container flex h-14 items-center mx-auto">
             <div className="mr-4 flex">
               <Link href="/dashboard" className="mr-6 flex items-center space-x-2">
