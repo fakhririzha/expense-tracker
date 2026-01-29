@@ -17,7 +17,7 @@ type TransactionType = (typeof TransactionTypeEnum)[keyof typeof TransactionType
 
 const transactionSchema = z.object({
   amount: z.number().positive("Amount must be positive"),
-  currency: z.string().default("USD"),
+  currency: z.string().default("IDR"),
   exchangeRate: z.number().positive().default(1),
   type: z.enum(["INCOME", "EXPENSE", "TRANSFER"]),
   description: z.string().optional(),

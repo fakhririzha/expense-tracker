@@ -45,9 +45,16 @@ interface PortfolioTableProps {
   displayCurrency?: string;
 }
 
+/**
+ * Render a sortable, paginated table of portfolio assets.
+ *
+ * @param assets - Array of portfolio assets to display in the table
+ * @param displayCurrency - ISO currency code used to format market value and P&L columns (default: "IDR")
+ * @returns The rendered portfolio table React element
+ */
 export function PortfolioTable({
   assets,
-  displayCurrency = "USD",
+  displayCurrency = "IDR",
 }: PortfolioTableProps) {
   const [sorting, setSorting] = useState<SortingState>([]);
 

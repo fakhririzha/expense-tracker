@@ -68,6 +68,14 @@ interface TransactionTableProps {
   onDelete?: (id: string) => void;
 }
 
+/**
+ * Render an interactive table of transactions with sortable columns, filtering, pagination, and per-row actions.
+ *
+ * @param transactions - The list of transactions to display.
+ * @param onEdit - Optional callback invoked with the full transaction when the user chooses "Edit".
+ * @param onDelete - Optional callback invoked with the transaction id when the user chooses "Delete".
+ * @returns The rendered transaction table element.
+ */
 export function TransactionTable({
   transactions,
   onEdit,

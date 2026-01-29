@@ -25,11 +25,20 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+/**
+ * Render the registration page and handle user sign-up.
+ *
+ * Renders a form for creating a new account, manages loading and error states, validates that
+ * the password and confirmation match, invokes the `register` action with the provided data
+ * (including the selected main currency), and navigates to the login page on successful registration.
+ *
+ * @returns The React element for the registration page.
+ */
 export default function RegisterPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [mainCurrency, setMainCurrency] = useState("USD");
+  const [mainCurrency, setMainCurrency] = useState("IDR");
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();

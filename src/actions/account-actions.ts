@@ -19,7 +19,7 @@ type AccountType = (typeof AccountTypeEnum)[keyof typeof AccountTypeEnum];
 const accountSchema = z.object({
   name: z.string().min(1, "Name is required"),
   type: z.enum(["BANK", "CASH", "INVESTMENT", "LOAN", "CREDIT_CARD"]),
-  currency: z.string().default("USD"),
+  currency: z.string().default("IDR"),
   balance: z.number().default(0),
   description: z.string().optional(),
   isActive: z.boolean().default(true),
