@@ -76,8 +76,6 @@ export function TransactionTable({
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
-  console.log(transactions);
-
   const columns: ColumnDef<Transaction>[] = [
     {
       accessorKey: "date",
