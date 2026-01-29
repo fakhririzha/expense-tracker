@@ -65,6 +65,17 @@ interface AddRecurringRuleDialogProps {
   onSuccess?: () => void;
 }
 
+/**
+ * Render a dialog that lets the user create a recurring financial rule.
+ *
+ * The dialog loads available accounts when opened, validates input against
+ * the recurring rule schema, submits the form to create the rule, and surfaces
+ * any submission errors at the form root. On successful creation the dialog
+ * closes, the form resets, and the optional `onSuccess` callback is invoked.
+ *
+ * @param onSuccess - Optional callback invoked after a recurring rule is successfully created
+ * @returns The Add Recurring Rule dialog component
+ */
 export function AddRecurringRuleDialog({ onSuccess }: AddRecurringRuleDialogProps) {
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);

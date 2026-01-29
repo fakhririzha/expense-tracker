@@ -10,6 +10,16 @@ interface RetirementProgressProps {
   currency?: string;
 }
 
+/**
+ * Renders a retirement progress card that visualizes current net worth relative to a target and the remaining amount.
+ *
+ * If `targetAmount` is not provided or is less than or equal to zero, displays a prompt to set a retirement target.
+ *
+ * @param currentNetWorth - The user's current net worth used to compute progress.
+ * @param targetAmount - The retirement target amount; may be `null` to indicate no target set.
+ * @param currency - Currency code used for formatting amounts (defaults to "IDR").
+ * @returns The rendered React element for the retirement progress UI.
+ */
 export function RetirementProgress({
   currentNetWorth,
   targetAmount,
@@ -78,6 +88,14 @@ interface RetirementMilestoneProps {
   currency?: string;
 }
 
+/**
+ * Renders a vertical list of retirement milestones (25%, 50%, 75%, 100%) showing each milestone's label and its monetary value, with reached milestones visually highlighted.
+ *
+ * @param currentNetWorth - The current net worth used to compute progress toward the target.
+ * @param targetAmount - The retirement target amount used to compute milestone values.
+ * @param currency - Currency code used to format milestone values (defaults to "IDR").
+ * @returns A JSX element containing the milestone list with reached milestones styled as highlighted and unreached milestones muted.
+ */
 export function RetirementMilestones({
   currentNetWorth,
   targetAmount,

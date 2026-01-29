@@ -40,6 +40,15 @@ interface AddInvestmentDialogProps {
   onSuccess?: () => void;
 }
 
+/**
+ * Renders a modal dialog containing a form to add a new investment asset.
+ *
+ * The form validates input according to the investment schema, uppercases the symbol as typed,
+ * shows field and form-level errors, and handles creation via the `createInvestmentAsset` action.
+ *
+ * @param onSuccess - Optional callback invoked after a successful asset creation
+ * @returns The dialog React element that hosts the Add Investment form
+ */
 export function AddInvestmentDialog({ onSuccess }: AddInvestmentDialogProps) {
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
