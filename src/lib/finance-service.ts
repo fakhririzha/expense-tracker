@@ -154,25 +154,24 @@ export async function searchSymbols(query: string) {
 }
 
 // Get exchange rate between currencies
-export const getExchangeRate = unstable_cache(
-  async (fromCurrency: string, toCurrency: string): Promise<number | null> => {
-    if (fromCurrency === toCurrency) return 1;
-    
-    try {
-      const symbol = `${fromCurrency}${toCurrency}=X`;
-      const quote = await yahooFinance.quote(symbol);
-      return quote?.regularMarketPrice ?? null;
-    } catch (error) {
-      console.error(
-        `Error fetching exchange rate ${fromCurrency}/${toCurrency}:`,
-        error
-      );
-      return null;
-    }
-  },
-  ["exchange-rate"],
-  { revalidate: 3600 } // 1 hour
-);
+export async function getExchangeRate(
+  fromCurrency: string,
+  toCurrency: string
+): Promise<number | null> {
+  if (fromCurrency === toCurrency) return 1;
+
+  try {
+    const symbol = `${fromCurrency}${toCurrency}=X`;
+    const quote = await yahooFinance.quote(symbol);
+    return quote?.regularMarketPrice ?? null;
+  } catch (error) {
+    console.error(
+      `Error fetching exchange rate ${fromCurrency}/${toCurrency}:`,
+      error
+    );
+    return null;
+  }
+}
 
 // Calculate investment metrics
 export interface InvestmentMetrics {
