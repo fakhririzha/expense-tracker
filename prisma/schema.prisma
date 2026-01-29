@@ -1,0 +1,277 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== AUTH.JS MODELS ====================
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  mainCurrency  String    @default("USD") // User's preferred currency for reporting
+  
+  // Financial targets
+  retirementTarget Float?
+  monthlyBudget    Float?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Auth.js relations
+  accounts      AuthAccount[]
+  sessions      Session[]
+  
+  // Financial relations
+  financialAccounts FinancialAccount[]
+  transactions      Transaction[]
+  categories        Category[]
+  investmentAssets  InvestmentAsset[]
+  tradeHistory      TradeHistory[]
+  recurringRules    RecurringRule[]
+}
+
+model AuthAccount {
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@id([identifier, token])
+}
+
+// ==================== FINANCIAL MODELS ====================
+
+enum AccountType {
+  BANK
+  CASH
+  INVESTMENT
+  LOAN
+  CREDIT_CARD
+}
+
+model FinancialAccount {
+  id          String      @id @default(cuid())
+  name        String
+  type        AccountType
+  currency    String      @default("USD") // ISO currency code
+  balance     Float       @default(0)
+  description String?
+  isActive    Boolean     @default(true)
+  
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  transactions Transaction[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+  TRANSFER
+}
+
+model Category {
+  id       String          @id @default(cuid())
+  name     String
+  icon     String?
+  color    String?
+  type     TransactionType
+  isSystem Boolean         @default(false) // System categories can't be deleted
+  
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  transactions Transaction[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model Transaction {
+  id           String          @id @default(cuid())
+  amount       Float
+  currency     String          @default("USD") // Transaction currency
+  exchangeRate Float           @default(1) // Rate to convert to user's main currency
+  type         TransactionType
+  description  String?
+  date         DateTime        @default(now())
+  isRecurring  Boolean         @default(false)
+  
+  // Relations
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  accountId String
+  account   FinancialAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  
+  recurringRuleId String?
+  recurringRule   RecurringRule? @relation(fields: [recurringRuleId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([accountId])
+  @@index([categoryId])
+  @@index([date])
+}
+
+// ==================== INVESTMENT MODELS ====================
+
+model InvestmentAsset {
+  id          String  @id @default(cuid())
+  symbol      String  // e.g., AAPL, BTC-USD
+  name        String? // e.g., Apple Inc.
+  quantity    Float
+  avgBuyPrice Float   // Cost basis per unit
+  currency    String  @default("USD") // Asset's trading currency
+  
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  tradeHistory TradeHistory[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, symbol])
+  @@index([userId])
+}
+
+enum TradeType {
+  BUY
+  SELL
+}
+
+model TradeHistory {
+  id           String    @id @default(cuid())
+  type         TradeType
+  quantity     Float
+  pricePerUnit Float
+  totalAmount  Float
+  fees         Float     @default(0)
+  date         DateTime  @default(now())
+  notes        String?
+  
+  // Realized PnL (only for SELL trades)
+  realizedPnL Float?
+  
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  assetId String
+  asset   InvestmentAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([assetId])
+  @@index([date])
+}
+
+// ==================== RECURRING TRANSACTIONS ====================
+
+enum RecurringInterval {
+  DAILY
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+model RecurringRule {
+  id          String            @id @default(cuid())
+  name        String
+  amount      Float
+  currency    String            @default("USD")
+  type        TransactionType
+  interval    RecurringInterval
+  nextDueDate DateTime
+  endDate     DateTime?
+  isActive    Boolean           @default(true)
+  
+  // Template data for creating transactions
+  description String?
+  categoryId  String?
+  accountId   String?
+  
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  transactions Transaction[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([nextDueDate])
+}
+
+// ==================== EXCHANGE RATES CACHE ====================
+
+model ExchangeRate {
+  id           String   @id @default(cuid())
+  fromCurrency String
+  toCurrency   String
+  rate         Float
+  fetchedAt    DateTime @default(now())
+
+  @@unique([fromCurrency, toCurrency])
+  @@index([fetchedAt])
+}
