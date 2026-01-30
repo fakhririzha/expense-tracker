@@ -52,7 +52,10 @@ export function useExchangeRateQuery({
       }
 
       const rate = await fetchExchangeRateAction(mainCurrency, displayCurrency)
-      return rate ?? 1
+      if (rate === null) {
+        throw new Error(`Failed to fetch exchange rate for ${mainCurrency} to ${displayCurrency}`)
+      }
+      return rate
     },
     // Skip fetching if currencies are the same (rate is always 1)
     enabled: enabled && !isSameCurrency,
