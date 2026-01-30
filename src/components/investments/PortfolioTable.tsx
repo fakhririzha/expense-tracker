@@ -9,7 +9,7 @@ import {
     getSortedRowModel,
     useReactTable,
 } from "@tanstack/react-table";
-import { ArrowUpDown, TrendingDown, TrendingUp } from "lucide-react";
+import { ArrowUpDown, Loader2, RefreshCw, TrendingDown, TrendingUp } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -43,6 +43,9 @@ export interface PortfolioAsset {
 interface PortfolioTableProps {
   assets: PortfolioAsset[];
   displayCurrency?: string;
+  onRefresh?: () => void;
+  isRefreshing?: boolean;
+  lastUpdated?: Date;
 }
 
 /**
@@ -50,11 +53,17 @@ interface PortfolioTableProps {
  *
  * @param assets - Array of portfolio assets to display in the table
  * @param displayCurrency - ISO currency code used to format market value and P&L columns (default: "IDR")
+ * @param onRefresh - Optional callback to refresh prices
+ * @param isRefreshing - Whether prices are being refreshed
+ * @param lastUpdated - Last update time for prices
  * @returns The rendered portfolio table React element
  */
 export function PortfolioTable({
   assets,
   displayCurrency = "IDR",
+  onRefresh,
+  isRefreshing = false,
+  lastUpdated,
 }: PortfolioTableProps) {
   const [sorting, setSorting] = useState<SortingState>([]);
 
@@ -220,6 +229,28 @@ export function PortfolioTable({
 
   return (
     <div className="space-y-4">
+      {onRefresh && (
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-muted-foreground">
+            {lastUpdated && (
+              <span>Last updated: {lastUpdated.toLocaleTimeString()}</span>
+            )}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onRefresh}
+            disabled={isRefreshing}
+          >
+            {isRefreshing ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-2 h-4 w-4" />
+            )}
+            Refresh Prices
+          </Button>
+        </div>
+      )}
       <div className="rounded-md border">
         <Table>
           <TableHeader>

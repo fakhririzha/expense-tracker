@@ -1,6 +1,6 @@
 "use client";
 
-import { getPortfolio, getPortfolioSummary } from "@/actions/investment-actions";
+import { getPortfolio, getPortfolioSummary, refreshPortfolioPrices } from "@/actions/investment-actions";
 import { AddInvestmentDialog } from "@/components/investments/AddInvestmentDialog";
 import {
   PortfolioAsset,
@@ -26,6 +26,8 @@ export default function InvestmentsPage() {
   const [assets, setAssets] = useState<PortfolioAsset[]>([]);
   const [summary, setSummary] = useState<PortfolioSummaryData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | undefined>();
 
   const loadData = async () => {
     setIsLoading(true);
@@ -37,6 +39,7 @@ export default function InvestmentsPage() {
 
       if (portfolioResult.success && portfolioResult.data) {
         setAssets(portfolioResult.data as PortfolioAsset[]);
+        setLastUpdated(new Date());
       }
 
       if (
@@ -50,6 +53,20 @@ export default function InvestmentsPage() {
       console.error("Failed to load portfolio:", error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      // Trigger server-side revalidation
+      await refreshPortfolioPrices();
+      // Reload data to get fresh prices
+      await loadData();
+    } catch (error) {
+      console.error("Failed to refresh prices:", error);
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
@@ -182,7 +199,12 @@ export default function InvestmentsPage() {
             <CardTitle>Holdings</CardTitle>
           </CardHeader>
           <CardContent>
-            <PortfolioTable assets={assets} />
+            <PortfolioTable
+              assets={assets}
+              onRefresh={handleRefresh}
+              isRefreshing={isRefreshing}
+              lastUpdated={lastUpdated}
+            />
           </CardContent>
         </Card>
       )}

@@ -6,6 +6,7 @@ import {
     calculateInvestmentMetrics,
     getAssetPrice,
     getMultipleAssetPrices,
+    searchSymbols,
 } from "@/lib/finance-service";
 import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
@@ -350,5 +351,43 @@ export async function getTradeHistory(assetId?: string) {
   } catch (error) {
     console.error("Get trade history error:", error);
     return { success: false, error: "Failed to fetch trade history", data: [] };
+  }
+}
+
+export async function searchSymbolsAction(query: string) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return { success: false, error: "Unauthorized", data: [] };
+    }
+
+    if (!query || query.length < 2) {
+      return { success: true, data: [] };
+    }
+
+    const results = await searchSymbols(query);
+    return { success: true, data: results };
+  } catch (error) {
+    console.error("Search symbols error:", error);
+    return { success: false, error: "Failed to search symbols", data: [] };
+  }
+}
+
+export async function refreshPortfolioPrices() {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    // Revalidate portfolio data by triggering path revalidation
+    // This will cause fresh data to be fetched on next load
+    revalidatePath("/dashboard/investments", "page");
+    revalidatePath("/dashboard", "page");
+    
+    return { success: true };
+  } catch (error) {
+    console.error("Refresh portfolio prices error:", error);
+    return { success: false, error: "Failed to refresh prices" };
   }
 }

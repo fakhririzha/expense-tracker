@@ -17,6 +17,7 @@ export interface QuoteResult {
   marketCap?: number;
   fiftyTwoWeekHigh?: number;
   fiftyTwoWeekLow?: number;
+  error?: string;
 }
 
 export interface HistoricalDataPoint {
@@ -27,6 +28,26 @@ export interface HistoricalDataPoint {
   close: number;
   volume: number;
   adjClose?: number;
+}
+
+export interface SearchResult {
+  symbol: string;
+  shortname?: string;
+  longname?: string;
+  exchDisp?: string;
+  typeDisp?: string;
+}
+
+// Custom error class for Yahoo Finance errors
+export class YahooFinanceError extends Error {
+  constructor(
+    message: string,
+    public code: string,
+    public symbol?: string
+  ) {
+    super(message);
+    this.name = "YahooFinanceError";
+  }
 }
 
 // Cache asset prices for 5 minutes
@@ -58,7 +79,15 @@ export const getAssetPrice = unstable_cache(
       };
     } catch (error) {
       console.error(`Error fetching price for ${symbol}:`, error);
-      return null;
+      // Return error info instead of null for better UX
+      return {
+        symbol,
+        regularMarketPrice: 0,
+        regularMarketChange: 0,
+        regularMarketChangePercent: 0,
+        regularMarketPreviousClose: 0,
+        error: error instanceof Error ? error.message : "Failed to fetch price",
+      };
     }
   },
   ["asset-price"],
@@ -126,29 +155,34 @@ export const getHistoricalData = unstable_cache(
   { revalidate: 3600 } // 1 hour
 );
 
-interface SearchQuoteResult {
-  symbol?: string;
-  shortname?: string;
-  longname?: string;
-  exchDisp?: string;
-  typeDisp?: string;
-}
-
 // Search for symbols
-export async function searchSymbols(query: string) {
+export async function searchSymbols(query: string): Promise<SearchResult[]> {
+  if (!query || query.trim().length < 2) {
+    return [];
+  }
+
   try {
-    const result = await yahooFinance.search(query);
-    return (result.quotes as SearchQuoteResult[])
-      .filter((quote) => quote.symbol)
-      .map((quote) => ({
-        symbol: quote.symbol!,
-        shortname: quote.shortname,
-        longname: quote.longname,
-        exchDisp: quote.exchDisp,
-        typeDisp: quote.typeDisp,
-      }));
+    const result = await yahooFinance.search(query, {
+      newsCount: 0,
+      enableFuzzyQuery: true,
+    });
+    
+    return (result.quotes || [])
+      .filter((quote: unknown) => {
+        const q = quote as Record<string, unknown>;
+        return typeof q.symbol === "string" && q.symbol.length > 0 && q.isYahooFinance !== false;
+      })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .map((quote: any) => ({
+        symbol: quote.symbol as string,
+        shortname: quote.shortname as string | undefined,
+        longname: quote.longname as string | undefined,
+        exchDisp: quote.exchDisp as string | undefined,
+        typeDisp: quote.typeDisp as string | undefined,
+      }))
+      .slice(0, 10); // Limit to 10 results for performance
   } catch (error) {
-    console.error(`Error searching for ${query}:`, error);
+    console.error(`Error searching for "${query}":`, error);
     return [];
   }
 }

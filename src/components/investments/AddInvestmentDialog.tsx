@@ -1,7 +1,15 @@
 "use client";
 
-import { createInvestmentAsset } from "@/actions/investment-actions";
+import { createInvestmentAsset, searchSymbolsAction } from "@/actions/investment-actions";
 import { Button } from "@/components/ui/button";
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from "@/components/ui/command";
 import {
     Dialog,
     DialogContent,
@@ -20,11 +28,25 @@ import {
     FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus } from "lucide-react";
-import { useState } from "react";
+import { Check, ChevronsUpDown, Loader2, Plus, Search } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+
+interface SearchResult {
+  symbol: string;
+  shortname?: string;
+  longname?: string;
+  exchDisp?: string;
+  typeDisp?: string;
+}
 
 const investmentFormSchema = z.object({
   symbol: z.string().min(1, "Symbol is required").toUpperCase(),
@@ -43,8 +65,9 @@ interface AddInvestmentDialogProps {
 /**
  * Renders a modal dialog containing a form to add a new investment asset.
  *
- * The form validates input according to the investment schema, uppercases the symbol as typed,
- * shows field and form-level errors, and handles creation via the `createInvestmentAsset` action.
+ * The form validates input according to the investment schema, includes symbol search
+ * with Yahoo Finance autocomplete, shows field and form-level errors, and handles
+ * creation via the `createInvestmentAsset` action.
  *
  * @param onSuccess - Optional callback invoked after a successful asset creation
  * @returns The dialog React element that hosts the Add Investment form
@@ -52,6 +75,11 @@ interface AddInvestmentDialogProps {
 export function AddInvestmentDialog({ onSuccess }: AddInvestmentDialogProps) {
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [selectedSymbol, setSelectedSymbol] = useState<SearchResult | null>(null);
 
   const form = useForm<InvestmentFormValues>({
     resolver: zodResolver(investmentFormSchema),
@@ -64,6 +92,47 @@ export function AddInvestmentDialog({ onSuccess }: AddInvestmentDialogProps) {
     },
   });
 
+  // Debounced search function
+  const debouncedSearch = useCallback(
+    async (query: string) => {
+      if (query.length < 2) {
+        setSearchResults([]);
+        return;
+      }
+
+      setIsSearching(true);
+      try {
+        const result = await searchSymbolsAction(query);
+        if (result.success && result.data) {
+          setSearchResults(result.data as SearchResult[]);
+        } else {
+          setSearchResults([]);
+        }
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    },
+    []
+  );
+
+  // Debounce effect
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      debouncedSearch(searchQuery);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, debouncedSearch]);
+
+  const handleSelectSymbol = (result: SearchResult) => {
+    setSelectedSymbol(result);
+    form.setValue("symbol", result.symbol);
+    form.setValue("name", result.longname || result.shortname || "");
+    setSearchOpen(false);
+  };
+
   const onSubmit = async (data: InvestmentFormValues) => {
     setIsSubmitting(true);
     try {
@@ -72,13 +141,15 @@ export function AddInvestmentDialog({ onSuccess }: AddInvestmentDialogProps) {
       if (result.success) {
         setOpen(false);
         form.reset();
+        setSelectedSymbol(null);
+        setSearchQuery("");
         onSuccess?.();
       } else {
         form.setError("root", {
           message: result.error || "Failed to create investment",
         });
       }
-    } catch (error) {
+    } catch {
       form.setError("root", {
         message: "An unexpected error occurred",
       });
@@ -99,7 +170,7 @@ export function AddInvestmentDialog({ onSuccess }: AddInvestmentDialogProps) {
         <DialogHeader>
           <DialogTitle>Add Investment</DialogTitle>
           <DialogDescription>
-            Add a new investment asset to your portfolio. Enter the symbol (e.g., AAPL, BTC-USD).
+            Search and add a new investment asset to your portfolio.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -108,15 +179,84 @@ export function AddInvestmentDialog({ onSuccess }: AddInvestmentDialogProps) {
               control={form.control}
               name="symbol"
               render={({ field }) => (
-                <FormItem>
+                <FormItem className="flex flex-col">
                   <FormLabel>Symbol</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="AAPL, BTC-USD, etc."
-                      {...field}
-                      onChange={(e) => field.onChange(e.target.value.toUpperCase())}
-                    />
-                  </FormControl>
+                  <Popover open={searchOpen} onOpenChange={setSearchOpen}>
+                    <PopoverTrigger asChild>
+                      <FormControl>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={searchOpen}
+                          className={cn(
+                            "w-full justify-between",
+                            !field.value && "text-muted-foreground"
+                          )}
+                        >
+                          <div className="flex items-center gap-2">
+                            <Search className="h-4 w-4 shrink-0 opacity-50" />
+                            {field.value || "Search symbol (e.g., AAPL)..."}
+                          </div>
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </FormControl>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[450px] p-0">
+                      <Command>
+                        <CommandInput
+                          placeholder="Type to search symbols..."
+                          value={searchQuery}
+                          onValueChange={setSearchQuery}
+                        />
+                        <CommandList>
+                          {isSearching ? (
+                            <div className="py-6 text-center">
+                              <Loader2 className="mx-auto h-4 w-4 animate-spin" />
+                              <p className="text-sm text-muted-foreground mt-2">
+                                Searching...
+                              </p>
+                            </div>
+                          ) : (
+                            <>
+                              <CommandEmpty>
+                                {searchQuery.length < 2
+                                  ? "Type at least 2 characters to search"
+                                  : "No symbols found"}
+                              </CommandEmpty>
+                              <CommandGroup>
+                                {searchResults.map((result) => (
+                                  <CommandItem
+                                    key={result.symbol}
+                                    value={result.symbol}
+                                    onSelect={() => handleSelectSymbol(result)}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        selectedSymbol?.symbol === result.symbol
+                                          ? "opacity-100"
+                                          : "opacity-0"
+                                      )}
+                                    />
+                                    <div className="flex flex-col">
+                                      <span className="font-medium">
+                                        {result.symbol}
+                                      </span>
+                                      <span className="text-xs text-muted-foreground">
+                                        {result.longname || result.shortname}
+                                        {result.exchDisp && ` • ${result.exchDisp}`}
+                                        {result.typeDisp && ` • ${result.typeDisp}`}
+                                      </span>
+                                    </div>
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </>
+                          )}
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                   <FormMessage />
                 </FormItem>
               )}
@@ -206,7 +346,14 @@ export function AddInvestmentDialog({ onSuccess }: AddInvestmentDialogProps) {
                 Cancel
               </Button>
               <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Adding..." : "Add Investment"}
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Adding...
+                  </>
+                ) : (
+                  "Add Investment"
+                )}
               </Button>
             </DialogFooter>
           </form>
