@@ -1,14 +1,15 @@
 "use client";
 
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import { useCurrency } from "@/contexts/CurrencyContext";
-import { Loader2 } from "lucide-react";
+import { AlertCircle, Loader2 } from "lucide-react";
+import { useSyncExternalStore } from "react";
 
 const SUPPORTED_CURRENCIES = [
   { code: "USD", name: "US Dollar", symbol: "$" },
@@ -28,13 +29,47 @@ const SUPPORTED_CURRENCIES = [
   { code: "VND", name: "Vietnamese Dong", symbol: "₫" },
 ];
 
+/**
+ * Provides a hydration-safe boolean that indicates whether the component is mounted.
+ *
+ * @returns `true` after the component has mounted on the client, `false` during server render or before mount
+ */
+function useMounted() {
+  return useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
+}
+
 interface CurrencySwitcherProps {
   className?: string;
 }
 
+/**
+ * Renders a hydration-safe currency selector that shows loading and error states.
+ *
+ * Displays a spinner while currencies or rates are loading, an error indicator when loading fails,
+ * and the current selected currency otherwise. Selection changes are propagated via the currency context.
+ *
+ * @param className - Optional container CSS class name for layout or styling
+ * @returns The currency selector React element
+ */
 export function CurrencySwitcher({ className }: CurrencySwitcherProps) {
-  const { displayCurrency, setDisplayCurrency, mainCurrency, isLoading } =
+  const { displayCurrency, setDisplayCurrency, mainCurrency, isLoading, isError } =
     useCurrency();
+  const mounted = useMounted();
+
+  // Prevent hydration mismatch by not rendering Select until mounted
+  if (!mounted) {
+    return (
+      <div className={className}>
+        <div className="border-input data-placeholder:text-muted-foreground flex w-[140px] items-center justify-between gap-2 rounded-md border bg-transparent px-3 py-2 text-sm whitespace-nowrap shadow-xs h-9">
+          <Loader2 className="h-4 w-4 animate-spin" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={className}>
@@ -42,6 +77,11 @@ export function CurrencySwitcher({ className }: CurrencySwitcherProps) {
         <SelectTrigger className="w-[140px]">
           {isLoading ? (
             <Loader2 className="h-4 w-4 animate-spin" />
+          ) : isError ? (
+            <span className="flex items-center gap-1 text-destructive">
+              <AlertCircle className="h-4 w-4" />
+              <span className="text-xs">Error</span>
+            </span>
           ) : (
             <SelectValue placeholder="Currency" />
           )}
