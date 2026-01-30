@@ -5,14 +5,13 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { ReactNode } from 'react'
 
 /**
- * Creates a new QueryClient instance with optimized defaults for financial data.
- * 
- * Configuration rationale:
- * - staleTime: 5 minutes - Exchange rates don't change rapidly; prevents excessive API calls
- * - gcTime: 10 minutes - Keep data in cache longer for quick navigation back
- * - retry: 3 - Retry failed requests for transient errors
- * - refetchOnWindowFocus: true - Refresh data when user returns to the app
- * - refetchOnReconnect: true - Refresh when network connection is restored
+ * Create a QueryClient preconfigured with sensible defaults tuned for financial data.
+ *
+ * Default behavior:
+ * - Queries: staleTime = 5 minutes; gcTime = 10 minutes; retry = 3; refetchOnWindowFocus = true; refetchOnReconnect = true
+ * - Mutations: retry = 1
+ *
+ * @returns A newly constructed QueryClient configured with the above defaults
  */
 function makeQueryClient() {
   return new QueryClient({
@@ -39,9 +38,13 @@ function makeQueryClient() {
 let browserQueryClient: QueryClient | undefined = undefined
 
 /**
- * Gets or creates a QueryClient instance.
- * On server: always creates a new instance for each request
- * On browser: reuses the same instance to maintain state across renders
+ * Return a QueryClient appropriate for the current execution environment.
+ *
+ * On the server this always constructs and returns a new QueryClient to avoid
+ * cross-request state sharing. In the browser it returns a single shared
+ * QueryClient instance, creating it on first access and reusing it thereafter.
+ *
+ * @returns A `QueryClient` instance: a fresh instance on the server, a shared singleton in the browser.
  */
 function getQueryClient() {
   if (isServer) {
@@ -61,13 +64,11 @@ interface QueryProviderProps {
 }
 
 /**
- * QueryProvider wraps the application with TanStack Query's QueryClientProvider.
- * 
- * This enables:
- * - Automatic caching and deduplication of requests
- * - Background refetching for fresh data
- * - Error handling with retry logic
- * - DevTools for debugging (only in development)
+ * Provides a shared TanStack Query client to the React tree and renders React Query DevTools.
+ *
+ * Wraps `children` in a `QueryClientProvider` using the client returned by `getQueryClient`.
+ *
+ * @param children - React nodes to be rendered within the query provider
  */
 export function QueryProvider({ children }: QueryProviderProps) {
   // NOTE: Avoid useState when initializing the query client if you don't

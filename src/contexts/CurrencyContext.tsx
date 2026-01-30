@@ -44,19 +44,16 @@ interface CurrencyProviderProps {
 }
 
 /**
- * Provider component for currency context.
- * 
- * Uses TanStack Query for exchange rate fetching with:
- * - Automatic caching and background refetching
- * - Proper error handling and loading states
- * - Query keys that invalidate when currency parameters change
- * 
- * @example
- * ```tsx
- * <CurrencyProvider mainCurrency="USD">
- *   <App />
- * </CurrencyProvider>
- * ```
+ * Provides currency-related state and utilities to descendant components.
+ *
+ * Supplies the current display currency, a setter to change it, the main (base) currency,
+ * the latest exchange rate between main and display currencies, loading/error flags,
+ * and helper functions to convert and format amounts in the display currency.
+ *
+ * @param children - React children that will have access to the currency context
+ * @param mainCurrency - The user's base currency used as the source for conversions
+ * @param initialDisplayCurrency - Optional initial display currency; defaults to `mainCurrency` if omitted
+ * @returns A React context provider that makes currency state and helpers available to descendants
  */
 export function CurrencyProvider({
   children,
@@ -120,10 +117,10 @@ export function CurrencyProvider({
 }
 
 /**
- * Hook to access the currency context.
- * Must be used within a CurrencyProvider.
- * 
- * @throws Error if used outside of CurrencyProvider
+ * Accesses the current currency context.
+ *
+ * @returns The current CurrencyContext value including display currency, main currency, exchange rate, loading/error state, and conversion/formatting helpers.
+ * @throws Error if called outside of a CurrencyProvider
  */
 export function useCurrency() {
   const context = useContext(CurrencyContext);
