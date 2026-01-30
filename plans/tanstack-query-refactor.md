@@ -253,9 +253,6 @@ export function CurrencyProvider({
   })
 
   const convertAmount = (amount: number, fromCurrency?: string): number => {
-    if (fromCurrency && fromCurrency !== mainCurrency) {
-      return amount * exchangeRate
-    }
     return amount * exchangeRate
   }
 
