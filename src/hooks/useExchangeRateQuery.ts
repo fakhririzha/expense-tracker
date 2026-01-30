@@ -26,21 +26,14 @@ export const exchangeRateKeys = {
 }
 
 /**
- * Custom hook for fetching exchange rates using TanStack Query.
- * 
- * Features:
- * - Automatic caching with parameterized query keys
- * - Background refetching every 5 minutes for live rates
- * - Returns rate of 1 immediately when currencies are the same
- * - Proper error handling with retry logic
- * 
- * @example
- * ```tsx
- * const { data: exchangeRate, isLoading, isError } = useExchangeRateQuery({
- *   mainCurrency: 'USD',
- *   displayCurrency: 'EUR'
- * })
- * ```
+ * Provides a React Query hook that returns the exchange rate for a currency pair.
+ *
+ * When `mainCurrency` and `displayCurrency` are identical, the hook returns an exchange rate of `1` immediately and skips network fetching.
+ *
+ * @param mainCurrency - The base currency code to convert from (e.g., `"USD"`).
+ * @param displayCurrency - The target currency code to convert to (e.g., `"EUR"`).
+ * @param enabled - Optional flag to enable or disable the query (default: `true`).
+ * @returns The TanStack Query result object whose `data` is the numeric exchange rate and which includes standard query status fields (`isLoading`, `isError`, etc.).
  */
 export function useExchangeRateQuery({
   mainCurrency,

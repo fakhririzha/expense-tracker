@@ -29,7 +29,11 @@ const SUPPORTED_CURRENCIES = [
   { code: "VND", name: "Vietnamese Dong", symbol: "₫" },
 ];
 
-// Helper to prevent hydration mismatch in Radix UI components
+/**
+ * Provides a hydration-safe boolean that indicates whether the component is mounted.
+ *
+ * @returns `true` after the component has mounted on the client, `false` during server render or before mount
+ */
 function useMounted() {
   return useSyncExternalStore(
     () => () => {},
@@ -43,14 +47,13 @@ interface CurrencySwitcherProps {
 }
 
 /**
- * Currency switcher component with TanStack Query integration.
- * 
- * Displays:
- * - Loading spinner when fetching exchange rates
- * - Error indicator when fetch fails
- * - Current currency selection
- * 
- * Uses useSyncExternalStore to prevent hydration mismatches.
+ * Renders a hydration-safe currency selector that shows loading and error states.
+ *
+ * Displays a spinner while currencies or rates are loading, an error indicator when loading fails,
+ * and the current selected currency otherwise. Selection changes are propagated via the currency context.
+ *
+ * @param className - Optional container CSS class name for layout or styling
+ * @returns The currency selector React element
  */
 export function CurrencySwitcher({ className }: CurrencySwitcherProps) {
   const { displayCurrency, setDisplayCurrency, mainCurrency, isLoading, isError } =

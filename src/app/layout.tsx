@@ -18,6 +18,15 @@ export const metadata: Metadata = {
   description: "FinHealth is your financial health companion. It helps you track your expenses, income, and investments. It also helps you plan for your retirement and save for your future.",
 };
 
+/**
+ * Provides the application's root HTML layout and global providers.
+ *
+ * Wraps the page content with global font classes and a QueryProvider so all
+ * descendants share the same query context.
+ *
+ * @param children - The page content to render inside the root layout.
+ * @returns The root HTML element containing the application body and providers.
+ */
 export default function RootLayout({
   children,
 }: Readonly<{
