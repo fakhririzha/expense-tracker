@@ -1,21 +1,35 @@
 "use client";
 
-import { fetchExchangeRate as fetchExchangeRateAction } from "@/actions/exchange-rate-actions";
+import { useExchangeRateQuery } from "@/hooks/useExchangeRateQuery";
 import {
-    createContext,
-    ReactNode,
-    useContext,
-    useEffect,
-    useState,
+  createContext,
+  ReactNode,
+  useContext,
+  useState,
 } from "react";
 
+/**
+ * Context type for currency-related state and operations.
+ * Maintains backward compatibility while adding TanStack Query error states.
+ */
 interface CurrencyContextType {
+  /** The currently selected display currency */
   displayCurrency: string;
+  /** Function to update the display currency */
   setDisplayCurrency: (currency: string) => void;
+  /** The user's main/base currency */
   mainCurrency: string;
+  /** The current exchange rate from mainCurrency to displayCurrency */
   exchangeRate: number;
+  /** Whether the exchange rate is being fetched */
   isLoading: boolean;
+  /** Whether an error occurred while fetching the exchange rate */
+  isError: boolean;
+  /** The error object if fetching failed */
+  error: Error | null;
+  /** Convert an amount from mainCurrency to displayCurrency */
   convertAmount: (amount: number, fromCurrency?: string) => number;
+  /** Format an amount in the display currency */
   formatInDisplayCurrency: (amount: number, fromCurrency?: string) => string;
 }
 
@@ -29,6 +43,21 @@ interface CurrencyProviderProps {
   initialDisplayCurrency?: string;
 }
 
+/**
+ * Provider component for currency context.
+ * 
+ * Uses TanStack Query for exchange rate fetching with:
+ * - Automatic caching and background refetching
+ * - Proper error handling and loading states
+ * - Query keys that invalidate when currency parameters change
+ * 
+ * @example
+ * ```tsx
+ * <CurrencyProvider mainCurrency="USD">
+ *   <App />
+ * </CurrencyProvider>
+ * ```
+ */
 export function CurrencyProvider({
   children,
   mainCurrency,
@@ -37,30 +66,17 @@ export function CurrencyProvider({
   const [displayCurrency, setDisplayCurrency] = useState(
     initialDisplayCurrency || mainCurrency
   );
-  const [exchangeRate, setExchangeRate] = useState(1);
-  const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    async function fetchExchangeRate() {
-      if (displayCurrency === mainCurrency) {
-        setExchangeRate(1);
-        return;
-      }
-
-      setIsLoading(true);
-      try {
-        const rate = await fetchExchangeRateAction(mainCurrency, displayCurrency);
-        setExchangeRate(rate ?? 1);
-      } catch (error) {
-        console.error("Failed to fetch exchange rate:", error);
-        setExchangeRate(1);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-
-    fetchExchangeRate();
-  }, [displayCurrency, mainCurrency]);
+  // Use TanStack Query for declarative exchange rate fetching
+  const {
+    data: exchangeRate = 1,
+    isLoading,
+    isError,
+    error,
+  } = useExchangeRateQuery({
+    mainCurrency,
+    displayCurrency,
+  });
 
   const convertAmount = (amount: number, fromCurrency?: string): number => {
     if (fromCurrency && fromCurrency !== mainCurrency) {
@@ -92,6 +108,8 @@ export function CurrencyProvider({
         mainCurrency,
         exchangeRate,
         isLoading,
+        isError,
+        error,
         convertAmount,
         formatInDisplayCurrency,
       }}
@@ -101,6 +119,12 @@ export function CurrencyProvider({
   );
 }
 
+/**
+ * Hook to access the currency context.
+ * Must be used within a CurrencyProvider.
+ * 
+ * @throws Error if used outside of CurrencyProvider
+ */
 export function useCurrency() {
   const context = useContext(CurrencyContext);
   if (context === undefined) {

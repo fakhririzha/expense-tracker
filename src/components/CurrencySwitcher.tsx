@@ -1,14 +1,14 @@
 "use client";
 
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import { useCurrency } from "@/contexts/CurrencyContext";
-import { Loader2 } from "lucide-react";
+import { AlertCircle, Loader2 } from "lucide-react";
 import { useSyncExternalStore } from "react";
 
 const SUPPORTED_CURRENCIES = [
@@ -42,8 +42,18 @@ interface CurrencySwitcherProps {
   className?: string;
 }
 
+/**
+ * Currency switcher component with TanStack Query integration.
+ * 
+ * Displays:
+ * - Loading spinner when fetching exchange rates
+ * - Error indicator when fetch fails
+ * - Current currency selection
+ * 
+ * Uses useSyncExternalStore to prevent hydration mismatches.
+ */
 export function CurrencySwitcher({ className }: CurrencySwitcherProps) {
-  const { displayCurrency, setDisplayCurrency, mainCurrency, isLoading } =
+  const { displayCurrency, setDisplayCurrency, mainCurrency, isLoading, isError } =
     useCurrency();
   const mounted = useMounted();
 
@@ -64,6 +74,11 @@ export function CurrencySwitcher({ className }: CurrencySwitcherProps) {
         <SelectTrigger className="w-[140px]">
           {isLoading ? (
             <Loader2 className="h-4 w-4 animate-spin" />
+          ) : isError ? (
+            <span className="flex items-center gap-1 text-destructive">
+              <AlertCircle className="h-4 w-4" />
+              <span className="text-xs">Error</span>
+            </span>
           ) : (
             <SelectValue placeholder="Currency" />
           )}
