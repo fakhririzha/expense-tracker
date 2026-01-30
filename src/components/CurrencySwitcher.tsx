@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/select";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { Loader2 } from "lucide-react";
+import { useSyncExternalStore } from "react";
 
 const SUPPORTED_CURRENCIES = [
   { code: "USD", name: "US Dollar", symbol: "$" },
@@ -28,6 +29,15 @@ const SUPPORTED_CURRENCIES = [
   { code: "VND", name: "Vietnamese Dong", symbol: "₫" },
 ];
 
+// Helper to prevent hydration mismatch in Radix UI components
+function useMounted() {
+  return useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
+}
+
 interface CurrencySwitcherProps {
   className?: string;
 }
@@ -35,6 +45,18 @@ interface CurrencySwitcherProps {
 export function CurrencySwitcher({ className }: CurrencySwitcherProps) {
   const { displayCurrency, setDisplayCurrency, mainCurrency, isLoading } =
     useCurrency();
+  const mounted = useMounted();
+
+  // Prevent hydration mismatch by not rendering Select until mounted
+  if (!mounted) {
+    return (
+      <div className={className}>
+        <div className="border-input data-placeholder:text-muted-foreground flex w-[140px] items-center justify-between gap-2 rounded-md border bg-transparent px-3 py-2 text-sm whitespace-nowrap shadow-xs h-9">
+          <Loader2 className="h-4 w-4 animate-spin" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={className}>

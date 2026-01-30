@@ -1,6 +1,6 @@
 "use client";
 
-import { getExchangeRate } from "@/lib/finance-service";
+import { fetchExchangeRate as fetchExchangeRateAction } from "@/actions/exchange-rate-actions";
 import {
     createContext,
     ReactNode,
@@ -49,7 +49,7 @@ export function CurrencyProvider({
 
       setIsLoading(true);
       try {
-        const rate = await getExchangeRate(mainCurrency, displayCurrency);
+        const rate = await fetchExchangeRateAction(mainCurrency, displayCurrency);
         setExchangeRate(rate ?? 1);
       } catch (error) {
         console.error("Failed to fetch exchange rate:", error);
