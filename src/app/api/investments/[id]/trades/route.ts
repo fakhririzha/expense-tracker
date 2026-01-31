@@ -3,14 +3,16 @@ import prisma from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 
 /**
- * GET /api/investments/[id]/trades
- * 
- * Fetches trade history for a specific investment asset.
- * Returns trades filtered by assetId, ordered by date descending.
- * 
- * @param request - The Next.js request object
- * @param params - Route parameters containing the asset id
- * @returns JSON response with trade history data
+ * Retrieve trade history for a user's investment asset.
+ *
+ * Verifies the asset belongs to the authenticated user, supports optional
+ * query filters (`type` - ignored when `ALL`) and sorting (`sortBy`, `sortOrder`),
+ * and returns 401 if unauthenticated or 404 if the asset is not found.
+ *
+ * @param params - Route parameters containing the asset `id`
+ * @returns An object with a `trades` array of trade records. Each trade includes:
+ * `id`, `type`, `quantity`, `pricePerUnit`, `totalAmount`, `fees`, `date` (ISO string),
+ * `notes`, `realizedPnL`, `assetId`, `userId`, `createdAt` (ISO string), and `updatedAt` (ISO string)
  */
 export async function GET(
   request: NextRequest,

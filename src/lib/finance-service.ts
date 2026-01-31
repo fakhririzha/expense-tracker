@@ -159,7 +159,14 @@ export const getHistoricalData = unstable_cache(
   { revalidate: 3600 } // 1 hour
 );
 
-// Search for symbols
+/**
+ * Search for matching financial symbols and basic metadata.
+ *
+ * Returns an array of matching SearchResult objects or an empty array when the query is too short, no matches are found, or an error occurs.
+ *
+ * @param query - The search term; must be at least 2 characters long
+ * @returns An array of up to 10 SearchResult items containing `symbol` and optional `shortname`, `longname`, `exchDisp`, and `typeDisp` fields
+ */
 export async function searchSymbols(query: string): Promise<SearchResult[]> {
   if (!query || query.trim().length < 2) {
     return [];
