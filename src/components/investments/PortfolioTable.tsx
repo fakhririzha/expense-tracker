@@ -238,6 +238,7 @@ export function PortfolioTable({
               size="icon"
               onClick={() => handleViewTradeHistory(asset)}
               title="View trade history"
+              aria-label="View trade history"
             >
               <Eye className="h-4 w-4" />
             </Button>
