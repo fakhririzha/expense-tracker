@@ -22,6 +22,13 @@ interface PortfolioSummaryData {
   assetCount: number;
 }
 
+/**
+ * Render the Investments page showing portfolio summary cards and a holdings table.
+ *
+ * Loads portfolio data and summary on mount, manages loading and refresh states, and exposes a refresh handler that triggers server-side price updates and reloads data.
+ *
+ * @returns The Investments page JSX element.
+ */
 export default function InvestmentsPage() {
   const [assets, setAssets] = useState<PortfolioAsset[]>([]);
   const [summary, setSummary] = useState<PortfolioSummaryData | null>(null);

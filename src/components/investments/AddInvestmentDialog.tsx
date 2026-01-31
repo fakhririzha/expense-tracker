@@ -66,15 +66,16 @@ interface AddInvestmentDialogProps {
 }
 
 /**
- * Renders a modal dialog containing a form to add or update an investment asset.
+ * Display a modal dialog with a form to add or update an investment asset.
  *
- * The form validates input according to the investment schema, includes symbol search
- * with Yahoo Finance autocomplete, shows field and form-level errors, and handles
- * creation or update via the `createInvestmentAsset` action. If the asset already
- * exists, it updates the quantity and recalculates the weighted average buy price.
+ * The form validates inputs against the investment schema, provides a symbol
+ * autocomplete/search UI, displays field and form-level errors, and creates or
+ * updates the asset on submit (combining quantity and recalculating weighted
+ * average buy price for existing assets). On successful save, trade history
+ * cache entries are invalidated and the dialog resets.
  *
  * @param onSuccess - Optional callback invoked after a successful asset creation or update
- * @returns The dialog React element that hosts the Add/Update Investment form
+ * @returns The dialog React element that contains the Add/Update Investment form
  */
 export function AddInvestmentDialog({ onSuccess }: AddInvestmentDialogProps) {
   const queryClient = useQueryClient();

@@ -33,6 +33,12 @@ const tradeSchema = z.object({
 export type InvestmentAssetInput = z.infer<typeof investmentAssetSchema>;
 export type TradeInput = z.infer<typeof tradeSchema>;
 
+/**
+ * Creates a new investment asset for the current user or updates an existing asset by recording a BUY trade and adjusting quantity and average buy price.
+ *
+ * @param data - Input describing the asset to create or add to (must include `symbol`, `quantity`, and `avgBuyPrice`; may include `name` and `currency`)
+ * @returns On success, an object with `success: true`, `data` containing the created or updated investment asset, and either `created: true` or `updated: true`. On failure, an object with `success: false` and an `error` message.
+ */
 export async function createInvestmentAsset(data: InvestmentAssetInput) {
   try {
     const session = await auth();
@@ -398,6 +404,12 @@ export async function getPortfolioSummary() {
   }
 }
 
+/**
+ * Fetches the authenticated user's trade history, optionally filtered by a specific asset ID.
+ *
+ * @param assetId - Optional investment asset ID to filter trades
+ * @returns On success: an object with `success: true` and `data` containing trade records (each includes the related asset). On failure: an object with `success: false`, an `error` message, and an empty `data` array.
+ */
 export async function getTradeHistory(assetId?: string) {
   try {
     const session = await auth();
@@ -424,6 +436,12 @@ export async function getTradeHistory(assetId?: string) {
   }
 }
 
+/**
+ * Searches for financial symbols that match the provided query string.
+ *
+ * @param query - The search string; a lookup is performed only when `query` has at least 2 characters.
+ * @returns On success, an object with `success: true` and `data` containing an array of matching symbol results (empty if no matches or if the query is shorter than 2). On failure or unauthorized access, an object with `success: false`, an `error` message, and `data: []`.
+ */
 export async function searchSymbolsAction(query: string) {
   try {
     const session = await auth();
@@ -443,6 +461,11 @@ export async function searchSymbolsAction(query: string) {
   }
 }
 
+/**
+ * Triggers revalidation of portfolio pages so subsequent requests fetch fresh asset prices.
+ *
+ * @returns An object with `success: true` when revalidation was initiated; otherwise `success: false` and an `error` message (for unauthorized access or failure).
+ */
 export async function refreshPortfolioPrices() {
   try {
     const session = await auth();

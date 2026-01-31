@@ -12,10 +12,14 @@ export const tradeHistoryKeys = {
 };
 
 /**
- * Fetches trade history for a specific investment asset.
- * 
- * @param assetId - The ID of the investment asset
- * @returns Promise with trade history data
+ * Retrieve trade history for the specified investment asset.
+ *
+ * @param assetId - ID of the investment asset to query
+ * @param options - Optional query modifiers
+ * @param options.type - Filter by trade type: `"BUY"`, `"SELL"`, or `"ALL"` (when `"ALL"` no type filter is applied)
+ * @param options.sortBy - Field name to sort results by
+ * @param options.sortOrder - Sort direction, `"asc"` or `"desc"`
+ * @returns An array of trade history items for the asset
  */
 async function fetchTradeHistory(
   assetId: string,

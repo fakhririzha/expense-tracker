@@ -35,11 +35,11 @@ const navItems = [
 ];
 
 /**
- * Render the authenticated dashboard layout and top navigation.
+ * Render the authenticated dashboard layout with header, primary navigation, and user menu.
  *
- * Redirects to "/login" if there is no authenticated user. Wraps `children` in a CurrencyProvider
- * using the user's `mainCurrency` (defaults to "IDR") and renders the header with branding,
- * primary navigation, currency switcher, and user menu.
+ * If the user is not authenticated, redirects to "/login". Wraps `children` in a CurrencyProvider
+ * using the current user's `mainCurrency` (defaults to "IDR" when not set) and renders the top
+ * navigation bar (branding, primary nav, and account menu).
  *
  * @param children - Content to render inside the layout's main area
  * @returns The dashboard layout React node containing the header and main content
