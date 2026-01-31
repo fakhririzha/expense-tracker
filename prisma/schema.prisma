@@ -20,18 +20,18 @@ model User {
   image         String?
   password      String?
   mainCurrency  String    @default("IDR") // User's preferred currency for reporting
-  
+
   // Financial targets
   retirementTarget Float?
   monthlyBudget    Float?
-  
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Auth.js relations
-  accounts      AuthAccount[]
-  sessions      Session[]
-  
+  accounts AuthAccount[]
+  sessions Session[]
+
   // Financial relations
   financialAccounts FinancialAccount[]
   transactions      Transaction[]
@@ -101,14 +101,16 @@ model FinancialAccount {
   balance     Float       @default(0)
   description String?
   isActive    Boolean     @default(true)
-  
+
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   transactions Transaction[]
-  
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  investmentAssets InvestmentAsset[]
+  tradeHistories   TradeHistory[]
 
   @@index([userId])
 }
@@ -126,12 +128,12 @@ model Category {
   color    String?
   type     TransactionType
   isSystem Boolean         @default(false) // System categories can't be deleted
-  
+
   userId String?
   user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   transactions Transaction[]
-  
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -147,17 +149,17 @@ model Transaction {
   description  String?
   date         DateTime        @default(now())
   isRecurring  Boolean         @default(false)
-  
+
   // Relations
-  userId    String
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   accountId String
   account   FinancialAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  
+
   categoryId String?
   category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  
+
   recurringRuleId String?
   recurringRule   RecurringRule? @relation(fields: [recurringRuleId], references: [id], onDelete: SetNull)
 
@@ -174,22 +176,27 @@ model Transaction {
 
 model InvestmentAsset {
   id          String  @id @default(cuid())
-  symbol      String  // e.g., AAPL, BTC-USD
+  symbol      String // e.g., AAPL, BTC-USD
   name        String? // e.g., Apple Inc.
   quantity    Float
-  avgBuyPrice Float   // Cost basis per unit
+  avgBuyPrice Float // Cost basis per unit
   currency    String  @default("IDR") // Asset's trading currency
-  
+
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  // Account linkage for tracking which investment account holds this asset
+  accountId String?
+  account   FinancialAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
   tradeHistory TradeHistory[]
-  
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([userId, symbol])
   @@index([userId])
+  @@index([accountId])
 }
 
 enum TradeType {
@@ -206,21 +213,30 @@ model TradeHistory {
   fees         Float     @default(0)
   date         DateTime  @default(now())
   notes        String?
-  
+
   // Realized PnL (only for SELL trades)
   realizedPnL Float?
-  
+
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
   assetId String
   asset   InvestmentAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  // Account linkage for audit trail - tracks which account was debited/credited
+  accountId String?
+  account   FinancialAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  // Audit trail fields for balance tracking
+  balanceBefore Float? // Account balance before this transaction
+  balanceAfter  Float? // Account balance after this transaction
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([userId])
   @@index([assetId])
+  @@index([accountId])
   @@index([date])
 }
 
@@ -245,17 +261,17 @@ model RecurringRule {
   nextDueDate DateTime
   endDate     DateTime?
   isActive    Boolean           @default(true)
-  
+
   // Template data for creating transactions
   description String?
   categoryId  String?
   accountId   String?
-  
+
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   transactions Transaction[]
-  
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -3,6 +3,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 
 import { createInvestmentAsset, searchSymbolsAction } from "@/actions/investment-actions";
+import { InvestmentAccountSelector } from "./InvestmentAccountSelector";
 import { tradeHistoryKeys } from "@/hooks/useTradeHistory";
 import { Button } from "@/components/ui/button";
 import {
@@ -57,6 +58,7 @@ const investmentFormSchema = z.object({
   quantity: z.number().positive("Quantity must be positive"),
   avgBuyPrice: z.number().positive("Average buy price must be positive"),
   currency: z.string(),
+  accountId: z.string().min(1, "Investment account is required"),
 });
 
 type InvestmentFormValues = z.infer<typeof investmentFormSchema>;
@@ -95,6 +97,7 @@ export function AddInvestmentDialog({ onSuccess }: AddInvestmentDialogProps) {
       quantity: 0,
       avgBuyPrice: 0,
       currency: "IDR",
+      accountId: "",
     },
   });
 
@@ -334,6 +337,25 @@ export function AddInvestmentDialog({ onSuccess }: AddInvestmentDialogProps) {
                   <FormLabel>Currency</FormLabel>
                   <FormControl>
                     <Input placeholder="IDR" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="accountId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Investment Account</FormLabel>
+                  <FormControl>
+                    <InvestmentAccountSelector
+                      value={field.value}
+                      onChange={field.onChange}
+                      disabled={isSubmitting}
+                      showBalance={true}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

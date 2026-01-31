@@ -17,6 +17,16 @@ export interface TradeHistoryItem {
   realizedPnL: number | null;
   assetId: string;
   userId: string;
+  // Account linkage for audit trail
+  accountId: string | null;
+  account?: {
+    id: string;
+    name: string;
+    currency: string;
+  } | null;
+  // Audit trail fields
+  balanceBefore: number | null;
+  balanceAfter: number | null;
   createdAt: string;
   updatedAt: string;
   asset?: {
@@ -57,4 +67,17 @@ export interface TradeFormData {
   fees: number;
   date: Date;
   notes?: string;
+  accountId: string; // Required investment account for the transaction
+}
+
+/**
+ * Form data for creating a new investment asset (buy transaction).
+ */
+export interface InvestmentAssetFormData {
+  symbol: string;
+  name?: string;
+  quantity: number;
+  avgBuyPrice: number;
+  currency: string;
+  accountId: string; // Required investment account for the purchase
 }

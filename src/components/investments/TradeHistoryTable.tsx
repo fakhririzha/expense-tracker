@@ -228,6 +228,39 @@ export function TradeHistoryTable({
         );
       },
     },
+    {
+      accessorKey: "account",
+      header: "Account",
+      cell: ({ row }) => {
+        const trade = row.original;
+        const accountName = trade.account?.name;
+        const balanceBefore = trade.balanceBefore;
+        const balanceAfter = trade.balanceAfter;
+        const type = trade.type;
+        
+        if (!accountName) {
+          return <span className="text-muted-foreground text-sm">-</span>;
+        }
+
+        const balanceChange = balanceBefore !== null && balanceAfter !== null
+          ? balanceAfter - balanceBefore
+          : null;
+
+        return (
+          <div className="space-y-1">
+            <div className="text-sm font-medium">{accountName}</div>
+            {balanceChange !== null && (
+              <div className={`text-xs ${
+                type === "BUY" ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"
+              }`}>
+                {type === "BUY" ? "-" : "+"}
+                {formatCurrency(Math.abs(balanceChange), assetCurrency)}
+              </div>
+            )}
+          </div>
+        );
+      },
+    },
   ];
 
   const table = useReactTable({
