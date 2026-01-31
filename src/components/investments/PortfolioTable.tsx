@@ -9,7 +9,7 @@ import {
     getSortedRowModel,
     useReactTable,
 } from "@tanstack/react-table";
-import { ArrowUpDown, Loader2, RefreshCw, TrendingDown, TrendingUp } from "lucide-react";
+import { ArrowUpDown, Eye, Loader2, RefreshCw, TrendingDown, TrendingUp } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { formatCurrency, formatPercentage } from "@/lib/utils";
+import { TradeHistoryDialog } from "./TradeHistoryDialog";
 
 export interface PortfolioAsset {
   id: string;
@@ -66,6 +67,18 @@ export function PortfolioTable({
   lastUpdated,
 }: PortfolioTableProps) {
   const [sorting, setSorting] = useState<SortingState>([]);
+  const [selectedAsset, setSelectedAsset] = useState<PortfolioAsset | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  const handleViewTradeHistory = (asset: PortfolioAsset) => {
+    setSelectedAsset(asset);
+    setIsDialogOpen(true);
+  };
+
+  const handleCloseDialog = () => {
+    setIsDialogOpen(false);
+    setSelectedAsset(null);
+  };
 
   const columns: ColumnDef<PortfolioAsset>[] = [
     {
@@ -128,7 +141,8 @@ export function PortfolioTable({
       cell: ({ row }) => {
         const price = row.getValue("currentPrice") as number;
         const currency = row.original.currency;
-        const dayChangePercent = row.original.dayChangePercent;
+        // const dayChangePercent = row.original.dayChangePercent;
+        const dayChangePercent = (row.original.currentPrice - row.original.avgBuyPrice) / row.original.avgBuyPrice * 100;
         const isPositive = dayChangePercent >= 0;
 
         return (
@@ -209,6 +223,25 @@ export function PortfolioTable({
             >
               {formatPercentage(pnlPercent)}
             </div>
+          </div>
+        );
+      },
+    },
+    {
+      id: "tradeHistory",
+      header: "Trade History",
+      cell: ({ row }) => {
+        const asset = row.original;
+        return (
+          <div className="text-center">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => handleViewTradeHistory(asset)}
+              title="View trade history"
+            >
+              <Eye className="h-4 w-4" />
+            </Button>
           </div>
         );
       },
@@ -321,6 +354,15 @@ export function PortfolioTable({
           </Button>
         </div>
       )}
+
+      <TradeHistoryDialog
+        isOpen={isDialogOpen}
+        onClose={handleCloseDialog}
+        assetId={selectedAsset?.id || null}
+        assetSymbol={selectedAsset?.symbol || ""}
+        assetName={selectedAsset?.name || null}
+        assetCurrency={selectedAsset?.currency || displayCurrency}
+      />
     </div>
   );
 }

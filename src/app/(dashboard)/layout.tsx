@@ -87,7 +87,7 @@ export default async function DashboardLayout({
               </nav>
             </div>
             <div className="flex flex-1 items-center justify-end space-x-4">
-              <CurrencySwitcher />
+              {/* <CurrencySwitcher /> */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button

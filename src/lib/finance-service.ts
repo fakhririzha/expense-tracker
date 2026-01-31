@@ -1,5 +1,9 @@
 import { unstable_cache } from "next/cache";
-import yahooFinance from "yahoo-finance2";
+import YahooFinance from "yahoo-finance2";
+
+const yahooFinance = new YahooFinance({
+  suppressNotices: ["yahooSurvey"]
+});
 
 export interface QuoteResult {
   symbol: string;

@@ -1,6 +1,9 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
+
 import { createInvestmentAsset, searchSymbolsAction } from "@/actions/investment-actions";
+import { tradeHistoryKeys } from "@/hooks/useTradeHistory";
 import { Button } from "@/components/ui/button";
 import {
     Command,
@@ -63,16 +66,18 @@ interface AddInvestmentDialogProps {
 }
 
 /**
- * Renders a modal dialog containing a form to add a new investment asset.
+ * Renders a modal dialog containing a form to add or update an investment asset.
  *
  * The form validates input according to the investment schema, includes symbol search
  * with Yahoo Finance autocomplete, shows field and form-level errors, and handles
- * creation via the `createInvestmentAsset` action.
+ * creation or update via the `createInvestmentAsset` action. If the asset already
+ * exists, it updates the quantity and recalculates the weighted average buy price.
  *
- * @param onSuccess - Optional callback invoked after a successful asset creation
- * @returns The dialog React element that hosts the Add Investment form
+ * @param onSuccess - Optional callback invoked after a successful asset creation or update
+ * @returns The dialog React element that hosts the Add/Update Investment form
  */
 export function AddInvestmentDialog({ onSuccess }: AddInvestmentDialogProps) {
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -139,6 +144,9 @@ export function AddInvestmentDialog({ onSuccess }: AddInvestmentDialogProps) {
       const result = await createInvestmentAsset(data);
 
       if (result.success) {
+        // Invalidate trade history cache for real-time updates
+        queryClient.invalidateQueries({ queryKey: tradeHistoryKeys.all });
+        
         setOpen(false);
         form.reset();
         setSelectedSymbol(null);
@@ -168,9 +176,10 @@ export function AddInvestmentDialog({ onSuccess }: AddInvestmentDialogProps) {
       </DialogTrigger>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Add Investment</DialogTitle>
+          <DialogTitle>Add/Update Investment</DialogTitle>
           <DialogDescription>
-            Search and add a new investment asset to your portfolio.
+            Search and add a new investment asset to your portfolio, or update an existing one.
+            If the asset already exists, quantities will be combined and the average buy price will be recalculated.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -349,10 +358,10 @@ export function AddInvestmentDialog({ onSuccess }: AddInvestmentDialogProps) {
                 {isSubmitting ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Adding...
+                    Saving...
                   </>
                 ) : (
-                  "Add Investment"
+                  "Save Investment"
                 )}
               </Button>
             </DialogFooter>

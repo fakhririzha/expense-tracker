@@ -61,7 +61,51 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
     });
 
     if (existingAsset) {
-      return { success: false, error: "Asset already exists in portfolio" };
+      // Update existing asset with weighted average price calculation
+      const { quantity: newQuantity, avgBuyPrice: newAvgBuyPrice, ...updateRest } = rest;
+
+      // Calculate new weighted average buy price
+      // Formula: (oldQty * oldPrice + newQty * newPrice) / (oldQty + newQty)
+      const totalQuantity = existingAsset.quantity + newQuantity;
+      const weightedAvgBuyPrice =
+        (existingAsset.avgBuyPrice * existingAsset.quantity + newAvgBuyPrice * newQuantity) /
+        totalQuantity;
+
+      const totalAmount = newQuantity * newAvgBuyPrice;
+
+      // Update asset and create trade history in transaction
+      const updatedAsset = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+        // Record the buy trade
+        await tx.tradeHistory.create({
+          data: {
+            type: "BUY",
+            quantity: newQuantity,
+            pricePerUnit: newAvgBuyPrice,
+            totalAmount,
+            fees: 0,
+            assetId: existingAsset.id,
+            userId: session.user.id,
+            date: new Date(),
+            notes: `Additional purchase of ${symbol}`,
+          },
+        });
+
+        // Update the asset
+        return tx.investmentAsset.update({
+          where: { id: existingAsset.id },
+          data: {
+            quantity: totalQuantity,
+            avgBuyPrice: weightedAvgBuyPrice,
+            name: updateRest.name || existingAsset.name,
+            currency: updateRest.currency || existingAsset.currency,
+          },
+        });
+      });
+
+      revalidatePath("/dashboard");
+      revalidatePath("/dashboard/investments");
+
+      return { success: true, data: updatedAsset, updated: true };
     }
 
     // Fetch asset name from Yahoo Finance if not provided
@@ -71,19 +115,45 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
       assetName = quote?.shortName || quote?.longName || symbol;
     }
 
-    const asset = await prisma.investmentAsset.create({
-      data: {
-        symbol,
-        name: assetName,
-        userId: session.user.id,
-        ...rest,
-      },
+    const { quantity, avgBuyPrice, currency } = rest;
+    const totalAmount = quantity * avgBuyPrice;
+
+    // Create asset and initial trade history in transaction
+    const asset = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      // Create the investment asset
+      const newAsset = await tx.investmentAsset.create({
+        data: {
+          symbol,
+          name: assetName,
+          userId: session.user.id,
+          quantity,
+          avgBuyPrice,
+          currency,
+        },
+      });
+
+      // Create initial BUY trade record
+      await tx.tradeHistory.create({
+        data: {
+          type: "BUY",
+          quantity,
+          pricePerUnit: avgBuyPrice,
+          totalAmount,
+          fees: 0,
+          assetId: newAsset.id,
+          userId: session.user.id,
+          date: new Date(),
+          notes: `Initial purchase of ${symbol}`,
+        },
+      });
+
+      return newAsset;
     });
 
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/investments");
 
-    return { success: true, data: asset };
+    return { success: true, data: asset, created: true };
   } catch (error) {
     console.error("Create investment asset error:", error);
     return { success: false, error: "Failed to create investment asset" };
