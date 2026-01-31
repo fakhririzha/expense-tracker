@@ -614,7 +614,7 @@ For self-hosted deployments:
 
 If you encounter issues not covered here:
 
-1. Check the [GitHub Issues](https://github.com/yourusername/expense-tracker/issues)
+1. Check the [GitHub Issues](https://github.com/fakhririzha/expense-tracker/issues)
 2. Review the [Next.js Documentation](https://nextjs.org/docs)
 3. Consult the [Prisma Documentation](https://www.prisma.io/docs)
 
