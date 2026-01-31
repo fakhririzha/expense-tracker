@@ -28,6 +28,7 @@
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
     "lucide-react": "^0.562.0",
     "next": "16.1.2",
@@ -39,7 +40,7 @@
     "react-hook-form": "^7.71.1",
     "recharts": "^3.6.0",
     "tailwind-merge": "^3.4.0",
-    "yahoo-finance2": "^2.14.2",
+    "yahoo-finance2": "^3.13.0",
     "zod": "^4.3.5"
   },
   "devDependencies": {

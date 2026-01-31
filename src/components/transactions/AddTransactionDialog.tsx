@@ -157,8 +157,9 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
       }
     } catch (error) {
       form.setError("root", {
-        message: "An unexpected error occurred",
+        message: "An unexpected error occurred: " + error,
       });
+      console.error("Create transaction error: ", error);
     } finally {
       setIsSubmitting(false);
     }

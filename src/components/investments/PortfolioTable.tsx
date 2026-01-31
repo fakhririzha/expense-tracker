@@ -9,7 +9,7 @@ import {
     getSortedRowModel,
     useReactTable,
 } from "@tanstack/react-table";
-import { ArrowUpDown, TrendingDown, TrendingUp } from "lucide-react";
+import { ArrowUpDown, Eye, Loader2, RefreshCw, TrendingDown, TrendingUp } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { formatCurrency, formatPercentage } from "@/lib/utils";
+import { TradeHistoryDialog } from "./TradeHistoryDialog";
 
 export interface PortfolioAsset {
   id: string;
@@ -43,6 +44,9 @@ export interface PortfolioAsset {
 interface PortfolioTableProps {
   assets: PortfolioAsset[];
   displayCurrency?: string;
+  onRefresh?: () => void;
+  isRefreshing?: boolean;
+  lastUpdated?: Date;
 }
 
 /**
@@ -50,13 +54,31 @@ interface PortfolioTableProps {
  *
  * @param assets - Array of portfolio assets to display in the table
  * @param displayCurrency - ISO currency code used to format market value and P&L columns (default: "IDR")
+ * @param onRefresh - Optional callback to refresh prices
+ * @param isRefreshing - Whether prices are being refreshed
+ * @param lastUpdated - Last update time for prices
  * @returns The rendered portfolio table React element
  */
 export function PortfolioTable({
   assets,
   displayCurrency = "IDR",
+  onRefresh,
+  isRefreshing = false,
+  lastUpdated,
 }: PortfolioTableProps) {
   const [sorting, setSorting] = useState<SortingState>([]);
+  const [selectedAsset, setSelectedAsset] = useState<PortfolioAsset | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  const handleViewTradeHistory = (asset: PortfolioAsset) => {
+    setSelectedAsset(asset);
+    setIsDialogOpen(true);
+  };
+
+  const handleCloseDialog = () => {
+    setIsDialogOpen(false);
+    setSelectedAsset(null);
+  };
 
   const columns: ColumnDef<PortfolioAsset>[] = [
     {
@@ -204,6 +226,26 @@ export function PortfolioTable({
         );
       },
     },
+    {
+      id: "tradeHistory",
+      header: "Trade History",
+      cell: ({ row }) => {
+        const asset = row.original;
+        return (
+          <div className="text-center">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => handleViewTradeHistory(asset)}
+              title="View trade history"
+              aria-label="View trade history"
+            >
+              <Eye className="h-4 w-4" />
+            </Button>
+          </div>
+        );
+      },
+    },
   ];
 
   const table = useReactTable({
@@ -220,6 +262,28 @@ export function PortfolioTable({
 
   return (
     <div className="space-y-4">
+      {onRefresh && (
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-muted-foreground">
+            {lastUpdated && (
+              <span>Last updated: {lastUpdated.toLocaleTimeString()}</span>
+            )}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onRefresh}
+            disabled={isRefreshing}
+          >
+            {isRefreshing ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-2 h-4 w-4" />
+            )}
+            Refresh Prices
+          </Button>
+        </div>
+      )}
       <div className="rounded-md border">
         <Table>
           <TableHeader>
@@ -290,6 +354,15 @@ export function PortfolioTable({
           </Button>
         </div>
       )}
+
+      <TradeHistoryDialog
+        isOpen={isDialogOpen}
+        onClose={handleCloseDialog}
+        assetId={selectedAsset?.id || null}
+        assetSymbol={selectedAsset?.symbol || ""}
+        assetName={selectedAsset?.name || null}
+        assetCurrency={selectedAsset?.currency || displayCurrency}
+      />
     </div>
   );
 }

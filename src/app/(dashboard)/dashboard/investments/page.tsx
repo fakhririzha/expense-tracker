@@ -1,6 +1,6 @@
 "use client";
 
-import { getPortfolio, getPortfolioSummary } from "@/actions/investment-actions";
+import { getPortfolio, getPortfolioSummary, refreshPortfolioPrices } from "@/actions/investment-actions";
 import { AddInvestmentDialog } from "@/components/investments/AddInvestmentDialog";
 import {
   PortfolioAsset,
@@ -22,10 +22,20 @@ interface PortfolioSummaryData {
   assetCount: number;
 }
 
+/**
+ * Render the Investments page showing portfolio summary cards and a holdings table.
+ *
+ * Loads portfolio data and summary on mount, manages loading and refresh states, and exposes a refresh handler that triggers server-side price updates and reloads data.
+ *
+ * @returns The Investments page JSX element.
+ */
 export default function InvestmentsPage() {
   const [assets, setAssets] = useState<PortfolioAsset[]>([]);
   const [summary, setSummary] = useState<PortfolioSummaryData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | undefined>();
+  const [error, setError] = useState<string | null>(null);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -37,6 +47,7 @@ export default function InvestmentsPage() {
 
       if (portfolioResult.success && portfolioResult.data) {
         setAssets(portfolioResult.data as PortfolioAsset[]);
+        setLastUpdated(new Date());
       }
 
       if (
@@ -53,12 +64,37 @@ export default function InvestmentsPage() {
     }
   };
 
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    setError(null);
+    try {
+      // Trigger server-side revalidation
+      const result = await refreshPortfolioPrices();
+      if (!result.success) {
+        setError(result.error ?? "Failed to refresh prices");
+        return;
+      }
+      // Reload data to get fresh prices
+      await loadData();
+    } catch (error) {
+      console.error("Failed to refresh prices:", error);
+      setError("Failed to refresh prices");
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   useEffect(() => {
     loadData();
   }, []);
 
   return (
     <div className="space-y-6">
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+          {error}
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Investments</h1>
@@ -182,7 +218,12 @@ export default function InvestmentsPage() {
             <CardTitle>Holdings</CardTitle>
           </CardHeader>
           <CardContent>
-            <PortfolioTable assets={assets} />
+            <PortfolioTable
+              assets={assets}
+              onRefresh={handleRefresh}
+              isRefreshing={isRefreshing}
+              lastUpdated={lastUpdated}
+            />
           </CardContent>
         </Card>
       )}

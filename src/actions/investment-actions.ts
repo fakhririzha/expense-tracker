@@ -6,6 +6,7 @@ import {
     calculateInvestmentMetrics,
     getAssetPrice,
     getMultipleAssetPrices,
+    searchSymbols,
 } from "@/lib/finance-service";
 import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
@@ -32,6 +33,12 @@ const tradeSchema = z.object({
 export type InvestmentAssetInput = z.infer<typeof investmentAssetSchema>;
 export type TradeInput = z.infer<typeof tradeSchema>;
 
+/**
+ * Creates a new investment asset for the current user or updates an existing asset by recording a BUY trade and adjusting quantity and average buy price.
+ *
+ * @param data - Input describing the asset to create or add to (must include `symbol`, `quantity`, and `avgBuyPrice`; may include `name` and `currency`)
+ * @returns On success, an object with `success: true`, `data` containing the created or updated investment asset, and either `created: true` or `updated: true`. On failure, an object with `success: false` and an `error` message.
+ */
 export async function createInvestmentAsset(data: InvestmentAssetInput) {
   try {
     const session = await auth();
@@ -60,7 +67,59 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
     });
 
     if (existingAsset) {
-      return { success: false, error: "Asset already exists in portfolio" };
+      // Update existing asset with weighted average price calculation
+      const { quantity: newQuantity, avgBuyPrice: newAvgBuyPrice, ...updateRest } = rest;
+      const totalAmount = newQuantity * newAvgBuyPrice;
+
+      // Update asset and create trade history in transaction
+      const updatedAsset = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+        // Re-fetch asset within transaction to get most recent data and prevent race condition
+        const assetToUpdate = await tx.investmentAsset.findUnique({
+          where: { id: existingAsset.id },
+        });
+
+        if (!assetToUpdate) {
+          throw new Error("Asset not found during update");
+        }
+
+        // Calculate new weighted average buy price using most recent data
+        // Formula: (oldQty * oldPrice + newQty * newPrice) / (oldQty + newQty)
+        const totalQuantity = assetToUpdate.quantity + newQuantity;
+        const weightedAvgBuyPrice =
+          (assetToUpdate.avgBuyPrice * assetToUpdate.quantity + newAvgBuyPrice * newQuantity) /
+          totalQuantity;
+
+        // Record the buy trade
+        await tx.tradeHistory.create({
+          data: {
+            type: "BUY",
+            quantity: newQuantity,
+            pricePerUnit: newAvgBuyPrice,
+            totalAmount,
+            fees: 0,
+            assetId: assetToUpdate.id,
+            userId: session.user.id,
+            date: new Date(),
+            notes: `Additional purchase of ${symbol}`,
+          },
+        });
+
+        // Update the asset
+        return tx.investmentAsset.update({
+          where: { id: assetToUpdate.id },
+          data: {
+            quantity: totalQuantity,
+            avgBuyPrice: weightedAvgBuyPrice,
+            name: updateRest.name || assetToUpdate.name,
+            currency: updateRest.currency || assetToUpdate.currency,
+          },
+        });
+      });
+
+      revalidatePath("/dashboard");
+      revalidatePath("/dashboard/investments");
+
+      return { success: true, data: updatedAsset, updated: true };
     }
 
     // Fetch asset name from Yahoo Finance if not provided
@@ -70,19 +129,45 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
       assetName = quote?.shortName || quote?.longName || symbol;
     }
 
-    const asset = await prisma.investmentAsset.create({
-      data: {
-        symbol,
-        name: assetName,
-        userId: session.user.id,
-        ...rest,
-      },
+    const { quantity, avgBuyPrice, currency } = rest;
+    const totalAmount = quantity * avgBuyPrice;
+
+    // Create asset and initial trade history in transaction
+    const asset = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      // Create the investment asset
+      const newAsset = await tx.investmentAsset.create({
+        data: {
+          symbol,
+          name: assetName,
+          userId: session.user.id,
+          quantity,
+          avgBuyPrice,
+          currency,
+        },
+      });
+
+      // Create initial BUY trade record
+      await tx.tradeHistory.create({
+        data: {
+          type: "BUY",
+          quantity,
+          pricePerUnit: avgBuyPrice,
+          totalAmount,
+          fees: 0,
+          assetId: newAsset.id,
+          userId: session.user.id,
+          date: new Date(),
+          notes: `Initial purchase of ${symbol}`,
+        },
+      });
+
+      return newAsset;
     });
 
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/investments");
 
-    return { success: true, data: asset };
+    return { success: true, data: asset, created: true };
   } catch (error) {
     console.error("Create investment asset error:", error);
     return { success: false, error: "Failed to create investment asset" };
@@ -107,30 +192,31 @@ export async function recordTrade(data: TradeInput) {
     const { assetId, type, quantity, pricePerUnit, fees, ...rest } =
       validatedFields.data;
 
-    // Get existing asset
-    const asset = await prisma.investmentAsset.findFirst({
-      where: { id: assetId, userId: session.user.id },
-    });
-
-    if (!asset) {
-      return { success: false, error: "Asset not found" };
-    }
-
     const totalAmount = quantity * pricePerUnit + fees;
-    let realizedPnL: number | null = null;
 
-    if (type === "SELL") {
-      // Check if user has enough quantity
-      if (asset.quantity < quantity) {
-        return { success: false, error: "Insufficient quantity to sell" };
+    // Perform all asset operations within transaction to prevent race conditions
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      // Re-fetch asset within transaction to get most recent data
+      const asset = await tx.investmentAsset.findFirst({
+        where: { id: assetId, userId: session.user.id },
+      });
+
+      if (!asset) {
+        throw new Error("Asset not found");
       }
 
-      // Calculate realized PnL
-      realizedPnL = (pricePerUnit - asset.avgBuyPrice) * quantity - fees;
-    }
+      let realizedPnL: number | null = null;
 
-    // Update asset and create trade history in transaction
-    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      if (type === "SELL") {
+        // Check if user has enough quantity
+        if (asset.quantity < quantity) {
+          throw new Error("Insufficient quantity to sell");
+        }
+
+        // Calculate realized PnL
+        realizedPnL = (pricePerUnit - asset.avgBuyPrice) * quantity - fees;
+      }
+
       // Create trade history
       await tx.tradeHistory.create({
         data: {
@@ -147,7 +233,7 @@ export async function recordTrade(data: TradeInput) {
       });
 
       if (type === "BUY") {
-        // Update average buy price and quantity
+        // Update average buy price and quantity using most recent data
         const newTotalQuantity = asset.quantity + quantity;
         const newAvgBuyPrice =
           (asset.avgBuyPrice * asset.quantity + pricePerUnit * quantity) /
@@ -327,6 +413,12 @@ export async function getPortfolioSummary() {
   }
 }
 
+/**
+ * Fetches the authenticated user's trade history, optionally filtered by a specific asset ID.
+ *
+ * @param assetId - Optional investment asset ID to filter trades
+ * @returns On success: an object with `success: true` and `data` containing trade records (each includes the related asset). On failure: an object with `success: false`, an `error` message, and an empty `data` array.
+ */
 export async function getTradeHistory(assetId?: string) {
   try {
     const session = await auth();
@@ -350,5 +442,54 @@ export async function getTradeHistory(assetId?: string) {
   } catch (error) {
     console.error("Get trade history error:", error);
     return { success: false, error: "Failed to fetch trade history", data: [] };
+  }
+}
+
+/**
+ * Searches for financial symbols that match the provided query string.
+ *
+ * @param query - The search string; a lookup is performed only when `query` has at least 2 characters.
+ * @returns On success, an object with `success: true` and `data` containing an array of matching symbol results (empty if no matches or if the query is shorter than 2). On failure or unauthorized access, an object with `success: false`, an `error` message, and `data: []`.
+ */
+export async function searchSymbolsAction(query: string) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return { success: false, error: "Unauthorized", data: [] };
+    }
+
+    if (!query || query.length < 2) {
+      return { success: true, data: [] };
+    }
+
+    const results = await searchSymbols(query);
+    return { success: true, data: results };
+  } catch (error) {
+    console.error("Search symbols error:", error);
+    return { success: false, error: "Failed to search symbols", data: [] };
+  }
+}
+
+/**
+ * Triggers revalidation of portfolio pages so subsequent requests fetch fresh asset prices.
+ *
+ * @returns An object with `success: true` when revalidation was initiated; otherwise `success: false` and an `error` message (for unauthorized access or failure).
+ */
+export async function refreshPortfolioPrices() {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    // Revalidate portfolio data by triggering path revalidation
+    // This will cause fresh data to be fetched on next load
+    revalidatePath("/dashboard/investments", "page");
+    revalidatePath("/dashboard", "page");
+    
+    return { success: true };
+  } catch (error) {
+    console.error("Refresh portfolio prices error:", error);
+    return { success: false, error: "Failed to refresh prices" };
   }
 }
