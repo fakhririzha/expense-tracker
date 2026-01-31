@@ -15,18 +15,46 @@ const TransactionTypeEnum = {
 
 type TransactionType = (typeof TransactionTypeEnum)[keyof typeof TransactionTypeEnum];
 
-const transactionSchema = z.object({
-  amount: z.number().positive("Amount must be positive"),
-  currency: z.string().default("IDR"),
-  exchangeRate: z.number().positive().default(1),
-  type: z.enum(["INCOME", "EXPENSE", "TRANSFER"]),
-  description: z.string().optional(),
-  date: z.date().default(() => new Date()),
-  accountId: z.string().min(1, "Account is required"),
-  categoryId: z.string().optional(),
-  isRecurring: z.boolean().default(false),
-  recurringRuleId: z.string().optional(),
-});
+const transactionSchema = z
+  .object({
+    amount: z.number().positive("Amount must be positive"),
+    currency: z.string().default("IDR"),
+    exchangeRate: z.number().positive().default(1),
+    type: z.enum(["INCOME", "EXPENSE", "TRANSFER"]),
+    description: z.string().optional(),
+    date: z.date().default(() => new Date()),
+    accountId: z.string().min(1, "From account is required"),
+    toAccountId: z.string().optional(),
+    categoryId: z.string().optional(),
+    isRecurring: z.boolean().default(false),
+    recurringRuleId: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      // For TRANSFER type, toAccountId is required
+      if (data.type === "TRANSFER") {
+        return data.toAccountId && data.toAccountId.length > 0;
+      }
+      return true;
+    },
+    {
+      message: "To account is required for transfers",
+      path: ["toAccountId"],
+    }
+  )
+  .refine(
+    (data) => {
+      // From and To accounts must be different for transfers
+      if (data.type === "TRANSFER" && data.toAccountId) {
+        return data.accountId !== data.toAccountId;
+      }
+      return true;
+    },
+    {
+      message: "From and To accounts must be different",
+      path: ["toAccountId"],
+    }
+  );
 
 export type TransactionInput = z.infer<typeof transactionSchema>;
 
@@ -45,7 +73,7 @@ export async function createTransaction(data: TransactionInput) {
       };
     }
 
-    const { amount, type, accountId, ...rest } = validatedFields.data;
+      const { amount, type, accountId, toAccountId, ...rest } = validatedFields.data;
 
     // Verify account belongs to user
     const account = await prisma.financialAccount.findFirst({
@@ -56,33 +84,83 @@ export async function createTransaction(data: TransactionInput) {
       return { success: false, error: "Account not found" };
     }
 
-    // Calculate balance change
+    // For transfers, verify to account belongs to user and is a BANK account
+    let toAccount = null;
+    if (type === "TRANSFER") {
+      if (!toAccountId) {
+        return { success: false, error: "To account is required for transfers" };
+      }
+
+      toAccount = await prisma.financialAccount.findFirst({
+        where: { id: toAccountId, userId: session.user.id },
+      });
+
+      if (!toAccount) {
+        return { success: false, error: "To account not found" };
+      }
+
+      if (toAccount.type !== "BANK") {
+        return { success: false, error: "Transfers can only be made to bank accounts" };
+      }
+
+      if (account.type !== "BANK") {
+        return { success: false, error: "Transfers can only be made from bank accounts" };
+      }
+
+      if (accountId === toAccountId) {
+        return { success: false, error: "Cannot transfer to the same account" };
+      }
+    }
+
+    // Calculate balance change (for non-transfer types)
     const balanceChange = type === "INCOME" ? amount : -amount;
+
+    // Sanitize optional FKs: empty string causes foreign key violation, use null
+    const categoryId = rest.categoryId?.trim() || null;
+    const recurringRuleId = rest.recurringRuleId?.trim() || null;
+    const createData = {
+      amount,
+      type,
+      accountId,
+      userId: session.user.id,
+      toAccountId: type === "TRANSFER" ? toAccountId : null,
+      ...rest,
+      categoryId,
+      recurringRuleId,
+    };
 
     // Use transaction to ensure atomicity
     const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      // Create transaction
+      // Create transaction record
       const transaction = await tx.transaction.create({
-        data: {
-          amount,
-          type,
-          accountId,
-          userId: session.user.id,
-          ...rest,
-        },
+        data: createData,
       });
 
-      // Update account balance
-      await tx.financialAccount.update({
-        where: { id: accountId },
-        data: { balance: { increment: balanceChange } },
-      });
+      if (type === "TRANSFER") {
+        // For transfers: decrement from source account, increment to destination account
+        await tx.financialAccount.update({
+          where: { id: accountId },
+          data: { balance: { decrement: amount } },
+        });
+
+        await tx.financialAccount.update({
+          where: { id: toAccountId },
+          data: { balance: { increment: amount } },
+        });
+      } else {
+        // For income/expense: update single account balance
+        await tx.financialAccount.update({
+          where: { id: accountId },
+          data: { balance: { increment: balanceChange } },
+        });
+      }
 
       return transaction;
     });
 
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/transactions");
+    revalidatePath("/dashboard/accounts");
 
     return { success: true, data: result };
   } catch (error) {

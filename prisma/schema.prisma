@@ -105,12 +105,14 @@ model FinancialAccount {
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  transactions Transaction[]
+  fromTransactions Transaction[] @relation("FromAccount")
+  toTransactions   Transaction[] @relation("ToAccount")
 
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   investmentAssets InvestmentAsset[]
   tradeHistories   TradeHistory[]
+  transactions     Transaction[]
 
   @@index([userId])
 }
@@ -155,7 +157,10 @@ model Transaction {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   accountId String
-  account   FinancialAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  account   FinancialAccount @relation("FromAccount", fields: [accountId], references: [id], onDelete: Cascade)
+
+  toAccountId String?
+  toAccount   FinancialAccount? @relation("ToAccount", fields: [toAccountId], references: [id], onDelete: Cascade)
 
   categoryId String?
   category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
@@ -163,11 +168,14 @@ model Transaction {
   recurringRuleId String?
   recurringRule   RecurringRule? @relation(fields: [recurringRuleId], references: [id], onDelete: SetNull)
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  financialAccount   FinancialAccount? @relation(fields: [financialAccountId], references: [id])
+  financialAccountId String?
 
   @@index([userId])
   @@index([accountId])
+  @@index([toAccountId])
   @@index([categoryId])
   @@index([date])
 }

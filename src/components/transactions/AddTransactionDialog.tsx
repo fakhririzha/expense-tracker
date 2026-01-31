@@ -47,7 +47,8 @@ const transactionFormSchema = z.object({
   type: z.enum(["INCOME", "EXPENSE", "TRANSFER"]),
   description: z.string().optional(),
   date: z.date(),
-  accountId: z.string().min(1, "Account is required"),
+  accountId: z.string().min(1, "From account is required"),
+  toAccountId: z.string().optional(),
   categoryId: z.string().optional(),
   currency: z.string(),
   exchangeRate: z.number(),
@@ -65,6 +66,7 @@ interface Category {
 interface Account {
   id: string;
   name: string;
+  type: string;
 }
 
 interface AddTransactionDialogProps {
@@ -93,6 +95,7 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
       description: "",
       date: new Date(),
       accountId: "",
+      toAccountId: "",
       categoryId: "",
       currency: "IDR",
       exchangeRate: 1,
@@ -107,9 +110,10 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
 
       if (accountsResult.success && accountsResult.data) {
         setAccounts(
-          accountsResult.data.map((a: { id: string; name: string }) => ({
+          accountsResult.data.map((a: { id: string; name: string; type: string }) => ({
             id: a.id,
             name: a.name,
+            type: a.type,
           }))
         );
       }
@@ -230,6 +234,79 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
               )}
             />
 
+            {selectedType === "TRANSFER" ? (
+            <>
+              <FormField
+                control={form.control}
+                name="accountId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>From Account</FormLabel>
+                    <Select
+                      onValueChange={(value) => {
+                        field.onChange(value);
+                        // Clear toAccountId if same as from account
+                        if (form.getValues("toAccountId") === value) {
+                          form.setValue("toAccountId", "");
+                        }
+                      }}
+                      defaultValue={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select source account" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {accounts
+                          .filter((account) => account.type === "BANK")
+                          .map((account) => (
+                            <SelectItem key={account.id} value={account.id}>
+                              {account.name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="toAccountId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>To Account</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select destination account" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {accounts
+                          .filter(
+                            (account) =>
+                              account.type === "BANK" &&
+                              account.id !== form.watch("accountId")
+                          )
+                          .map((account) => (
+                            <SelectItem key={account.id} value={account.id}>
+                              {account.name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </>
+          ) : (
             <FormField
               control={form.control}
               name="accountId"
@@ -257,6 +334,7 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
                 </FormItem>
               )}
             />
+          )}
 
             <FormField
               control={form.control}

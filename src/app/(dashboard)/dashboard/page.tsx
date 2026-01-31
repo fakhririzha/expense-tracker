@@ -78,18 +78,20 @@ export default async function DashboardPage() {
             <div className="text-2xl font-bold">
               {formatCurrency(metrics.totalInvestments, currency)}
             </div>
-            {"data" in portfolioSummary && portfolioSummary.data && (
-              <p
-                className={`text-xs ${
-                  portfolioSummary.data.totalUnrealizedPnL >= 0
-                    ? "text-green-600"
-                    : "text-red-600"
-                }`}
-              >
-                {formatPercentage(portfolioSummary.data.totalUnrealizedPnLPercent)}{" "}
-                unrealized
-              </p>
-            )}
+            {"data" in portfolioSummary &&
+              portfolioSummary.data &&
+              !Array.isArray(portfolioSummary.data) && (
+                <p
+                  className={`text-xs ${
+                    portfolioSummary.data.totalUnrealizedPnL >= 0
+                      ? "text-green-600"
+                      : "text-red-600"
+                  }`}
+                >
+                  {formatPercentage(portfolioSummary.data.totalUnrealizedPnLPercent)}{" "}
+                  unrealized
+                </p>
+              )}
           </CardContent>
         </Card>
 
@@ -178,7 +180,9 @@ export default async function DashboardPage() {
       </div>
 
       {/* Investment Performance Summary */}
-      {"data" in portfolioSummary && portfolioSummary.data && (
+      {"data" in portfolioSummary &&
+        portfolioSummary.data &&
+        !Array.isArray(portfolioSummary.data) && (
         <Card>
           <CardHeader>
             <CardTitle>Investment Performance</CardTitle>

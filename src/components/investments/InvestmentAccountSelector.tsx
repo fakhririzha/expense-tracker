@@ -70,6 +70,7 @@ export function InvestmentAccountSelector({
           setAccounts([]);
         }
       } catch (err) {
+        console.error("Error loading investment accounts:", err);
         setError("An unexpected error occurred");
         setAccounts([]);
       } finally {
