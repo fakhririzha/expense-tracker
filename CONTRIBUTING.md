@@ -411,7 +411,7 @@ Update README.md when:
 ### Getting Help
 
 - Check existing [documentation](./README.md)
-- Search [existing issues](https://github.com/yourusername/expense-tracker/issues)
+- Search [existing issues](https://github.com/fakhririzha/expense-tracker/issues)
 - Ask in discussions for general questions
 
 ### Reporting Bugs
