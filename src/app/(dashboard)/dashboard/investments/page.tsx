@@ -35,6 +35,7 @@ export default function InvestmentsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | undefined>();
+  const [error, setError] = useState<string | null>(null);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -65,13 +66,19 @@ export default function InvestmentsPage() {
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
+    setError(null);
     try {
       // Trigger server-side revalidation
-      await refreshPortfolioPrices();
+      const result = await refreshPortfolioPrices();
+      if (!result.success) {
+        setError(result.error ?? "Failed to refresh prices");
+        return;
+      }
       // Reload data to get fresh prices
       await loadData();
     } catch (error) {
       console.error("Failed to refresh prices:", error);
+      setError("Failed to refresh prices");
     } finally {
       setIsRefreshing(false);
     }
@@ -83,6 +90,11 @@ export default function InvestmentsPage() {
 
   return (
     <div className="space-y-6">
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+          {error}
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Investments</h1>
