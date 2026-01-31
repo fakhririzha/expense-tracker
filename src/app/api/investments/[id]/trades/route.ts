@@ -24,7 +24,7 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id: assetId } = await params;
+    const { id: assetId } = params;
 
     // Verify the asset belongs to the user
     const asset = await prisma.investmentAsset.findFirst({
