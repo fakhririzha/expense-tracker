@@ -141,8 +141,7 @@ export function PortfolioTable({
       cell: ({ row }) => {
         const price = row.getValue("currentPrice") as number;
         const currency = row.original.currency;
-        // const dayChangePercent = row.original.dayChangePercent;
-        const dayChangePercent = (row.original.currentPrice - row.original.avgBuyPrice) / row.original.avgBuyPrice * 100;
+        const dayChangePercent = row.original.dayChangePercent;
         const isPositive = dayChangePercent >= 0;
 
         return (
