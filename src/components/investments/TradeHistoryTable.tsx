@@ -27,7 +27,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { formatCurrency, formatNumber } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
 import { TradeHistoryItem } from "@/types/trade-history";
 
 import { TradeHistorySkeleton } from "./TradeHistorySkeleton";

@@ -44,8 +44,38 @@ export async function GET(
     // Get query parameters for filtering/sorting
     const { searchParams } = new URL(request.url);
     const type = searchParams.get("type");
-    const sortBy = searchParams.get("sortBy") || "date";
-    const sortOrder = searchParams.get("sortOrder") || "desc";
+
+    // Whitelisted sort fields and orders for safe Prisma ordering
+    const allowedSortBy = [
+      "date",
+      "amount",
+      "price",
+      "quantity",
+      "type",
+      "createdAt",
+    ] as const;
+    const allowedSortOrder = ["asc", "desc"] as const;
+
+    // Normalize and validate sort parameters
+    const rawSortBy = searchParams.get("sortBy") || "date";
+    const rawSortOrder = searchParams.get("sortOrder") || "desc";
+
+    const sortBy = allowedSortBy.includes(rawSortBy as typeof allowedSortBy[number])
+      ? (rawSortBy as typeof allowedSortBy[number])
+      : "date";
+    const sortOrder = allowedSortOrder.includes(rawSortOrder as typeof allowedSortOrder[number])
+      ? (rawSortOrder as typeof allowedSortOrder[number])
+      : "desc";
+
+    // Map validated sortBy to actual model field names
+    const sortByFieldMap: Record<typeof allowedSortBy[number], string> = {
+      date: "date",
+      amount: "totalAmount",
+      price: "pricePerUnit",
+      quantity: "quantity",
+      type: "type",
+      createdAt: "createdAt",
+    };
 
     // Build where clause
     const where: Record<string, unknown> = {
@@ -57,9 +87,9 @@ export async function GET(
       where.type = type;
     }
 
-    // Build order by clause
+    // Build order by clause using validated values
     const orderBy: Record<string, string> = {
-      [sortBy]: sortOrder,
+      [sortByFieldMap[sortBy]]: sortOrder,
     };
 
     // Fetch trade history

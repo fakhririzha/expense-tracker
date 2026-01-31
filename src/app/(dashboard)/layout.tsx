@@ -1,6 +1,6 @@
 import { logout } from "@/actions/auth-actions";
 import { auth } from "@/auth";
-import { CurrencySwitcher } from "@/components/CurrencySwitcher";
+// import { CurrencySwitcher } from "@/components/CurrencySwitcher";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {

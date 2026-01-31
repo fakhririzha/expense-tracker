@@ -69,18 +69,26 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
     if (existingAsset) {
       // Update existing asset with weighted average price calculation
       const { quantity: newQuantity, avgBuyPrice: newAvgBuyPrice, ...updateRest } = rest;
-
-      // Calculate new weighted average buy price
-      // Formula: (oldQty * oldPrice + newQty * newPrice) / (oldQty + newQty)
-      const totalQuantity = existingAsset.quantity + newQuantity;
-      const weightedAvgBuyPrice =
-        (existingAsset.avgBuyPrice * existingAsset.quantity + newAvgBuyPrice * newQuantity) /
-        totalQuantity;
-
       const totalAmount = newQuantity * newAvgBuyPrice;
 
       // Update asset and create trade history in transaction
       const updatedAsset = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+        // Re-fetch asset within transaction to get most recent data and prevent race condition
+        const assetToUpdate = await tx.investmentAsset.findUnique({
+          where: { id: existingAsset.id },
+        });
+
+        if (!assetToUpdate) {
+          throw new Error("Asset not found during update");
+        }
+
+        // Calculate new weighted average buy price using most recent data
+        // Formula: (oldQty * oldPrice + newQty * newPrice) / (oldQty + newQty)
+        const totalQuantity = assetToUpdate.quantity + newQuantity;
+        const weightedAvgBuyPrice =
+          (assetToUpdate.avgBuyPrice * assetToUpdate.quantity + newAvgBuyPrice * newQuantity) /
+          totalQuantity;
+
         // Record the buy trade
         await tx.tradeHistory.create({
           data: {
@@ -89,7 +97,7 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
             pricePerUnit: newAvgBuyPrice,
             totalAmount,
             fees: 0,
-            assetId: existingAsset.id,
+            assetId: assetToUpdate.id,
             userId: session.user.id,
             date: new Date(),
             notes: `Additional purchase of ${symbol}`,
@@ -98,12 +106,12 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
 
         // Update the asset
         return tx.investmentAsset.update({
-          where: { id: existingAsset.id },
+          where: { id: assetToUpdate.id },
           data: {
             quantity: totalQuantity,
             avgBuyPrice: weightedAvgBuyPrice,
-            name: updateRest.name || existingAsset.name,
-            currency: updateRest.currency || existingAsset.currency,
+            name: updateRest.name || assetToUpdate.name,
+            currency: updateRest.currency || assetToUpdate.currency,
           },
         });
       });
@@ -184,30 +192,31 @@ export async function recordTrade(data: TradeInput) {
     const { assetId, type, quantity, pricePerUnit, fees, ...rest } =
       validatedFields.data;
 
-    // Get existing asset
-    const asset = await prisma.investmentAsset.findFirst({
-      where: { id: assetId, userId: session.user.id },
-    });
-
-    if (!asset) {
-      return { success: false, error: "Asset not found" };
-    }
-
     const totalAmount = quantity * pricePerUnit + fees;
-    let realizedPnL: number | null = null;
 
-    if (type === "SELL") {
-      // Check if user has enough quantity
-      if (asset.quantity < quantity) {
-        return { success: false, error: "Insufficient quantity to sell" };
+    // Perform all asset operations within transaction to prevent race conditions
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      // Re-fetch asset within transaction to get most recent data
+      const asset = await tx.investmentAsset.findFirst({
+        where: { id: assetId, userId: session.user.id },
+      });
+
+      if (!asset) {
+        throw new Error("Asset not found");
       }
 
-      // Calculate realized PnL
-      realizedPnL = (pricePerUnit - asset.avgBuyPrice) * quantity - fees;
-    }
+      let realizedPnL: number | null = null;
 
-    // Update asset and create trade history in transaction
-    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      if (type === "SELL") {
+        // Check if user has enough quantity
+        if (asset.quantity < quantity) {
+          throw new Error("Insufficient quantity to sell");
+        }
+
+        // Calculate realized PnL
+        realizedPnL = (pricePerUnit - asset.avgBuyPrice) * quantity - fees;
+      }
+
       // Create trade history
       await tx.tradeHistory.create({
         data: {
@@ -224,7 +233,7 @@ export async function recordTrade(data: TradeInput) {
       });
 
       if (type === "BUY") {
-        // Update average buy price and quantity
+        // Update average buy price and quantity using most recent data
         const newTotalQuantity = asset.quantity + quantity;
         const newAvgBuyPrice =
           (asset.avgBuyPrice * asset.quantity + pricePerUnit * quantity) /

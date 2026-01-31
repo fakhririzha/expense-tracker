@@ -47,8 +47,15 @@ async function fetchTradeHistory(
   const response = await fetch(url);
   
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to fetch trade history");
+    let errorMessage: string;
+    try {
+      const errorData = await response.json();
+      errorMessage = errorData.error || "Failed to fetch trade history";
+    } catch {
+      const errorText = await response.text();
+      errorMessage = errorText || "Failed to fetch trade history";
+    }
+    throw new Error(errorMessage);
   }
 
   const data: TradeHistoryResponse = await response.json();
