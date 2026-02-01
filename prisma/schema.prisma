@@ -3,6 +3,7 @@
 
 generator client {
   provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
 }
 
 datasource db {
@@ -121,6 +122,15 @@ enum TransactionType {
   INCOME
   EXPENSE
   TRANSFER
+  LIABILITY_PAYMENT
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  ROLLED_BACK
 }
 
 model Category {
@@ -152,6 +162,15 @@ model Transaction {
   date         DateTime        @default(now())
   isRecurring  Boolean         @default(false)
 
+  // Liability payment specific fields
+  referenceNumber String?       @unique
+  isOverpayment   Boolean       @default(false)
+  paymentStatus   PaymentStatus @default(COMPLETED)
+
+  // Audit trail fields
+  createdBy   String?
+  processedAt DateTime @default(now())
+
   // Relations
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -173,11 +192,15 @@ model Transaction {
   financialAccount   FinancialAccount? @relation(fields: [financialAccountId], references: [id])
   financialAccountId String?
 
+  // Reverse relation for audit
+  liabilityPaymentAudit LiabilityPaymentAudit?
+
   @@index([userId])
   @@index([accountId])
   @@index([toAccountId])
   @@index([categoryId])
   @@index([date])
+  @@index([referenceNumber])
 }
 
 // ==================== INVESTMENT MODELS ====================
@@ -298,4 +321,42 @@ model ExchangeRate {
 
   @@unique([fromCurrency, toCurrency])
   @@index([fetchedAt])
+}
+
+// ==================== LIABILITY PAYMENT AUDIT ====================
+
+model LiabilityPaymentAudit {
+  id            String      @id @default(cuid())
+  transactionId String      @unique
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  // Source account snapshot
+  sourceAccountId     String
+  sourceBalanceBefore Float
+  sourceBalanceAfter  Float
+
+  // Target account snapshot
+  targetAccountId     String
+  targetBalanceBefore Float
+  targetBalanceAfter  Float
+
+  // Payment details
+  paymentAmount Float
+  currency      String
+  exchangeRate  Float
+
+  // Audit metadata
+  executedBy String
+  executedAt DateTime @default(now())
+  ipAddress  String?
+  userAgent  String?
+
+  // Rollback information
+  isRolledBack   Boolean   @default(false)
+  rolledBackAt   DateTime?
+  rollbackReason String?
+
+  @@index([transactionId])
+  @@index([executedBy])
+  @@index([executedAt])
 }

@@ -76,7 +76,13 @@ export function AddAccountDialog({ onSuccess }: AddAccountDialogProps) {
   const onSubmit = async (data: AccountFormValues) => {
     setIsSubmitting(true);
     try {
-      const result = await createAccount(data);
+      let tempData = data;
+      if (data.type === "LOAN" || data.type === "CREDIT_CARD") {
+        tempData = { ...data, balance: (data.balance * -1) };
+      } else {
+        tempData = data;
+      }
+      const result = await createAccount(tempData);
 
       if (result.success) {
         setOpen(false);
