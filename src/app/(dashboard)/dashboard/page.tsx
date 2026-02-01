@@ -16,6 +16,12 @@ import {
 } from "lucide-react";
 import { redirect } from "next/navigation";
 
+/**
+ * Render the authenticated user's dashboard, showing executive metrics, monthly cash flow,
+ * health and retirement progress, and investment performance summaries.
+ *
+ * @returns The dashboard page React element; may trigger a redirect to `/login` when the user is not authenticated or render an error message if executive metrics fail to load.
+ */
 export default async function DashboardPage() {
   const session = await auth();
   if (!session?.user) {

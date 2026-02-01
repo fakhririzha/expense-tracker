@@ -2,6 +2,11 @@ import { auth } from "@/auth";
 import prisma from "@/lib/db";
 import { NextResponse } from "next/server";
 
+/**
+ * Handle GET requests to fetch the authenticated user's active accounts grouped by type.
+ *
+ * @returns A JSON NextResponse containing `bankAccounts` (active BANK accounts ordered by name) and `liabilityAccounts` (active LOAN and CREDIT_CARD accounts ordered by name) for the authenticated user; returns a 401 JSON response with an error when the user is unauthorized, or a 500 JSON response with an error on failure.
+ */
 export async function GET() {
   try {
     const session = await auth();

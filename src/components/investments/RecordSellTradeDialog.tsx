@@ -71,12 +71,11 @@ interface RecordSellTradeDialogProps {
 }
 
 /**
- * Display a modal dialog with a form to record a sell trade for an existing investment asset.
+ * Render a modal dialog that lets the user record a sell trade for an existing investment asset.
  *
- * The form validates inputs against the sell trade schema, provides an asset selector
- * showing only investments with available quantity, validates that sell quantity does
- * not exceed available quantity, and records the sell trade on submit. On successful
- * save, trade history cache entries are invalidated and the dialog resets.
+ * When opened, it loads available sellable investments, enforces that the entered sell quantity
+ * does not exceed the selected asset's available quantity, and records the trade on submit.
+ * On successful save, trade history cache entries are invalidated, the dialog closes, and the form resets.
  *
  * @param onSuccess - Optional callback invoked after a successful trade recording
  * @returns The dialog React element that contains the Record Sell Trade form
@@ -120,6 +119,12 @@ export function RecordSellTradeDialog({ onSuccess }: RecordSellTradeDialogProps)
   };
 
   useEffect(() => {
+    /**
+     * Fetches the list of sellable investments and updates component state accordingly.
+     *
+     * Updates `investments` with the fetched data on success, clears `investments` on failure,
+     * and toggles the `isLoadingInvestments` loading flag for the duration of the request.
+     */
     async function loadInvestments() {
       setIsLoadingInvestments(true);
       try {

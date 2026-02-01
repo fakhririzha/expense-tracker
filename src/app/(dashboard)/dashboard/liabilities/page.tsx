@@ -10,6 +10,11 @@ export const metadata: Metadata = {
   description: "Manage your loans and credit card payments",
 };
 
+/**
+ * Render the Liabilities page showing total debt, counts of loan and credit card accounts, payment history, and an active liabilities list or a no-liabilities warning.
+ *
+ * @returns The JSX for the Liabilities page containing summary cards (total debt, loan accounts, credit cards), a payment history section, and either an active liabilities list with per-account balances or a prompt to add liability accounts.
+ */
 export default async function LiabilitiesPage() {
   const summaryResult = await getAccountsSummary();
   const summary = summaryResult.success ? summaryResult.data : null;

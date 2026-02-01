@@ -70,6 +70,17 @@ interface LiabilityPaymentDialogProps {
   preselectedLiabilityId?: string;
 }
 
+/**
+ * Renders a modal dialog that lets the user pay a liability from a selected bank account.
+ *
+ * The dialog fetches bank and liability accounts when opened, auto-generates a payment reference,
+ * validates payment amount against the selected accounts (insufficient funds, outstanding balance,
+ * and maximum payable), and submits a liability payment. UI includes source/target account selectors,
+ * balance displays, reference generator, description, and date picker.
+ *
+ * @param preselectedLiabilityId - Optional liability account id to preselect and lock the "Pay To" field.
+ * @returns The LiabilityPaymentDialog React element.
+ */
 export function LiabilityPaymentDialog({
   preselectedLiabilityId,
 }: LiabilityPaymentDialogProps) {

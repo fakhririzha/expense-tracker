@@ -58,6 +58,11 @@ export function InvestmentAccountSelector({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    /**
+     * Fetches active investment accounts and updates component state accordingly.
+     *
+     * Updates `accounts`, `isLoading`, and `error`: sets `isLoading` while fetching, populates `accounts` on success, and sets an error message and clears `accounts` on failure or exception. Ensures `isLoading` is cleared when finished.
+     */
     async function loadAccounts() {
       setIsLoading(true);
       setError(null);

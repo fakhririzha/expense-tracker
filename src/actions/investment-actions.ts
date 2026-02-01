@@ -41,16 +41,10 @@ export type InvestmentAssetInput = z.infer<typeof investmentAssetSchema>;
 export type TradeInput = z.infer<typeof tradeSchema>;
 
 /**
- * Creates a new investment asset for the current user or updates an existing asset by recording a BUY trade,
- * adjusting quantity and average buy price, and deducting the purchase amount from the specified investment account.
+ * Create or update an investment asset by recording a BUY trade, updating the asset's quantity and average buy price, and adjusting the specified investment account balance.
  *
- * Validates that:
- * - User has an active INVESTMENT-type account
- * - Account has sufficient funds for the purchase
- * - Atomic transaction ensures balance consistency
- *
- * @param data - Input describing the asset to create or add to (must include `symbol`, `quantity`, `avgBuyPrice`, and `accountId`; may include `name` and `currency`)
- * @returns On success, an object with `success: true`, `data` containing the created or updated investment asset, and either `created: true` or `updated: true`. On failure, an object with `success: false` and an `error` message.
+ * @param data - Input describing the asset to create or add to; must include `symbol`, `quantity`, `avgBuyPrice`, and `accountId` (may include `name` and `currency`)
+ * @returns On success, `{ success: true, data: <asset>, created: true }` or `{ success: true, data: <asset>, updated: true }` plus `account` balance context; on failure, `{ success: false, error: <message> }`.
  */
 export async function createInvestmentAsset(data: InvestmentAssetInput) {
   try {
@@ -700,12 +694,9 @@ export async function getInvestmentAccountsAction() {
 }
 
 /**
- * Fetches the authenticated user's investments that have available quantity greater than zero.
- * Used for populating the sell trade dialog asset selector.
+ * Retrieve the authenticated user's investment assets with quantity greater than zero for use in a sell dialog selector.
  *
- * @returns On success: an object with `success: true` and `data` containing an array of investment assets
- * with their id, symbol, name, quantity, avgBuyPrice, and currency. On failure: an object with
- * `success: false`, an `error` message, and an empty `data` array.
+ * @returns `{ success: true, data: Array<{ id: string; symbol: string; name: string | null; quantity: number; avgBuyPrice: number; currency: string }> }` on success; `{ success: false, error: string, data: [] }` on failure.
  */
 export async function getSellableInvestments() {
   try {

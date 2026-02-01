@@ -20,10 +20,9 @@ export interface ValidationResult<T = unknown> {
 }
 
 /**
- * Validates that a user has at least one active INVESTMENT-type account.
- * 
- * @param userId - The user ID to check
- * @returns Validation result with list of investment accounts if valid
+ * Ensure the user has at least one active INVESTMENT account.
+ *
+ * @returns A ValidationResult containing an array of investment accounts when valid, or an error message when none are found.
  */
 export async function validateInvestmentAccountPrerequisite(
   userId: string
@@ -90,11 +89,9 @@ export async function validateInvestmentAccountOwnership(
 }
 
 /**
- * Validates that an account has sufficient funds for a transaction.
- * 
- * @param accountId - The account ID to check
- * @param requiredAmount - The amount required
- * @returns Validation result with current balance if valid
+ * Check that the specified account has at least the required available balance.
+ *
+ * @returns A ValidationResult whose `data` contains `currentBalance` and `currency` when the account has sufficient funds; otherwise `valid` is `false` and `error` explains the shortage or that the account was not found.
  */
 export async function validateSufficientFunds(
   accountId: string,
@@ -126,12 +123,12 @@ export async function validateSufficientFunds(
 }
 
 /**
- * Validates that a user has sufficient quantity of an asset to sell.
- * 
- * @param userId - The user ID to check
- * @param assetId - The asset ID to validate
- * @param sellQuantity - The quantity to sell
- * @returns Validation result with current quantity if valid
+ * Ensure the user owns the specified investment asset and has at least the requested quantity to sell.
+ *
+ * @param userId - ID of the owner to validate
+ * @param assetId - ID of the investment asset to check
+ * @param sellQuantity - Quantity the user intends to sell
+ * @returns When valid, `data` contains `currentQuantity`, `assetSymbol`, and `assetName`; when invalid, `error` contains a descriptive message
  */
 export async function validateHoldingExists(
   userId: string,
@@ -175,13 +172,12 @@ export async function validateHoldingExists(
 }
 
 /**
- * Comprehensive validation for buy transactions.
- * Validates account ownership, prerequisite, and sufficient funds in one call.
- * 
- * @param userId - The user ID
- * @param accountId - The investment account ID
+ * Validate that a user can execute a buy by confirming the specified investment account belongs to the user, is active, and has sufficient funds.
+ *
+ * @param userId - The ID of the user initiating the buy
+ * @param accountId - The investment account ID to be used for the buy
  * @param totalAmount - The total amount required for the purchase
- * @returns Validation result with account and balance info if valid
+ * @returns A ValidationResult whose `data` contains the account and `balanceBefore` when validation succeeds; `error` is set when validation fails
  */
 export async function validateBuyTransaction(
   userId: string,
@@ -222,14 +218,11 @@ export async function validateBuyTransaction(
 }
 
 /**
- * Comprehensive validation for sell transactions.
- * Validates account ownership and sufficient holdings in one call.
- * 
- * @param userId - The user ID
- * @param accountId - The investment account ID to credit proceeds to
- * @param assetId - The asset ID to sell
- * @param sellQuantity - The quantity to sell
- * @returns Validation result with asset and account info if valid
+ * Validate that the user may sell the specified quantity of an asset from the given investment account.
+ *
+ * Performs ownership and holding checks, fetches the asset record, and returns account and asset details plus the account balance prior to the sale when valid.
+ *
+ * @returns The validated payload: an object containing `account`, `asset` (`id`, `symbol`, `name`, `quantity`, `avgBuyPrice`), and `balanceBefore`. 
  */
 export async function validateSellTransaction(
   userId: string,
@@ -293,11 +286,9 @@ export async function validateSellTransaction(
 }
 
 /**
- * Fetches all active INVESTMENT-type accounts for a user.
- * Useful for populating account selectors.
- * 
- * @param userId - The user ID
- * @returns Array of investment accounts
+ * Return the user's active INVESTMENT accounts ordered by name.
+ *
+ * @returns The array of active INVESTMENT `FinancialAccount` records for the user, ordered ascending by `name`
  */
 export async function getInvestmentAccounts(userId: string): Promise<FinancialAccount[]> {
   return prisma.financialAccount.findMany({

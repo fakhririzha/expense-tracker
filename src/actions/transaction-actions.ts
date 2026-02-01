@@ -58,6 +58,12 @@ const transactionSchema = z
 
 export type TransactionInput = z.infer<typeof transactionSchema>;
 
+/**
+ * Creates a financial transaction, adjusts the related account balance(s), and revalidates relevant caches.
+ *
+ * @param data - Transaction input validated by the file's `transactionSchema`. For transfers, `toAccountId` must be provided and differ from `accountId`.
+ * @returns An object with `success: true` and the created transaction in `data` on success, or `success: false` and an `error` message on failure.
+ */
 export async function createTransaction(data: TransactionInput) {
   try {
     const session = await auth();
