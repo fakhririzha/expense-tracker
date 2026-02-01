@@ -25,7 +25,9 @@ export interface AccountValidationData {
 }
 
 /**
- * Validates that a source account is a BANK type, belongs to user, and is active
+ * Ensure the source account exists, is a BANK account owned by the given user, and is active.
+ *
+ * @returns A ValidationResult with `data` containing the account and its `currentBalance` and `availableBalance` when valid; otherwise contains `error` and `errorCode` describing why validation failed (`INVALID_SOURCE_ACCOUNT` or `ACCOUNT_INACTIVE`).
  */
 export async function validateSourceAccount(
   userId: string,
@@ -67,7 +69,11 @@ export async function validateSourceAccount(
 }
 
 /**
- * Validates that a target account is a LOAN or CREDIT_CARD type, belongs to user, and is active
+ * Ensure the specified target account exists, is a LOAN or CREDIT_CARD liability owned by the user, and is active.
+ *
+ * @param userId - ID of the account owner to validate ownership
+ * @param accountId - ID of the target account to validate
+ * @returns A ValidationResult containing `data` with the account and its `currentBalance` and `availableBalance` when valid; otherwise `valid` is `false` and `error`/`errorCode` explain the failure.
  */
 export async function validateTargetLiabilityAccount(
   userId: string,
@@ -111,7 +117,11 @@ export async function validateTargetLiabilityAccount(
 }
 
 /**
- * Validates that source account has sufficient funds for the payment
+ * Check that an account's balance is at least the required payment amount.
+ *
+ * @param accountId - The ID of the account to validate
+ * @param requiredAmount - The minimum amount required for the payment
+ * @returns ValidationResult whose `data` contains `currentBalance` and `currency` when the account has sufficient funds, `valid` is `false` with `errorCode` and `error` otherwise
  */
 export async function validateSufficientFunds(
   accountId: string,
@@ -145,8 +155,12 @@ export async function validateSufficientFunds(
 }
 
 /**
- * Validates that payment amount does not exceed liability balance
- * unless overpayment protection is disabled
+ * Ensure a payment amount does not exceed the liability account's outstanding balance unless overpayment is allowed.
+ *
+ * @param liabilityAccountId - The ID of the liability (loan or credit card) account to validate against
+ * @param paymentAmount - The amount intended to be paid
+ * @param allowOverpayment - When true, permits payments larger than the outstanding balance
+ * @returns A ValidationResult whose `data` contains `{ liabilityBalance, maxPayment }` when valid; otherwise includes an `errorCode` and `error` describing the failure
  */
 export async function validatePaymentAmount(
   liabilityAccountId: string,
@@ -197,7 +211,10 @@ export async function validatePaymentAmount(
 }
 
 /**
- * Validates reference number uniqueness
+ * Checks that a transaction reference number is not already used.
+ *
+ * @param referenceNumber - The transaction reference to verify for uniqueness
+ * @returns A ValidationResult: `valid: false` with `errorCode: "DUPLICATE_REFERENCE"` and an explanatory `error` if the reference exists, `valid: true` otherwise
  */
 export async function validateReferenceNumber(
   referenceNumber: string
@@ -218,7 +235,11 @@ export async function validateReferenceNumber(
 }
 
 /**
- * Validates that neither account is frozen or closed
+ * Check that both source and target accounts exist and are active.
+ *
+ * Returns an invalid result if either account cannot be found or if one or both accounts are inactive; when available the result includes `sourceActive` and `targetActive` flags.
+ *
+ * @returns A ValidationResult whose `data` contains `sourceActive` and `targetActive` booleans when valid. When invalid, `errorCode` will be one of `ACCOUNT_NOT_FOUND`, `ACCOUNT_INACTIVE`, or `ACCOUNTS_INACTIVE`, and `data` includes activity flags when available.
  */
 export async function validateAccountStatus(
   sourceAccountId: string,
@@ -274,7 +295,23 @@ export async function validateAccountStatus(
 }
 
 /**
- * Comprehensive validation for liability payment
+ * Run end-to-end validations for a liability payment and return the involved accounts and their pre-action balances when valid.
+ *
+ * Validations performed:
+ * - source account exists, is a BANK account, belongs to `userId`, and is active
+ * - target account exists, is a LOAN or CREDIT_CARD account, belongs to `userId`, and is active
+ * - source and target accounts are not the same
+ * - source account has sufficient funds for the requested amount
+ * - payment amount does not exceed the liability balance unless `allowOverpayment` is true
+ * - `referenceNumber` is unique
+ *
+ * @param userId - Owner identifier used to validate account ownership
+ * @param data.sourceAccountId - ID of the source BANK account
+ * @param data.targetAccountId - ID of the target liability account (LOAN or CREDIT_CARD)
+ * @param data.amount - Payment amount to validate
+ * @param data.referenceNumber - Payment reference to check for uniqueness
+ * @param data.allowOverpayment - When true, allows payment amounts that exceed the liability balance
+ * @returns A ValidationResult containing, on success, `sourceAccount`, `targetAccount`, `sourceBalanceBefore`, and `targetBalanceBefore`; on failure, `valid` is false and `error`/`errorCode` describe the problem
  */
 export async function validateLiabilityPayment(
   userId: string,
@@ -385,7 +422,9 @@ export async function validateLiabilityPayment(
 }
 
 /**
- * Fetches all active BANK accounts for a user (for source account selection)
+ * Retrieve the user's active BANK accounts ordered by name.
+ *
+ * @returns An array of the user's active `FinancialAccount` records of type `BANK`, sorted ascending by name
  */
 export async function getBankAccounts(
   userId: string
@@ -419,8 +458,11 @@ export async function getLiabilityAccounts(
 }
 
 /**
- * Generates a unique reference number for liability payments
- * Format: LP-YYYYMMDD-XXXX (where XXXX is a random 4-digit number)
+ * Generate a unique payment reference for liability payments.
+ *
+ * Format: `LP-YYYYMMDD-XXXX` where `YYYYMMDD` is the current date and `XXXX` is a random 4-digit number.
+ *
+ * @returns A string reference in the format `LP-YYYYMMDD-XXXX`.
  */
 export function generatePaymentReference(): string {
   const date = new Date();
@@ -430,7 +472,9 @@ export function generatePaymentReference(): string {
 }
 
 /**
- * Validates if an account has any outstanding balance
+ * Determine whether the account has an outstanding (negative) balance.
+ *
+ * @returns `true` if the account exists and its balance is less than zero, `false` otherwise.
  */
 export async function hasOutstandingBalance(
   accountId: string

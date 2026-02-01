@@ -41,17 +41,10 @@ export interface PaymentResult {
 }
 
 /**
- * Creates a liability payment transaction with double-entry bookkeeping
+ * Create a liability payment using double-entry accounting and record an audit trail.
  *
- * Business Logic:
- * 1. Validate all inputs and business rules
- * 2. Lock both accounts for update (prevent race conditions)
- * 3. Create transaction record with PENDING status
- * 4. Update source account balance (decrement - credit)
- * 5. Update target account balance (increment toward zero - debit)
- * 6. Create audit trail record
- * 7. Update transaction status to COMPLETED
- * 8. Revalidate affected paths
+ * @param data - Input fields required to perform the payment: sourceAccountId, targetAccountId, amount, currency, exchangeRate, description, date, referenceNumber, and allowOverpayment.
+ * @returns A PaymentResult object. On success `data` contains `transactionId`, `referenceNumber`, `sourceAccountId`, `targetAccountId`, `amount`, `sourceBalanceAfter`, and `targetBalanceAfter`. On failure contains `error` and an `errorCode` such as `AUTH_REQUIRED`, `VALIDATION_ERROR`, `DUPLICATE_REFERENCE`, `RECORD_NOT_FOUND`, `RACE_CONDITION`, or `TRANSACTION_FAILED`.
  */
 export async function createLiabilityPayment(
   data: LiabilityPaymentInput
@@ -251,7 +244,9 @@ export async function createLiabilityPayment(
 }
 
 /**
- * Retrieves liability payment details with audit trail
+ * Fetches a liability payment transaction along with its related accounts and audit trail.
+ *
+ * @returns On success, an object with `success: true` and `data` containing the transaction (including `account`, `toAccount`, and `liabilityPaymentAudit`); on failure, an object with `success: false` and an `error` message.
  */
 export async function getLiabilityPaymentDetails(transactionId: string) {
   try {
@@ -298,12 +293,13 @@ export async function getLiabilityPaymentDetails(transactionId: string) {
 }
 
 /**
- * Rolls back a liability payment (for admin/error scenarios)
- * This reverses the payment by:
- * 1. Crediting the source account (adding back the payment amount)
- * 2. Debiting the target account (subtracting the payment amount)
- * 3. Marking the audit record as rolled back
- * 4. Updating the transaction status to ROLLED_BACK
+ * Roll back a recent liability payment and reverse its accounting effects.
+ *
+ * This reverses the original payment within a 24-hour rollback window by crediting the source account, debiting the target account, marking the audit record as rolled back, and updating the transaction status to ROLLED_BACK.
+ *
+ * @param transactionId - The ID of the transaction to roll back
+ * @param reason - The reason for performing the rollback (stored on the audit record)
+ * @returns An object with `success` `true` and `data` containing the updated transaction on success; otherwise `success` `false` and `error` containing a failure message
  */
 export async function rollbackLiabilityPayment(
   transactionId: string,
@@ -406,7 +402,14 @@ export async function rollbackLiabilityPayment(
 }
 
 /**
- * Gets payment history for a specific liability account or all liability payments
+ * Retrieve liability payment records with optional account, pagination, and date-range filters.
+ *
+ * @param accountId - If provided, limits results to payments made to the specified liability account
+ * @param options.limit - Maximum number of records to return (defaults to 50)
+ * @param options.offset - Number of records to skip (for pagination)
+ * @param options.startDate - Include payments on or after this date
+ * @param options.endDate - Include payments on or before this date
+ * @returns An object with `success` indicating operation result, `data` containing an array of transaction records (each including related account, toAccount, and a liability payment audit subset), and `total` with the total matching count when successful; `error` contains a message on failure
  */
 export async function getLiabilityPaymentHistory(
   accountId?: string,
@@ -485,8 +488,11 @@ export async function getLiabilityPaymentHistory(
 }
 
 /**
- * Generates a unique reference number for liability payments
- * Format: LP-YYYYMMDD-XXXX (where XXXX is a random 4-digit number)
+ * Generate a unique liability payment reference in the format `LP-YYYYMMDD-XXXX`.
+ *
+ * Attempts up to 10 generated candidates to ensure uniqueness against existing transactions before failing.
+ *
+ * @returns An object with `success` indicating whether a unique reference was produced; on success `reference` contains the generated reference in the `LP-YYYYMMDD-XXXX` format, on failure `error` contains a human-readable message.
  */
 export async function generatePaymentReference(): Promise<{
   success: boolean;
@@ -532,7 +538,14 @@ export async function generatePaymentReference(): Promise<{
 }
 
 /**
- * Gets summary statistics for liability payments
+ * Produce aggregated statistics for completed liability payments, optionally limited to a date range.
+ *
+ * @param startDate - Inclusive start of the date range to include in the summary
+ * @param endDate - Inclusive end of the date range to include in the summary
+ * @returns An object with:
+ *   - `totalPayments`: total number of matching payments,
+ *   - `totalAmount`: sum of `amount * exchangeRate` for matching payments,
+ *   - `byAccountType`: map of account type to summed `amount * exchangeRate`
  */
 export async function getLiabilityPaymentSummary(startDate?: Date, endDate?: Date) {
   try {

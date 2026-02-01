@@ -74,12 +74,12 @@ interface AddTransactionDialogProps {
 }
 
 /**
- * Render a dialog that lets the user create a new transaction (income, expense, or transfer) and handles its submission lifecycle.
+ * Display a dialog for creating a transaction (income, expense, or transfer).
  *
- * The dialog loads account and category options when opened, creates a transaction on submit, closes and resets on success, and surfaces errors to the form on failure.
+ * Attempts to create the transaction when the form is submitted; on success the dialog closes and the optional callback is invoked.
  *
  * @param onSuccess - Optional callback invoked after a transaction is successfully created
- * @returns The rendered Add Transaction dialog React element
+ * @returns The Add Transaction dialog React element
  */
 export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
   const [open, setOpen] = useState(false);
@@ -105,6 +105,13 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
   const selectedType = form.watch("type");
 
   useEffect(() => {
+    /**
+     * Loads account data and updates the component's accounts state with mapped account objects.
+     *
+     * Fetches accounts and, if the request succeeds and returns data, maps each account to an object
+     * containing `id`, `name`, and `type`, then calls `setAccounts` with the resulting array. If the
+     * fetch fails or returns no data, the accounts state is left unchanged.
+     */
     async function loadData() {
       const [accountsResult] = await Promise.all([getAccounts()]);
 

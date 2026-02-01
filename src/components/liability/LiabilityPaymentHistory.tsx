@@ -45,6 +45,13 @@ interface LiabilityPaymentHistoryProps {
   limit?: number;
 }
 
+/**
+ * Displays liability payment history for a given account and handles loading, error, empty, and populated states.
+ *
+ * @param accountId - Optional account identifier used to filter the fetched payments.
+ * @param limit - Maximum number of payments to fetch. Defaults to 20.
+ * @returns The rendered liability payment history UI (skeleton while loading, error panel on failure, empty message when no data, or a table of payments).
+ */
 export function LiabilityPaymentHistory({
   accountId,
   limit = 20,

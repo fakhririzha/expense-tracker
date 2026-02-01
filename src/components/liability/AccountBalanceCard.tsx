@@ -15,6 +15,24 @@ interface AccountBalanceCardProps {
   className?: string;
 }
 
+/**
+ * Render a stylized account balance card showing account type, account name, and a formatted balance.
+ *
+ * Displays an optional available balance when provided and, when `highlightInsufficient` is true and
+ * `requiredAmount` is supplied, highlights the card and shows an insufficient-funds message if the
+ * available (or fallback) balance is less than the required amount. Otherwise, if `requiredAmount`
+ * is provided and funds are sufficient, shows a confirmation message.
+ *
+ * @param accountName - The display name of the account
+ * @param accountType - Account type identifier; commonly "BANK", "LOAN", or "CREDIT_CARD" (mapped to user-facing labels)
+ * @param balance - Primary balance amount to display (used when `availableBalance` is undefined)
+ * @param currency - ISO currency code used for formatting the amounts (e.g., "IDR", "USD")
+ * @param availableBalance - Optional available balance to display in place of `balance` when present
+ * @param highlightInsufficient - When true and `requiredAmount` is provided, enable visual highlighting for insufficient funds
+ * @param requiredAmount - Optional threshold amount used to determine sufficiency of funds for highlighting and messages
+ * @param className - Optional additional CSS class names applied to the outer card
+ * @returns The rendered account balance card element
+ */
 export function AccountBalanceCard({
   accountName,
   accountType,
