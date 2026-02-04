@@ -41,6 +41,37 @@ export type InvestmentAssetInput = z.infer<typeof investmentAssetSchema>;
 export type TradeInput = z.infer<typeof tradeSchema>;
 
 /**
+ * Helper function for transactions with Serializable isolation and retry logic.
+ * Prevents race conditions in financial operations by ensuring strict isolation.
+ */
+async function withSerializableTransaction<T>(
+  fn: (tx: Prisma.TransactionClient) => Promise<T>,
+  maxRetries: number = 3
+): Promise<T> {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await prisma.$transaction(fn, {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        maxWait: 5000, // 5 seconds max to wait for lock
+        timeout: 10000, // 10 seconds max transaction duration
+      });
+    } catch (error: unknown) {
+      // Check for transaction conflict errors (P2023, P2034, etc.)
+      const prismaError = error as { code?: string };
+      const isConflictError = ["P2023", "P2034"].includes(prismaError.code || "");
+
+      if (isConflictError && attempt < maxRetries) {
+        // Exponential backoff before retry
+        await new Promise((resolve) => setTimeout(resolve, 100 * attempt));
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw new Error("Transaction failed after maximum retries");
+}
+
+/**
  * Create or update an investment asset by recording a BUY trade, updating the asset's quantity and average buy price, and adjusting the specified investment account balance.
  *
  * @param data - Input describing the asset to create or add to; must include `symbol`, `quantity`, `avgBuyPrice`, and `accountId` (may include `name` and `currency`)
@@ -92,8 +123,8 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
       // Update existing asset with weighted average price calculation
       const { quantity: newQuantity, avgBuyPrice: newAvgBuyPrice, currency } = rest;
 
-      // Execute atomic transaction: update asset, create trade history, deduct balance
-      const updatedAsset = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      // Execute atomic transaction with Serializable isolation to prevent race conditions
+      const updatedAsset = await withSerializableTransaction(async (tx) => {
         // Lock account row for update to prevent race conditions
         const lockedAccount = await tx.financialAccount.findUnique({
           where: { id: accountId },
@@ -184,8 +215,8 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
 
     const { quantity, avgBuyPrice, currency } = rest;
 
-    // Create asset and initial trade history in atomic transaction
-    const asset = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    // Create asset and initial trade history in atomic transaction with Serializable isolation
+    const asset = await withSerializableTransaction(async (tx) => {
       // Lock account row for update
       const lockedAccount = await tx.financialAccount.findUnique({
         where: { id: accountId },
@@ -320,8 +351,8 @@ export async function recordTrade(data: TradeInput) {
       }
     }
 
-    // Perform all operations within transaction to prevent race conditions
-    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    // Perform all operations within transaction with Serializable isolation to prevent race conditions
+    const result = await withSerializableTransaction(async (tx) => {
       // Lock account row for update
       const account = await tx.financialAccount.findUnique({
         where: { id: accountId },
