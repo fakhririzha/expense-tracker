@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "postinstall": "pnpm dlx prisma@^6.19.2 migrate deploy && pnpm dlx prisma@^6.19.2 db push && pnpm dlx prisma@^6.19.2 generate"
+    "postinstall": "pnpm dlx prisma@^6.19.2 db push && pnpm dlx prisma@^6.19.2 generate"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",
