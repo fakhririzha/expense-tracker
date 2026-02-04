@@ -2,6 +2,7 @@
 
 import { getPortfolio, getPortfolioSummary, refreshPortfolioPrices } from "@/actions/investment-actions";
 import { AddInvestmentDialog } from "@/components/investments/AddInvestmentDialog";
+import { RecordSellTradeDialog } from "@/components/investments/RecordSellTradeDialog";
 import {
   PortfolioAsset,
   PortfolioTable,
@@ -102,7 +103,10 @@ export default function InvestmentsPage() {
             Track your investment portfolio and performance
           </p>
         </div>
-        <AddInvestmentDialog onSuccess={loadData} />
+        <div className="flex gap-2">
+          <RecordSellTradeDialog onSuccess={loadData} />
+          <AddInvestmentDialog onSuccess={loadData} />
+        </div>
       </div>
 
       {/* Summary Cards */}

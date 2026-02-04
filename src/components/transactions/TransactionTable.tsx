@@ -45,7 +45,7 @@ export interface Transaction {
   amount: number;
   currency: string;
   exchangeRate: number;
-  type: "INCOME" | "EXPENSE" | "TRANSFER";
+  type: "INCOME" | "EXPENSE" | "TRANSFER" | "LIABILITY_PAYMENT";
   description: string | null;
   date: Date;
   isRecurring: boolean;

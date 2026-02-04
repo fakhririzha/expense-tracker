@@ -16,6 +16,12 @@ import {
 } from "lucide-react";
 import { redirect } from "next/navigation";
 
+/**
+ * Render the authenticated user's dashboard, showing executive metrics, monthly cash flow,
+ * health and retirement progress, and investment performance summaries.
+ *
+ * @returns The dashboard page React element; may trigger a redirect to `/login` when the user is not authenticated or render an error message if executive metrics fail to load.
+ */
 export default async function DashboardPage() {
   const session = await auth();
   if (!session?.user) {
@@ -78,18 +84,20 @@ export default async function DashboardPage() {
             <div className="text-2xl font-bold">
               {formatCurrency(metrics.totalInvestments, currency)}
             </div>
-            {"data" in portfolioSummary && portfolioSummary.data && (
-              <p
-                className={`text-xs ${
-                  portfolioSummary.data.totalUnrealizedPnL >= 0
-                    ? "text-green-600"
-                    : "text-red-600"
-                }`}
-              >
-                {formatPercentage(portfolioSummary.data.totalUnrealizedPnLPercent)}{" "}
-                unrealized
-              </p>
-            )}
+            {"data" in portfolioSummary &&
+              portfolioSummary.data &&
+              !Array.isArray(portfolioSummary.data) && (
+                <p
+                  className={`text-xs ${
+                    portfolioSummary.data.totalUnrealizedPnL >= 0
+                      ? "text-green-600"
+                      : "text-red-600"
+                  }`}
+                >
+                  {formatPercentage(portfolioSummary.data.totalUnrealizedPnLPercent)}{" "}
+                  unrealized
+                </p>
+              )}
           </CardContent>
         </Card>
 
@@ -178,7 +186,9 @@ export default async function DashboardPage() {
       </div>
 
       {/* Investment Performance Summary */}
-      {"data" in portfolioSummary && portfolioSummary.data && (
+      {"data" in portfolioSummary &&
+        portfolioSummary.data &&
+        !Array.isArray(portfolioSummary.data) && (
         <Card>
           <CardHeader>
             <CardTitle>Investment Performance</CardTitle>

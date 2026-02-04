@@ -3,6 +3,7 @@
 
 generator client {
   provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
 }
 
 datasource db {
@@ -20,18 +21,18 @@ model User {
   image         String?
   password      String?
   mainCurrency  String    @default("IDR") // User's preferred currency for reporting
-  
+
   // Financial targets
   retirementTarget Float?
   monthlyBudget    Float?
-  
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Auth.js relations
-  accounts      AuthAccount[]
-  sessions      Session[]
-  
+  accounts AuthAccount[]
+  sessions Session[]
+
   // Financial relations
   financialAccounts FinancialAccount[]
   transactions      Transaction[]
@@ -101,14 +102,18 @@ model FinancialAccount {
   balance     Float       @default(0)
   description String?
   isActive    Boolean     @default(true)
-  
+
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  transactions Transaction[]
-  
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  fromTransactions Transaction[] @relation("FromAccount")
+  toTransactions   Transaction[] @relation("ToAccount")
+
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  investmentAssets InvestmentAsset[]
+  tradeHistories   TradeHistory[]
+  transactions     Transaction[]
 
   @@index([userId])
 }
@@ -117,6 +122,15 @@ enum TransactionType {
   INCOME
   EXPENSE
   TRANSFER
+  LIABILITY_PAYMENT
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  ROLLED_BACK
 }
 
 model Category {
@@ -126,12 +140,12 @@ model Category {
   color    String?
   type     TransactionType
   isSystem Boolean         @default(false) // System categories can't be deleted
-  
+
   userId String?
   user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   transactions Transaction[]
-  
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -147,49 +161,73 @@ model Transaction {
   description  String?
   date         DateTime        @default(now())
   isRecurring  Boolean         @default(false)
-  
+
+  // Liability payment specific fields
+  referenceNumber String?       @unique
+  isOverpayment   Boolean       @default(false)
+  paymentStatus   PaymentStatus @default(COMPLETED)
+
+  // Audit trail fields
+  createdBy   String?
+  processedAt DateTime @default(now())
+
   // Relations
-  userId    String
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   accountId String
-  account   FinancialAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  
+  account   FinancialAccount @relation("FromAccount", fields: [accountId], references: [id], onDelete: Cascade)
+
+  toAccountId String?
+  toAccount   FinancialAccount? @relation("ToAccount", fields: [toAccountId], references: [id], onDelete: Cascade)
+
   categoryId String?
   category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  
+
   recurringRuleId String?
   recurringRule   RecurringRule? @relation(fields: [recurringRuleId], references: [id], onDelete: SetNull)
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  financialAccount   FinancialAccount? @relation(fields: [financialAccountId], references: [id])
+  financialAccountId String?
+
+  // Reverse relation for audit
+  liabilityPaymentAudit LiabilityPaymentAudit?
 
   @@index([userId])
   @@index([accountId])
+  @@index([toAccountId])
   @@index([categoryId])
   @@index([date])
+  @@index([referenceNumber])
 }
 
 // ==================== INVESTMENT MODELS ====================
 
 model InvestmentAsset {
   id          String  @id @default(cuid())
-  symbol      String  // e.g., AAPL, BTC-USD
+  symbol      String // e.g., AAPL, BTC-USD
   name        String? // e.g., Apple Inc.
   quantity    Float
-  avgBuyPrice Float   // Cost basis per unit
+  avgBuyPrice Float // Cost basis per unit
   currency    String  @default("IDR") // Asset's trading currency
-  
+
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  // Account linkage for tracking which investment account holds this asset
+  accountId String?
+  account   FinancialAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
   tradeHistory TradeHistory[]
-  
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([userId, symbol])
   @@index([userId])
+  @@index([accountId])
 }
 
 enum TradeType {
@@ -206,21 +244,30 @@ model TradeHistory {
   fees         Float     @default(0)
   date         DateTime  @default(now())
   notes        String?
-  
+
   // Realized PnL (only for SELL trades)
   realizedPnL Float?
-  
+
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
   assetId String
   asset   InvestmentAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  // Account linkage for audit trail - tracks which account was debited/credited
+  accountId String?
+  account   FinancialAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  // Audit trail fields for balance tracking
+  balanceBefore Float? // Account balance before this transaction
+  balanceAfter  Float? // Account balance after this transaction
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([userId])
   @@index([assetId])
+  @@index([accountId])
   @@index([date])
 }
 
@@ -245,17 +292,17 @@ model RecurringRule {
   nextDueDate DateTime
   endDate     DateTime?
   isActive    Boolean           @default(true)
-  
+
   // Template data for creating transactions
   description String?
   categoryId  String?
   accountId   String?
-  
+
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   transactions Transaction[]
-  
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -274,4 +321,42 @@ model ExchangeRate {
 
   @@unique([fromCurrency, toCurrency])
   @@index([fetchedAt])
+}
+
+// ==================== LIABILITY PAYMENT AUDIT ====================
+
+model LiabilityPaymentAudit {
+  id            String      @id @default(cuid())
+  transactionId String      @unique
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  // Source account snapshot
+  sourceAccountId     String
+  sourceBalanceBefore Float
+  sourceBalanceAfter  Float
+
+  // Target account snapshot
+  targetAccountId     String
+  targetBalanceBefore Float
+  targetBalanceAfter  Float
+
+  // Payment details
+  paymentAmount Float
+  currency      String
+  exchangeRate  Float
+
+  // Audit metadata
+  executedBy String
+  executedAt DateTime @default(now())
+  ipAddress  String?
+  userAgent  String?
+
+  // Rollback information
+  isRolledBack   Boolean   @default(false)
+  rolledBackAt   DateTime?
+  rollbackReason String?
+
+  @@index([transactionId])
+  @@index([executedBy])
+  @@index([executedAt])
 }

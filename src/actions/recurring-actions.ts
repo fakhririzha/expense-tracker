@@ -37,9 +37,24 @@ export async function createRecurringRule(data: RecurringRuleInput) {
       };
     }
 
+    // Validate category belongs to user OR is a system category (IDOR prevention)
+    const { categoryId, ...restData } = validatedFields.data;
+    if (categoryId) {
+      const category = await prisma.category.findFirst({
+        where: {
+          id: categoryId,
+          OR: [{ userId: session.user.id }, { isSystem: true }],
+        },
+      });
+      if (!category) {
+        return { success: false, error: "Category not found" };
+      }
+    }
+
     const rule = await prisma.recurringRule.create({
       data: {
-        ...validatedFields.data,
+        ...restData,
+        categoryId: categoryId?.trim() || null,
         userId: session.user.id,
       },
     });
@@ -72,9 +87,28 @@ export async function updateRecurringRule(
       return { success: false, error: "Recurring rule not found" };
     }
 
+    // Validate category belongs to user OR is a system category (IDOR prevention)
+    if (data.categoryId !== undefined) {
+      const sanitizedCategoryId = data.categoryId?.trim() || null;
+      if (sanitizedCategoryId) {
+        const category = await prisma.category.findFirst({
+          where: {
+            id: sanitizedCategoryId,
+            OR: [{ userId: session.user.id }, { isSystem: true }],
+          },
+        });
+        if (!category) {
+          return { success: false, error: "Category not found" };
+        }
+      }
+    }
+
     const rule = await prisma.recurringRule.update({
       where: { id },
-      data,
+      data: {
+        ...data,
+        categoryId: data.categoryId !== undefined ? (data.categoryId?.trim() || null) : undefined,
+      },
     });
 
     revalidatePath("/dashboard");

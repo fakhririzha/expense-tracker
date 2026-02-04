@@ -15,21 +15,55 @@ const TransactionTypeEnum = {
 
 type TransactionType = (typeof TransactionTypeEnum)[keyof typeof TransactionTypeEnum];
 
-const transactionSchema = z.object({
-  amount: z.number().positive("Amount must be positive"),
-  currency: z.string().default("IDR"),
-  exchangeRate: z.number().positive().default(1),
-  type: z.enum(["INCOME", "EXPENSE", "TRANSFER"]),
-  description: z.string().optional(),
-  date: z.date().default(() => new Date()),
-  accountId: z.string().min(1, "Account is required"),
-  categoryId: z.string().optional(),
-  isRecurring: z.boolean().default(false),
-  recurringRuleId: z.string().optional(),
-});
+const transactionSchema = z
+  .object({
+    amount: z.number().positive("Amount must be positive"),
+    currency: z.string().default("IDR"),
+    exchangeRate: z.number().positive().default(1),
+    type: z.enum(["INCOME", "EXPENSE", "TRANSFER"]),
+    description: z.string().optional(),
+    date: z.date().default(() => new Date()),
+    accountId: z.string().min(1, "From account is required"),
+    toAccountId: z.string().optional(),
+    categoryId: z.string().optional(),
+    isRecurring: z.boolean().default(false),
+    recurringRuleId: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      // For TRANSFER type, toAccountId is required
+      if (data.type === "TRANSFER") {
+        return data.toAccountId && data.toAccountId.length > 0;
+      }
+      return true;
+    },
+    {
+      message: "To account is required for transfers",
+      path: ["toAccountId"],
+    }
+  )
+  .refine(
+    (data) => {
+      // From and To accounts must be different for transfers
+      if (data.type === "TRANSFER" && data.toAccountId) {
+        return data.accountId !== data.toAccountId;
+      }
+      return true;
+    },
+    {
+      message: "From and To accounts must be different",
+      path: ["toAccountId"],
+    }
+  );
 
 export type TransactionInput = z.infer<typeof transactionSchema>;
 
+/**
+ * Creates a financial transaction, adjusts the related account balance(s), and revalidates relevant caches.
+ *
+ * @param data - Transaction input validated by the file's `transactionSchema`. For transfers, `toAccountId` must be provided and differ from `accountId`.
+ * @returns An object with `success: true` and the created transaction in `data` on success, or `success: false` and an `error` message on failure.
+ */
 export async function createTransaction(data: TransactionInput) {
   try {
     const session = await auth();
@@ -45,7 +79,7 @@ export async function createTransaction(data: TransactionInput) {
       };
     }
 
-    const { amount, type, accountId, ...rest } = validatedFields.data;
+      const { amount, type, accountId, toAccountId, ...rest } = validatedFields.data;
 
     // Verify account belongs to user
     const account = await prisma.financialAccount.findFirst({
@@ -56,33 +90,107 @@ export async function createTransaction(data: TransactionInput) {
       return { success: false, error: "Account not found" };
     }
 
-    // Calculate balance change
+    // For transfers, verify to account belongs to user and is a BANK account
+    let toAccount = null;
+    if (type === "TRANSFER") {
+      if (!toAccountId) {
+        return { success: false, error: "To account is required for transfers" };
+      }
+
+      toAccount = await prisma.financialAccount.findFirst({
+        where: { id: toAccountId, userId: session.user.id },
+      });
+
+      if (!toAccount) {
+        return { success: false, error: "To account not found" };
+      }
+
+      if (toAccount.type !== "BANK") {
+        return { success: false, error: "Transfers can only be made to bank accounts" };
+      }
+
+      if (account.type !== "BANK") {
+        return { success: false, error: "Transfers can only be made from bank accounts" };
+      }
+
+      if (accountId === toAccountId) {
+        return { success: false, error: "Cannot transfer to the same account" };
+      }
+    }
+
+    // Calculate balance change (for non-transfer types)
     const balanceChange = type === "INCOME" ? amount : -amount;
+
+    // Sanitize optional FKs: empty string causes foreign key violation, use null
+    const categoryId = rest.categoryId?.trim() || null;
+    const recurringRuleId = rest.recurringRuleId?.trim() || null;
+
+    // Validate category belongs to user OR is a system category (IDOR prevention)
+    if (categoryId) {
+      const category = await prisma.category.findFirst({
+        where: {
+          id: categoryId,
+          OR: [{ userId: session.user.id }, { isSystem: true }],
+        },
+      });
+      if (!category) {
+        return { success: false, error: "Category not found" };
+      }
+    }
+
+    // Validate recurring rule belongs to user (IDOR prevention)
+    if (recurringRuleId) {
+      const recurringRule = await prisma.recurringRule.findFirst({
+        where: { id: recurringRuleId, userId: session.user.id },
+      });
+      if (!recurringRule) {
+        return { success: false, error: "Recurring rule not found" };
+      }
+    }
+
+    const createData = {
+      amount,
+      type,
+      accountId,
+      userId: session.user.id,
+      toAccountId: type === "TRANSFER" ? toAccountId : null,
+      ...rest,
+      categoryId,
+      recurringRuleId,
+    };
 
     // Use transaction to ensure atomicity
     const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      // Create transaction
+      // Create transaction record
       const transaction = await tx.transaction.create({
-        data: {
-          amount,
-          type,
-          accountId,
-          userId: session.user.id,
-          ...rest,
-        },
+        data: createData,
       });
 
-      // Update account balance
-      await tx.financialAccount.update({
-        where: { id: accountId },
-        data: { balance: { increment: balanceChange } },
-      });
+      if (type === "TRANSFER") {
+        // For transfers: decrement from source account, increment to destination account
+        await tx.financialAccount.update({
+          where: { id: accountId },
+          data: { balance: { decrement: amount } },
+        });
+
+        await tx.financialAccount.update({
+          where: { id: toAccountId },
+          data: { balance: { increment: amount } },
+        });
+      } else {
+        // For income/expense: update single account balance
+        await tx.financialAccount.update({
+          where: { id: accountId },
+          data: { balance: { increment: balanceChange } },
+        });
+      }
 
       return transaction;
     });
 
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/transactions");
+    revalidatePath("/dashboard/accounts");
 
     return { success: true, data: result };
   } catch (error) {
@@ -111,21 +219,62 @@ export async function updateTransaction(
       return { success: false, error: "Transaction not found" };
     }
 
-    const { amount, type, accountId, ...rest } = data;
+    const { amount, type, accountId, categoryId, recurringRuleId, ...rest } = data;
+
+    // Validate category belongs to user OR is a system category (IDOR prevention)
+    if (categoryId !== undefined) {
+      const sanitizedCategoryId = categoryId?.trim() || null;
+      if (sanitizedCategoryId) {
+        const category = await prisma.category.findFirst({
+          where: {
+            id: sanitizedCategoryId,
+            OR: [{ userId: session.user.id }, { isSystem: true }],
+          },
+        });
+        if (!category) {
+          return { success: false, error: "Category not found" };
+        }
+      }
+    }
+
+    // Validate recurring rule belongs to user (IDOR prevention)
+    if (recurringRuleId !== undefined) {
+      const sanitizedRecurringRuleId = recurringRuleId?.trim() || null;
+      if (sanitizedRecurringRuleId) {
+        const recurringRule = await prisma.recurringRule.findFirst({
+          where: { id: sanitizedRecurringRuleId, userId: session.user.id },
+        });
+        if (!recurringRule) {
+          return { success: false, error: "Recurring rule not found" };
+        }
+      }
+    }
 
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Reverse old balance change
-      const oldBalanceChange =
-        existingTransaction.type === "INCOME"
-          ? -existingTransaction.amount
-          : existingTransaction.amount;
+      if (existingTransaction.type === "TRANSFER" && existingTransaction.toAccountId) {
+        // For transfers: reverse by incrementing source account and decrementing destination account
+        await tx.financialAccount.update({
+          where: { id: existingTransaction.accountId },
+          data: { balance: { increment: existingTransaction.amount } },
+        });
+        await tx.financialAccount.update({
+          where: { id: existingTransaction.toAccountId },
+          data: { balance: { decrement: existingTransaction.amount } },
+        });
+      } else {
+        // For income/expense: reverse against single account
+        const oldBalanceChange =
+          existingTransaction.type === "INCOME"
+            ? -existingTransaction.amount
+            : existingTransaction.amount;
+        await tx.financialAccount.update({
+          where: { id: existingTransaction.accountId },
+          data: { balance: { increment: oldBalanceChange } },
+        });
+      }
 
-      await tx.financialAccount.update({
-        where: { id: existingTransaction.accountId },
-        data: { balance: { increment: oldBalanceChange } },
-      });
-
-      // Apply new balance change
+      // Apply new balance change (non-TRANSFER only for now per user request)
       const newAmount = amount ?? existingTransaction.amount;
       const newType = type ?? existingTransaction.type;
       const newAccountId = accountId ?? existingTransaction.accountId;
@@ -143,7 +292,8 @@ export async function updateTransaction(
           amount: newAmount,
           type: newType,
           accountId: newAccountId,
-          ...rest,
+          categoryId: categoryId !== undefined ? (categoryId?.trim() || null) : undefined,
+          recurringRuleId: recurringRuleId !== undefined ? (recurringRuleId?.trim() || null) : undefined,
         },
       });
     });
@@ -167,6 +317,7 @@ export async function deleteTransaction(id: string) {
 
     const transaction = await prisma.transaction.findFirst({
       where: { id, userId: session.user.id },
+      select: { id: true, amount: true, type: true, accountId: true, toAccountId: true },
     });
 
     if (!transaction) {
@@ -175,15 +326,27 @@ export async function deleteTransaction(id: string) {
 
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Reverse balance change
-      const balanceChange =
-        transaction.type === "INCOME"
-          ? -transaction.amount
-          : transaction.amount;
-
-      await tx.financialAccount.update({
-        where: { id: transaction.accountId },
-        data: { balance: { increment: balanceChange } },
-      });
+      if (transaction.type === "TRANSFER" && transaction.toAccountId) {
+        // For transfers: reverse by incrementing source account and decrementing destination account
+        await tx.financialAccount.update({
+          where: { id: transaction.accountId },
+          data: { balance: { increment: transaction.amount } },
+        });
+        await tx.financialAccount.update({
+          where: { id: transaction.toAccountId },
+          data: { balance: { decrement: transaction.amount } },
+        });
+      } else {
+        // For income/expense: reverse against single account
+        const balanceChange =
+          transaction.type === "INCOME"
+            ? -transaction.amount
+            : transaction.amount;
+        await tx.financialAccount.update({
+          where: { id: transaction.accountId },
+          data: { balance: { increment: balanceChange } },
+        });
+      }
 
       // Delete transaction
       await tx.transaction.delete({ where: { id } });

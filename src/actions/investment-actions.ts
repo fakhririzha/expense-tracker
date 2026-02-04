@@ -3,6 +3,11 @@
 import { auth } from "@/auth";
 import prisma from "@/lib/db";
 import {
+    validateBuyTransaction,
+    validateSellTransaction,
+    getInvestmentAccounts,
+} from "@/lib/investment-validation";
+import {
     calculateInvestmentMetrics,
     getAssetPrice,
     getMultipleAssetPrices,
@@ -18,6 +23,7 @@ const investmentAssetSchema = z.object({
   quantity: z.number().positive("Quantity must be positive"),
   avgBuyPrice: z.number().positive("Average buy price must be positive"),
   currency: z.string().default("IDR"),
+  accountId: z.string().min(1, "Investment account is required"),
 });
 
 const tradeSchema = z.object({
@@ -28,16 +34,48 @@ const tradeSchema = z.object({
   fees: z.number().min(0).default(0),
   date: z.date().default(() => new Date()),
   notes: z.string().optional(),
+  accountId: z.string().min(1, "Investment account is required"),
 });
 
 export type InvestmentAssetInput = z.infer<typeof investmentAssetSchema>;
 export type TradeInput = z.infer<typeof tradeSchema>;
 
 /**
- * Creates a new investment asset for the current user or updates an existing asset by recording a BUY trade and adjusting quantity and average buy price.
+ * Helper function for transactions with Serializable isolation and retry logic.
+ * Prevents race conditions in financial operations by ensuring strict isolation.
+ */
+async function withSerializableTransaction<T>(
+  fn: (tx: Prisma.TransactionClient) => Promise<T>,
+  maxRetries: number = 3
+): Promise<T> {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await prisma.$transaction(fn, {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        maxWait: 5000, // 5 seconds max to wait for lock
+        timeout: 10000, // 10 seconds max transaction duration
+      });
+    } catch (error: unknown) {
+      // Check for transaction conflict errors (P2023, P2034, etc.)
+      const prismaError = error as { code?: string };
+      const isConflictError = ["P2023", "P2034"].includes(prismaError.code || "");
+
+      if (isConflictError && attempt < maxRetries) {
+        // Exponential backoff before retry
+        await new Promise((resolve) => setTimeout(resolve, 100 * attempt));
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw new Error("Transaction failed after maximum retries");
+}
+
+/**
+ * Create or update an investment asset by recording a BUY trade, updating the asset's quantity and average buy price, and adjusting the specified investment account balance.
  *
- * @param data - Input describing the asset to create or add to (must include `symbol`, `quantity`, and `avgBuyPrice`; may include `name` and `currency`)
- * @returns On success, an object with `success: true`, `data` containing the created or updated investment asset, and either `created: true` or `updated: true`. On failure, an object with `success: false` and an `error` message.
+ * @param data - Input describing the asset to create or add to; must include `symbol`, `quantity`, `avgBuyPrice`, and `accountId` (may include `name` and `currency`)
+ * @returns On success, `{ success: true, data: <asset>, created: true }` or `{ success: true, data: <asset>, updated: true }` plus `account` balance context; on failure, `{ success: false, error: <message> }`.
  */
 export async function createInvestmentAsset(data: InvestmentAssetInput) {
   try {
@@ -54,7 +92,21 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
       };
     }
 
-    const { symbol, ...rest } = validatedFields.data;
+    const { symbol, accountId, ...rest } = validatedFields.data;
+    const totalAmount = rest.quantity * rest.avgBuyPrice;
+
+    // Validate investment account and sufficient funds
+    const validationResult = await validateBuyTransaction(
+      session.user.id,
+      accountId,
+      totalAmount
+    );
+
+    if (!validationResult.valid) {
+      return { success: false, error: validationResult.error };
+    }
+
+    const { account } = validationResult.data!;
 
     // Check if asset already exists for user
     const existingAsset = await prisma.investmentAsset.findUnique({
@@ -68,12 +120,23 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
 
     if (existingAsset) {
       // Update existing asset with weighted average price calculation
-      const { quantity: newQuantity, avgBuyPrice: newAvgBuyPrice, ...updateRest } = rest;
-      const totalAmount = newQuantity * newAvgBuyPrice;
+      const { quantity: newQuantity, avgBuyPrice: newAvgBuyPrice, currency } = rest;
 
-      // Update asset and create trade history in transaction
-      const updatedAsset = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-        // Re-fetch asset within transaction to get most recent data and prevent race condition
+      // Execute atomic transaction with Serializable isolation to prevent race conditions
+      const updatedAsset = await withSerializableTransaction(async (tx) => {
+        // Lock account row for update to prevent race conditions
+        const lockedAccount = await tx.financialAccount.findUnique({
+          where: { id: accountId },
+        });
+
+        if (!lockedAccount || lockedAccount.balance < totalAmount) {
+          throw new Error("Insufficient funds or account not found");
+        }
+
+        // Compute balanceBefore from fresh read inside transaction
+        const balanceBefore = lockedAccount.balance;
+
+        // Re-fetch asset within transaction to get most recent data
         const assetToUpdate = await tx.investmentAsset.findUnique({
           where: { id: existingAsset.id },
         });
@@ -82,14 +145,35 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
           throw new Error("Asset not found during update");
         }
 
-        // Calculate new weighted average buy price using most recent data
+        // Calculate new weighted average buy price
         // Formula: (oldQty * oldPrice + newQty * newPrice) / (oldQty + newQty)
         const totalQuantity = assetToUpdate.quantity + newQuantity;
         const weightedAvgBuyPrice =
           (assetToUpdate.avgBuyPrice * assetToUpdate.quantity + newAvgBuyPrice * newQuantity) /
           totalQuantity;
 
-        // Record the buy trade
+        // Update the asset
+        const updated = await tx.investmentAsset.update({
+          where: { id: assetToUpdate.id },
+          data: {
+            quantity: totalQuantity,
+            avgBuyPrice: weightedAvgBuyPrice,
+            name: rest.name || assetToUpdate.name,
+            currency: currency || assetToUpdate.currency,
+            accountId: account.id, // Link to investment account
+          },
+        });
+
+        // Deduct balance from account and get updated balance
+        const updatedAccount = await tx.financialAccount.update({
+          where: { id: accountId },
+          data: { balance: { decrement: totalAmount } },
+        });
+
+        // Compute balanceAfter immediately before writing trade history
+        const balanceAfter = updatedAccount.balance;
+
+        // Record the buy trade with audit trail using fresh balance snapshots
         await tx.tradeHistory.create({
           data: {
             type: "BUY",
@@ -99,27 +183,32 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
             fees: 0,
             assetId: assetToUpdate.id,
             userId: session.user.id,
+            accountId: account.id,
+            balanceBefore,
+            balanceAfter,
             date: new Date(),
             notes: `Additional purchase of ${symbol}`,
           },
         });
 
-        // Update the asset
-        return tx.investmentAsset.update({
-          where: { id: assetToUpdate.id },
-          data: {
-            quantity: totalQuantity,
-            avgBuyPrice: weightedAvgBuyPrice,
-            name: updateRest.name || assetToUpdate.name,
-            currency: updateRest.currency || assetToUpdate.currency,
-          },
-        });
+        return { asset: updated, balanceBefore, balanceAfter };
       });
 
       revalidatePath("/dashboard");
       revalidatePath("/dashboard/investments");
+      revalidatePath("/dashboard/accounts");
 
-      return { success: true, data: updatedAsset, updated: true };
+      return { 
+        success: true, 
+        data: updatedAsset.asset, 
+        updated: true,
+        account: {
+          id: account.id,
+          name: account.name,
+          balanceBefore: updatedAsset.balanceBefore,
+          balanceAfter: updatedAsset.balanceAfter,
+        }
+      };
     }
 
     // Fetch asset name from Yahoo Finance if not provided
@@ -130,11 +219,22 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
     }
 
     const { quantity, avgBuyPrice, currency } = rest;
-    const totalAmount = quantity * avgBuyPrice;
 
-    // Create asset and initial trade history in transaction
-    const asset = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      // Create the investment asset
+    // Create asset and initial trade history in atomic transaction with Serializable isolation
+    const asset = await withSerializableTransaction(async (tx) => {
+      // Lock account row for update
+      const lockedAccount = await tx.financialAccount.findUnique({
+        where: { id: accountId },
+      });
+
+      if (!lockedAccount || lockedAccount.balance < totalAmount) {
+        throw new Error("Insufficient funds or account not found");
+      }
+
+      // Compute balanceBefore from fresh read inside transaction
+      const balanceBefore = lockedAccount.balance;
+
+      // Create the investment asset linked to the account
       const newAsset = await tx.investmentAsset.create({
         data: {
           symbol,
@@ -143,10 +243,20 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
           quantity,
           avgBuyPrice,
           currency,
+          accountId: account.id,
         },
       });
 
-      // Create initial BUY trade record
+      // Deduct balance from account and get updated balance
+      const updatedAccount = await tx.financialAccount.update({
+        where: { id: accountId },
+        data: { balance: { decrement: totalAmount } },
+      });
+
+      // Compute balanceAfter immediately before writing trade history
+      const balanceAfter = updatedAccount.balance;
+
+      // Create initial BUY trade record with audit trail using fresh balance snapshots
       await tx.tradeHistory.create({
         data: {
           type: "BUY",
@@ -156,24 +266,60 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
           fees: 0,
           assetId: newAsset.id,
           userId: session.user.id,
+          accountId: account.id,
+          balanceBefore,
+          balanceAfter,
           date: new Date(),
           notes: `Initial purchase of ${symbol}`,
         },
       });
 
-      return newAsset;
+      return { asset: newAsset, balanceBefore, balanceAfter };
     });
 
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/investments");
+    revalidatePath("/dashboard/accounts");
 
-    return { success: true, data: asset, created: true };
+    return { 
+      success: true, 
+      data: asset.asset, 
+      created: true,
+      account: {
+        id: account.id,
+        name: account.name,
+        balanceBefore: asset.balanceBefore,
+        balanceAfter: asset.balanceAfter,
+      }
+    };
   } catch (error) {
     console.error("Create investment asset error:", error);
+    if (error instanceof Error) {
+      return { success: false, error: error.message };
+    }
     return { success: false, error: "Failed to create investment asset" };
   }
 }
 
+/**
+ * Records a trade (BUY or SELL) for an existing investment asset.
+ * 
+ * For BUY trades:
+ * - Validates sufficient funds in the investment account
+ * - Deducts the purchase amount from the account balance
+ * - Updates asset quantity and average buy price
+ * 
+ * For SELL trades:
+ * - Validates sufficient holdings
+ * - Credits the sale proceeds (minus fees) to the investment account
+ * - Calculates realized PnL
+ * - Updates or deletes the asset based on remaining quantity
+ * 
+ * All operations are performed atomically within a transaction with full audit trail.
+ *
+ * @param data - Trade input including assetId, type, quantity, price, fees, accountId, etc.
+ * @returns On success, an object with `success: true` and audit data. On failure, an object with `success: false` and an `error` message.
+ */
 export async function recordTrade(data: TradeInput) {
   try {
     const session = await auth();
@@ -189,13 +335,45 @@ export async function recordTrade(data: TradeInput) {
       };
     }
 
-    const { assetId, type, quantity, pricePerUnit, fees, ...rest } =
+    const { assetId, type, quantity, pricePerUnit, fees, accountId, ...rest } =
       validatedFields.data;
 
-    const totalAmount = quantity * pricePerUnit + fees;
+    const grossAmount = quantity * pricePerUnit;
+    const totalAmount = type === "BUY" ? grossAmount + fees : grossAmount - fees;
 
-    // Perform all asset operations within transaction to prevent race conditions
-    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    // Validate based on trade type
+    if (type === "BUY") {
+      const validationResult = await validateBuyTransaction(
+        session.user.id,
+        accountId,
+        totalAmount
+      );
+      if (!validationResult.valid) {
+        return { success: false, error: validationResult.error };
+      }
+    } else {
+      const validationResult = await validateSellTransaction(
+        session.user.id,
+        accountId,
+        assetId,
+        quantity
+      );
+      if (!validationResult.valid) {
+        return { success: false, error: validationResult.error };
+      }
+    }
+
+    // Perform all operations within transaction with Serializable isolation to prevent race conditions
+    const result = await withSerializableTransaction(async (tx) => {
+      // Lock account row for update
+      const account = await tx.financialAccount.findUnique({
+        where: { id: accountId },
+      });
+
+      if (!account) {
+        throw new Error("Account not found");
+      }
+
       // Re-fetch asset within transaction to get most recent data
       const asset = await tx.investmentAsset.findFirst({
         where: { id: assetId, userId: session.user.id },
@@ -205,35 +383,19 @@ export async function recordTrade(data: TradeInput) {
         throw new Error("Asset not found");
       }
 
+      const balanceBefore = account.balance;
+      let balanceAfter: number;
       let realizedPnL: number | null = null;
 
-      if (type === "SELL") {
-        // Check if user has enough quantity
-        if (asset.quantity < quantity) {
-          throw new Error("Insufficient quantity to sell");
+      if (type === "BUY") {
+        // Validate sufficient funds within transaction
+        if (account.balance < totalAmount) {
+          throw new Error(`Insufficient funds in "${account.name}". Available: ${account.balance}, Required: ${totalAmount}`);
         }
 
-        // Calculate realized PnL
-        realizedPnL = (pricePerUnit - asset.avgBuyPrice) * quantity - fees;
-      }
+        balanceAfter = balanceBefore - totalAmount;
 
-      // Create trade history
-      await tx.tradeHistory.create({
-        data: {
-          type,
-          quantity,
-          pricePerUnit,
-          totalAmount,
-          fees,
-          realizedPnL,
-          assetId,
-          userId: session.user.id,
-          ...rest,
-        },
-      });
-
-      if (type === "BUY") {
-        // Update average buy price and quantity using most recent data
+        // Update average buy price and quantity
         const newTotalQuantity = asset.quantity + quantity;
         const newAvgBuyPrice =
           (asset.avgBuyPrice * asset.quantity + pricePerUnit * quantity) /
@@ -244,14 +406,30 @@ export async function recordTrade(data: TradeInput) {
           data: {
             quantity: newTotalQuantity,
             avgBuyPrice: newAvgBuyPrice,
+            accountId: account.id,
           },
         });
-      } else {
-        // SELL - just reduce quantity
-        const newQuantity = asset.quantity - quantity;
 
+        // Deduct balance from account
+        await tx.financialAccount.update({
+          where: { id: accountId },
+          data: { balance: { decrement: totalAmount } },
+        });
+      } else {
+        // SELL
+        // Validate sufficient quantity
+        if (asset.quantity < quantity) {
+          throw new Error(`Insufficient quantity. You own ${asset.quantity} units, but tried to sell ${quantity} units`);
+        }
+
+        // Calculate realized PnL
+        const proceeds = quantity * pricePerUnit - fees;
+        realizedPnL = proceeds - (asset.avgBuyPrice * quantity);
+        balanceAfter = balanceBefore + proceeds;
+
+        // Update or delete asset
+        const newQuantity = asset.quantity - quantity;
         if (newQuantity === 0) {
-          // Delete asset if all sold
           await tx.investmentAsset.delete({ where: { id: assetId } });
         } else {
           await tx.investmentAsset.update({
@@ -259,15 +437,56 @@ export async function recordTrade(data: TradeInput) {
             data: { quantity: newQuantity },
           });
         }
+
+        // Credit proceeds to account
+        await tx.financialAccount.update({
+          where: { id: accountId },
+          data: { balance: { increment: proceeds } },
+        });
       }
+
+      // Create trade history with audit trail
+      const trade = await tx.tradeHistory.create({
+        data: {
+          type,
+          quantity,
+          pricePerUnit,
+          totalAmount,
+          fees,
+          realizedPnL,
+          assetId,
+          userId: session.user.id,
+          accountId: account.id,
+          balanceBefore,
+          balanceAfter,
+          ...rest,
+        },
+      });
+
+      return {
+        trade,
+        account: {
+          id: account.id,
+          name: account.name,
+          balanceBefore,
+          balanceAfter,
+        },
+      };
     });
 
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/investments");
+    revalidatePath("/dashboard/accounts");
 
-    return { success: true };
+    return { 
+      success: true,
+      data: result,
+    };
   } catch (error) {
     console.error("Record trade error:", error);
+    if (error instanceof Error) {
+      return { success: false, error: error.message };
+    }
     return { success: false, error: "Failed to record trade" };
   }
 }
@@ -491,5 +710,65 @@ export async function refreshPortfolioPrices() {
   } catch (error) {
     console.error("Refresh portfolio prices error:", error);
     return { success: false, error: "Failed to refresh prices" };
+  }
+}
+
+/**
+ * Fetches the authenticated user's active INVESTMENT-type accounts.
+ * Used for populating account selectors in buy/sell dialogs.
+ *
+ * @returns On success: an object with `success: true` and `data` containing an array of investment accounts
+ * with their id, name, balance, and currency. On failure: an object with `success: false`, an `error` message, and an empty `data` array.
+ */
+export async function getInvestmentAccountsAction() {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return { success: false, error: "Unauthorized", data: [] };
+    }
+
+    const accounts = await getInvestmentAccounts(session.user.id);
+
+    return { success: true, data: accounts };
+  } catch (error) {
+    console.error("Get investment accounts error:", error);
+    return { success: false, error: "Failed to fetch investment accounts", data: [] };
+  }
+}
+
+/**
+ * Retrieve the authenticated user's investment assets with quantity greater than zero for use in a sell dialog selector.
+ *
+ * @returns `{ success: true, data: Array<{ id: string; symbol: string; name: string | null; quantity: number; avgBuyPrice: number; currency: string }> }` on success; `{ success: false, error: string, data: [] }` on failure.
+ */
+export async function getSellableInvestments() {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return { success: false, error: "Unauthorized", data: [] };
+    }
+
+    const assets = await prisma.investmentAsset.findMany({
+      where: {
+        userId: session.user.id,
+        quantity: {
+          gt: 0,
+        },
+      },
+      select: {
+        id: true,
+        symbol: true,
+        name: true,
+        quantity: true,
+        avgBuyPrice: true,
+        currency: true,
+      },
+      orderBy: { symbol: "asc" },
+    });
+
+    return { success: true, data: assets };
+  } catch (error) {
+    console.error("Get sellable investments error:", error);
+    return { success: false, error: "Failed to fetch sellable investments", data: [] };
   }
 }
