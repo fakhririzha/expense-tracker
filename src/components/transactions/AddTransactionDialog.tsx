@@ -257,7 +257,7 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
                           form.setValue("toAccountId", "");
                         }
                       }}
-                      defaultValue={field.value}
+                      value={field.value}
                     >
                       <FormControl>
                         <SelectTrigger>
@@ -287,7 +287,7 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
                     <FormLabel>To Account</FormLabel>
                     <Select
                       onValueChange={field.onChange}
-                      defaultValue={field.value}
+                      value={field.value}
                     >
                       <FormControl>
                         <SelectTrigger>

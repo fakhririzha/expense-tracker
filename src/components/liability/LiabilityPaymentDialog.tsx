@@ -210,7 +210,7 @@ export function LiabilityPaymentDialog({
                   <FormLabel>Pay From (Bank Account)</FormLabel>
                   <Select
                     onValueChange={field.onChange}
-                    defaultValue={field.value}
+                    value={field.value}
                   >
                     <FormControl>
                       <SelectTrigger>
@@ -256,7 +256,7 @@ export function LiabilityPaymentDialog({
                   <FormLabel>Pay To (Liability Account)</FormLabel>
                   <Select
                     onValueChange={field.onChange}
-                    defaultValue={field.value}
+                    value={field.value}
                     disabled={!!preselectedLiabilityId}
                   >
                     <FormControl>

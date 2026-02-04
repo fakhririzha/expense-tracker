@@ -1,4 +1,77 @@
-# Race Condition Fix Plan: Investment Actions
+# Race Condition Fix Plan
+
+## Summary
+
+This plan addresses race condition vulnerabilities in:
+1. **Investment Actions** - `createInvestmentAsset` and `recordTrade` functions
+2. **Liability Payment Actions** - `rollbackLiabilityPayment` function
+
+---
+
+## Part 1: Liability Payment Rollback Vulnerability
+
+### Issue Location
+
+[`rollbackLiabilityPayment`](src/actions/liability-payment-actions.ts:304) function at lines 318-385 has a **race condition vulnerability**.
+
+### The Problem
+
+The function checks `isRolledBack` flag without using Serializable isolation or row locking:
+
+```typescript
+const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+  const transaction = await tx.transaction.findFirst({
+    where: { id: transactionId, userId: session.user.id },
+    include: { liabilityPaymentAudit: true },
+  });
+
+  // Check is passed - but this is NOT atomic!
+  if (transaction.liabilityPaymentAudit.isRolledBack) {
+    throw new Error("Payment has already been rolled back");
+  }
+
+  // Two concurrent requests can BOTH pass this check
+  // before either updates the isRolledBack flag
+  // Result: Double credit/debit of accounts!
+
+  await tx.financialAccount.update({
+    where: { id: liabilityPaymentAudit.sourceAccountId },
+    data: { balance: { increment: liabilityPaymentAudit.paymentAmount } },
+  });
+  // ... more updates
+});
+// NO isolationLevel, NO maxWait, NO timeout
+```
+
+### Attack Scenario
+
+```
+Request 1: Rollback $500 payment          Request 2: Rollback $500 payment
+─────────────────────────────────────   ─────────────────────────────────────
+1. Read isRolledBack: false ✓             1. Read isRolledBack: false ✓
+2. Passes check ✓                         2. Passes check ✓
+3. Credit source: +$500                   3. Credit source: +$500
+4. Debit target: -$500                    4. Debit target: -$500
+5. Update isRolledBack: true              5. Update isRolledBack: true
+6. Commit                                  6. Commit
+
+Result: Accounts adjusted TWICE → $1000 total adjustment (CORRUPTION!)
+```
+
+### Existing Pattern (Already Fixed)
+
+The [`createLiabilityPayment`](src/actions/liability-payment-actions.ts:111) function correctly uses:
+- `isolationLevel: Prisma.TransactionIsolationLevel.Serializable`
+- `maxWait: 5000` (5 seconds)
+- `timeout: 10000` (10 seconds)
+
+### Solution
+
+Add the same transaction options to `rollbackLiabilityPayment`.
+
+---
+
+## Part 2: Investment Actions Vulnerability
 
 ## Issue Summary
 
@@ -223,3 +296,93 @@ sequenceDiagram
     
     Note over User2: "Insufficient funds" error
 ```
+
+---
+
+## Part 3: Rollback Fix Implementation Plan
+
+### File to Modify
+
+`src/actions/liability-payment-actions.ts`
+
+### Changes Required
+
+1. **Add transaction options** to `rollbackLiabilityPayment` function (line 318)
+
+   **Before:**
+   ```typescript
+   const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+     // ...
+   });
+   ```
+
+   **After:**
+   ```typescript
+   const result = await prisma.$transaction(
+     async (tx: Prisma.TransactionClient) => {
+       // ...
+     },
+     {
+       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+       maxWait: 5000,  // 5 seconds
+       timeout: 10000, // 10 seconds
+     }
+   );
+   ```
+
+2. **Add error handling** for transaction conflicts/deadlocks
+
+   **After the catch block** (around line 395), add handling for serialization failures:
+
+   ```typescript
+   // Handle transaction timeout/serialization errors
+   if (
+     error instanceof Prisma.PrismaClientUnknownRequestError &&
+     error.message.includes("deadlock")
+   ) {
+     return {
+       success: false,
+       errorCode: "RACE_CONDITION",
+       error:
+         "Another rollback is currently processing. Please wait a moment and try again.",
+     };
+   }
+   ```
+
+### Diagram: Fixed Rollback Flow
+
+```mermaid
+sequenceDiagram
+    participant Req1 as Request 1
+    participant Req2 as Request 2
+    participant DB as Database
+    
+    Note over DB: Serializable Isolation
+    
+    Req1->>DB: BEGIN (Serializable)
+    Req2->>DB: BEGIN (Serializable)
+    
+    Req1->>DB: SELECT isRolledBack (Read 1)
+    Req2->>DB: SELECT isRolledBack (Waits for Req1)
+    
+    Req1->>DB: UPDATE isRolledBack=true, Credit/Debit accounts
+    Req1->>DB: COMMIT
+    
+    Req2->>DB: SELECT isRolledBack (Reads true)
+    Req2->>DB: Check fails → Throw "Already rolled back"
+    Req2->>DB: ROLLBACK
+    
+    Note over Req2: Error - Payment already rolled back
+```
+
+### Verification Steps
+
+1. Test concurrent rollback requests - second request should fail with appropriate error
+2. Verify account balances are adjusted only once
+3. Test error handling for transaction conflicts
+
+### Risk Assessment
+
+- **Low Risk**: Consistent with existing codebase pattern
+- **No Schema Changes**: Only code modifications
+- **Backward Compatible**: No API changes

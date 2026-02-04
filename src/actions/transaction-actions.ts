@@ -124,6 +124,30 @@ export async function createTransaction(data: TransactionInput) {
     // Sanitize optional FKs: empty string causes foreign key violation, use null
     const categoryId = rest.categoryId?.trim() || null;
     const recurringRuleId = rest.recurringRuleId?.trim() || null;
+
+    // Validate category belongs to user OR is a system category (IDOR prevention)
+    if (categoryId) {
+      const category = await prisma.category.findFirst({
+        where: {
+          id: categoryId,
+          OR: [{ userId: session.user.id }, { isSystem: true }],
+        },
+      });
+      if (!category) {
+        return { success: false, error: "Category not found" };
+      }
+    }
+
+    // Validate recurring rule belongs to user (IDOR prevention)
+    if (recurringRuleId) {
+      const recurringRule = await prisma.recurringRule.findFirst({
+        where: { id: recurringRuleId, userId: session.user.id },
+      });
+      if (!recurringRule) {
+        return { success: false, error: "Recurring rule not found" };
+      }
+    }
+
     const createData = {
       amount,
       type,
@@ -195,21 +219,62 @@ export async function updateTransaction(
       return { success: false, error: "Transaction not found" };
     }
 
-    const { amount, type, accountId, ...rest } = data;
+    const { amount, type, accountId, categoryId, recurringRuleId, ...rest } = data;
+
+    // Validate category belongs to user OR is a system category (IDOR prevention)
+    if (categoryId !== undefined) {
+      const sanitizedCategoryId = categoryId?.trim() || null;
+      if (sanitizedCategoryId) {
+        const category = await prisma.category.findFirst({
+          where: {
+            id: sanitizedCategoryId,
+            OR: [{ userId: session.user.id }, { isSystem: true }],
+          },
+        });
+        if (!category) {
+          return { success: false, error: "Category not found" };
+        }
+      }
+    }
+
+    // Validate recurring rule belongs to user (IDOR prevention)
+    if (recurringRuleId !== undefined) {
+      const sanitizedRecurringRuleId = recurringRuleId?.trim() || null;
+      if (sanitizedRecurringRuleId) {
+        const recurringRule = await prisma.recurringRule.findFirst({
+          where: { id: sanitizedRecurringRuleId, userId: session.user.id },
+        });
+        if (!recurringRule) {
+          return { success: false, error: "Recurring rule not found" };
+        }
+      }
+    }
 
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Reverse old balance change
-      const oldBalanceChange =
-        existingTransaction.type === "INCOME"
-          ? -existingTransaction.amount
-          : existingTransaction.amount;
+      if (existingTransaction.type === "TRANSFER" && existingTransaction.toAccountId) {
+        // For transfers: reverse by incrementing source account and decrementing destination account
+        await tx.financialAccount.update({
+          where: { id: existingTransaction.accountId },
+          data: { balance: { increment: existingTransaction.amount } },
+        });
+        await tx.financialAccount.update({
+          where: { id: existingTransaction.toAccountId },
+          data: { balance: { decrement: existingTransaction.amount } },
+        });
+      } else {
+        // For income/expense: reverse against single account
+        const oldBalanceChange =
+          existingTransaction.type === "INCOME"
+            ? -existingTransaction.amount
+            : existingTransaction.amount;
+        await tx.financialAccount.update({
+          where: { id: existingTransaction.accountId },
+          data: { balance: { increment: oldBalanceChange } },
+        });
+      }
 
-      await tx.financialAccount.update({
-        where: { id: existingTransaction.accountId },
-        data: { balance: { increment: oldBalanceChange } },
-      });
-
-      // Apply new balance change
+      // Apply new balance change (non-TRANSFER only for now per user request)
       const newAmount = amount ?? existingTransaction.amount;
       const newType = type ?? existingTransaction.type;
       const newAccountId = accountId ?? existingTransaction.accountId;
@@ -227,7 +292,8 @@ export async function updateTransaction(
           amount: newAmount,
           type: newType,
           accountId: newAccountId,
-          ...rest,
+          categoryId: categoryId !== undefined ? (categoryId?.trim() || null) : undefined,
+          recurringRuleId: recurringRuleId !== undefined ? (recurringRuleId?.trim() || null) : undefined,
         },
       });
     });
@@ -251,6 +317,7 @@ export async function deleteTransaction(id: string) {
 
     const transaction = await prisma.transaction.findFirst({
       where: { id, userId: session.user.id },
+      select: { id: true, amount: true, type: true, accountId: true, toAccountId: true },
     });
 
     if (!transaction) {
@@ -259,15 +326,27 @@ export async function deleteTransaction(id: string) {
 
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Reverse balance change
-      const balanceChange =
-        transaction.type === "INCOME"
-          ? -transaction.amount
-          : transaction.amount;
-
-      await tx.financialAccount.update({
-        where: { id: transaction.accountId },
-        data: { balance: { increment: balanceChange } },
-      });
+      if (transaction.type === "TRANSFER" && transaction.toAccountId) {
+        // For transfers: reverse by incrementing source account and decrementing destination account
+        await tx.financialAccount.update({
+          where: { id: transaction.accountId },
+          data: { balance: { increment: transaction.amount } },
+        });
+        await tx.financialAccount.update({
+          where: { id: transaction.toAccountId },
+          data: { balance: { decrement: transaction.amount } },
+        });
+      } else {
+        // For income/expense: reverse against single account
+        const balanceChange =
+          transaction.type === "INCOME"
+            ? -transaction.amount
+            : transaction.amount;
+        await tx.financialAccount.update({
+          where: { id: transaction.accountId },
+          data: { balance: { increment: balanceChange } },
+        });
+      }
 
       // Delete transaction
       await tx.transaction.delete({ where: { id } });

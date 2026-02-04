@@ -106,8 +106,7 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
       return { success: false, error: validationResult.error };
     }
 
-    const { account, balanceBefore } = validationResult.data!;
-    const balanceAfter = balanceBefore - totalAmount;
+    const { account } = validationResult.data!;
 
     // Check if asset already exists for user
     const existingAsset = await prisma.investmentAsset.findUnique({
@@ -134,6 +133,9 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
           throw new Error("Insufficient funds or account not found");
         }
 
+        // Compute balanceBefore from fresh read inside transaction
+        const balanceBefore = lockedAccount.balance;
+
         // Re-fetch asset within transaction to get most recent data
         const assetToUpdate = await tx.investmentAsset.findUnique({
           where: { id: existingAsset.id },
@@ -150,7 +152,28 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
           (assetToUpdate.avgBuyPrice * assetToUpdate.quantity + newAvgBuyPrice * newQuantity) /
           totalQuantity;
 
-        // Record the buy trade with audit trail
+        // Update the asset
+        const updated = await tx.investmentAsset.update({
+          where: { id: assetToUpdate.id },
+          data: {
+            quantity: totalQuantity,
+            avgBuyPrice: weightedAvgBuyPrice,
+            name: rest.name || assetToUpdate.name,
+            currency: currency || assetToUpdate.currency,
+            accountId: account.id, // Link to investment account
+          },
+        });
+
+        // Deduct balance from account and get updated balance
+        const updatedAccount = await tx.financialAccount.update({
+          where: { id: accountId },
+          data: { balance: { decrement: totalAmount } },
+        });
+
+        // Compute balanceAfter immediately before writing trade history
+        const balanceAfter = updatedAccount.balance;
+
+        // Record the buy trade with audit trail using fresh balance snapshots
         await tx.tradeHistory.create({
           data: {
             type: "BUY",
@@ -168,25 +191,7 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
           },
         });
 
-        // Update the asset
-        const updated = await tx.investmentAsset.update({
-          where: { id: assetToUpdate.id },
-          data: {
-            quantity: totalQuantity,
-            avgBuyPrice: weightedAvgBuyPrice,
-            name: rest.name || assetToUpdate.name,
-            currency: currency || assetToUpdate.currency,
-            accountId: account.id, // Link to investment account
-          },
-        });
-
-        // Deduct balance from account
-        await tx.financialAccount.update({
-          where: { id: accountId },
-          data: { balance: { decrement: totalAmount } },
-        });
-
-        return updated;
+        return { asset: updated, balanceBefore, balanceAfter };
       });
 
       revalidatePath("/dashboard");
@@ -195,13 +200,13 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
 
       return { 
         success: true, 
-        data: updatedAsset, 
+        data: updatedAsset.asset, 
         updated: true,
         account: {
           id: account.id,
           name: account.name,
-          balanceBefore,
-          balanceAfter,
+          balanceBefore: updatedAsset.balanceBefore,
+          balanceAfter: updatedAsset.balanceAfter,
         }
       };
     }
@@ -226,6 +231,9 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
         throw new Error("Insufficient funds or account not found");
       }
 
+      // Compute balanceBefore from fresh read inside transaction
+      const balanceBefore = lockedAccount.balance;
+
       // Create the investment asset linked to the account
       const newAsset = await tx.investmentAsset.create({
         data: {
@@ -239,7 +247,16 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
         },
       });
 
-      // Create initial BUY trade record with audit trail
+      // Deduct balance from account and get updated balance
+      const updatedAccount = await tx.financialAccount.update({
+        where: { id: accountId },
+        data: { balance: { decrement: totalAmount } },
+      });
+
+      // Compute balanceAfter immediately before writing trade history
+      const balanceAfter = updatedAccount.balance;
+
+      // Create initial BUY trade record with audit trail using fresh balance snapshots
       await tx.tradeHistory.create({
         data: {
           type: "BUY",
@@ -257,13 +274,7 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
         },
       });
 
-      // Deduct balance from account
-      await tx.financialAccount.update({
-        where: { id: accountId },
-        data: { balance: { decrement: totalAmount } },
-      });
-
-      return newAsset;
+      return { asset: newAsset, balanceBefore, balanceAfter };
     });
 
     revalidatePath("/dashboard");
@@ -272,13 +283,13 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
 
     return { 
       success: true, 
-      data: asset, 
+      data: asset.asset, 
       created: true,
       account: {
         id: account.id,
         name: account.name,
-        balanceBefore,
-        balanceAfter,
+        balanceBefore: asset.balanceBefore,
+        balanceAfter: asset.balanceAfter,
       }
     };
   } catch (error) {
@@ -327,7 +338,8 @@ export async function recordTrade(data: TradeInput) {
     const { assetId, type, quantity, pricePerUnit, fees, accountId, ...rest } =
       validatedFields.data;
 
-    const totalAmount = quantity * pricePerUnit + fees;
+    const grossAmount = quantity * pricePerUnit;
+    const totalAmount = type === "BUY" ? grossAmount + fees : grossAmount - fees;
 
     // Validate based on trade type
     if (type === "BUY") {

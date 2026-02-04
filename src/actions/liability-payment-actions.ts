@@ -100,23 +100,32 @@ export async function createLiabilityPayment(
       };
     }
 
-    const {
-      // sourceAccount,
-      // targetAccount,
-      sourceBalanceBefore,
-      targetBalanceBefore,
-    } = validationResult.data;
-
     // Step 3: Execute atomic transaction
     const result = await prisma.$transaction(
       async (tx: Prisma.TransactionClient) => {
-        // 3a. Create transaction record with PENDING status
+        // 3a. Re-read accounts with fresh balances inside transaction to avoid race conditions
+        const sourceAccount = await tx.financialAccount.findUnique({
+          where: { id: sourceAccountId },
+        });
+
+        const targetAccount = await tx.financialAccount.findUnique({
+          where: { id: targetAccountId },
+        });
+
+        if (!sourceAccount || !targetAccount) {
+          throw new Error("Account not found during transaction");
+        }
+
+        const sourceBalanceBefore = sourceAccount.balance;
+        const targetBalanceBefore = targetAccount.balance;
+
+        // 3b. Create transaction record with PENDING status
         const transaction = await tx.transaction.create({
           data: {
             amount,
             currency,
             exchangeRate,
-            type: TransactionType.EXPENSE, // Payments are treated as expenses
+            type: TransactionType.LIABILITY_PAYMENT, // Payments are treated as expenses
             description,
             date,
             referenceNumber,
@@ -130,13 +139,13 @@ export async function createLiabilityPayment(
           },
         });
 
-        // 3b. Lock and update source account balance (credit/decrease)
+        // 3c. Lock and update source account balance (credit/decrease)
         const updatedSourceAccount = await tx.financialAccount.update({
           where: { id: sourceAccountId },
           data: { balance: { decrement: amount } },
         });
 
-        // 3c. Lock and update target account balance (debit/increase toward zero)
+        // 3d. Lock and update target account balance (debit/increase toward zero)
         // For liability accounts, balance is negative (debt)
         // Payment increases the balance (reduces debt)
         const updatedTargetAccount = await tx.financialAccount.update({
@@ -144,7 +153,7 @@ export async function createLiabilityPayment(
           data: { balance: { increment: amount } },
         });
 
-        // 3d. Create audit trail record
+        // 3e. Create audit trail record with consistent in-transaction balances
         await tx.liabilityPaymentAudit.create({
           data: {
             transactionId: transaction.id,
@@ -162,7 +171,7 @@ export async function createLiabilityPayment(
           },
         });
 
-        // 3e. Update transaction status to COMPLETED
+        // 3f. Update transaction status to COMPLETED
         const completedTransaction = await tx.transaction.update({
           where: { id: transaction.id },
           data: { paymentStatus: PaymentStatus.COMPLETED },
@@ -315,74 +324,82 @@ export async function rollbackLiabilityPayment(
     }
 
     // Only allow rollback for recent payments (e.g., within 24 hours)
-    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      // Fetch the original payment
-      const transaction = await tx.transaction.findFirst({
-        where: {
-          id: transactionId,
-          userId: session.user.id,
-        },
-        include: {
-          liabilityPaymentAudit: true,
-        },
-      });
+    const result = await prisma.$transaction(
+      async (tx: Prisma.TransactionClient) => {
+        // Fetch the original payment
+        const transaction = await tx.transaction.findFirst({
+          where: {
+            id: transactionId,
+            userId: session.user.id,
+          },
+          include: {
+            liabilityPaymentAudit: true,
+          },
+        });
 
-      if (!transaction) {
-        throw new Error("Payment not found");
+        if (!transaction) {
+          throw new Error("Payment not found");
+        }
+
+        if (!transaction.liabilityPaymentAudit) {
+          throw new Error("No audit record found for this payment");
+        }
+
+        if (transaction.liabilityPaymentAudit.isRolledBack) {
+          throw new Error("Payment has already been rolled back");
+        }
+
+        // Check if payment is within rollback window (24 hours)
+        const paymentTime = new Date(transaction.processedAt).getTime();
+        const currentTime = new Date().getTime();
+        const hoursSincePayment = (currentTime - paymentTime) / (1000 * 60 * 60);
+
+        if (hoursSincePayment > 24) {
+          throw new Error(
+            "Payments can only be rolled back within 24 hours of processing"
+          );
+        }
+
+        const { liabilityPaymentAudit } = transaction;
+
+        // Reverse the payment:
+        // 1. Add back to source account (credit back)
+        await tx.financialAccount.update({
+          where: { id: liabilityPaymentAudit.sourceAccountId },
+          data: { balance: { increment: liabilityPaymentAudit.paymentAmount } },
+        });
+
+        // 2. Subtract from target account (debit back)
+        await tx.financialAccount.update({
+          where: { id: liabilityPaymentAudit.targetAccountId },
+          data: { balance: { decrement: liabilityPaymentAudit.paymentAmount } },
+        });
+
+        // 3. Mark audit record as rolled back
+        await tx.liabilityPaymentAudit.update({
+          where: { transactionId },
+          data: {
+            isRolledBack: true,
+            rolledBackAt: new Date(),
+            rollbackReason: reason,
+          },
+        });
+
+        // 4. Update transaction status
+        const updatedTransaction = await tx.transaction.update({
+          where: { id: transactionId },
+          data: { paymentStatus: PaymentStatus.ROLLED_BACK },
+        });
+
+        return updatedTransaction;
+      },
+      {
+        // Use serializable isolation to prevent race conditions
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        maxWait: 5000, // 5 seconds max to wait for lock
+        timeout: 10000, // 10 seconds max transaction duration
       }
-
-      if (!transaction.liabilityPaymentAudit) {
-        throw new Error("No audit record found for this payment");
-      }
-
-      if (transaction.liabilityPaymentAudit.isRolledBack) {
-        throw new Error("Payment has already been rolled back");
-      }
-
-      // Check if payment is within rollback window (24 hours)
-      const paymentTime = new Date(transaction.processedAt).getTime();
-      const currentTime = new Date().getTime();
-      const hoursSincePayment = (currentTime - paymentTime) / (1000 * 60 * 60);
-
-      if (hoursSincePayment > 24) {
-        throw new Error(
-          "Payments can only be rolled back within 24 hours of processing"
-        );
-      }
-
-      const { liabilityPaymentAudit } = transaction;
-
-      // Reverse the payment:
-      // 1. Add back to source account (credit back)
-      await tx.financialAccount.update({
-        where: { id: liabilityPaymentAudit.sourceAccountId },
-        data: { balance: { increment: liabilityPaymentAudit.paymentAmount } },
-      });
-
-      // 2. Subtract from target account (debit back)
-      await tx.financialAccount.update({
-        where: { id: liabilityPaymentAudit.targetAccountId },
-        data: { balance: { decrement: liabilityPaymentAudit.paymentAmount } },
-      });
-
-      // 3. Mark audit record as rolled back
-      await tx.liabilityPaymentAudit.update({
-        where: { transactionId },
-        data: {
-          isRolledBack: true,
-          rolledBackAt: new Date(),
-          rollbackReason: reason,
-        },
-      });
-
-      // 4. Update transaction status
-      const updatedTransaction = await tx.transaction.update({
-        where: { id: transactionId },
-        data: { paymentStatus: PaymentStatus.ROLLED_BACK },
-      });
-
-      return updatedTransaction;
-    });
+    );
 
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/transactions");
@@ -394,6 +411,20 @@ export async function rollbackLiabilityPayment(
     };
   } catch (error) {
     console.error("Rollback liability payment error:", error);
+
+    // Handle transaction timeout/serialization errors
+    if (
+      error instanceof Prisma.PrismaClientUnknownRequestError &&
+      error.message.includes("deadlock")
+    ) {
+      return {
+        success: false,
+        errorCode: "RACE_CONDITION",
+        error:
+          "Another rollback is currently processing. Please wait a moment and try again.",
+      };
+    }
+
     return {
       success: false,
       error: error instanceof Error ? error.message : "Failed to rollback payment",
