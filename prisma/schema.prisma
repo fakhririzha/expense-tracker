@@ -2,7 +2,7 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
   // output   = "../node_modules/.prisma/client"
   previewFeatures = ["relationJoins"]
   binaryTargets   = ["native", "rhel-openssl-3.0.x"]
@@ -42,6 +42,7 @@ model User {
   investmentAssets  InvestmentAsset[]
   tradeHistory      TradeHistory[]
   recurringRules    RecurringRule[]
+  budgets           Budget[]
 }
 
 model AuthAccount {
@@ -147,6 +148,7 @@ model Category {
   user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   transactions Transaction[]
+  budgets      Budget[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -361,4 +363,34 @@ model LiabilityPaymentAudit {
   @@index([transactionId])
   @@index([executedBy])
   @@index([executedAt])
+}
+
+// ==================== BUDGETING ====================
+
+enum BudgetPeriod {
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+model Budget {
+  id        String       @id @default(cuid())
+  name      String
+  amount    Float
+  period    BudgetPeriod
+  startDate DateTime
+  endDate   DateTime?
+  isActive  Boolean      @default(true)
+
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([categoryId])
 }
