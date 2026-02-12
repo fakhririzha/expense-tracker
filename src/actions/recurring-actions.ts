@@ -18,6 +18,7 @@ const recurringRuleSchema = z.object({
   description: z.string().optional(),
   categoryId: z.string().optional(),
   accountId: z.string().optional(),
+  isActive: z.boolean().optional(),
 });
 
 export type RecurringRuleInput = z.infer<typeof recurringRuleSchema>;
