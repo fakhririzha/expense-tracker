@@ -15,6 +15,7 @@ import { CurrencyProvider } from "@/contexts/CurrencyContext";
 import prisma from "@/lib/db";
 import { getInitials } from "@/lib/utils";
 import {
+    Calendar,
     CreditCard,
     LayoutDashboard,
     LogOut,
@@ -34,6 +35,7 @@ const navItems = [
   { href: "/dashboard/liabilities", label: "Liabilities", icon: CreditCard },
   { href: "/dashboard/investments", label: "Investments", icon: TrendingUp },
   { href: "/dashboard/recurring", label: "Recurring", icon: RefreshCw },
+  { href: "/dashboard/calendar", label: "Calendar", icon: Calendar },
 ];
 
 /**

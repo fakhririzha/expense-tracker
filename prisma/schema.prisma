@@ -43,6 +43,7 @@ model User {
   tradeHistory      TradeHistory[]
   recurringRules    RecurringRule[]
   budgets           Budget[]
+  savingsGoals      SavingsGoal[]
 }
 
 model AuthAccount {
@@ -117,6 +118,7 @@ model FinancialAccount {
   investmentAssets InvestmentAsset[]
   tradeHistories   TradeHistory[]
   transactions     Transaction[]
+  savingsGoals     SavingsGoal[]
 
   @@index([userId])
 }
@@ -393,4 +395,31 @@ model Budget {
 
   @@index([userId])
   @@index([categoryId])
+}
+
+// ==================== SAVINGS GOALS ====================
+
+model SavingsGoal {
+  id            String    @id @default(cuid())
+  name          String
+  targetAmount  Float
+  currentAmount Float     @default(0)
+  targetDate    DateTime?
+  icon          String? // emoji or icon name
+  color         String? // hex color for UI
+  description   String?
+  isCompleted   Boolean   @default(false)
+
+  // Optional: Link to account for auto-tracking
+  accountId String?
+  account   FinancialAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([accountId])
 }
