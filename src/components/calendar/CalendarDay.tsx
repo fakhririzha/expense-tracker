@@ -1,6 +1,6 @@
 "use client";
 
-import { isSameDay, isToday } from "date-fns";
+import { isToday } from "date-fns";
 import { CalendarEvent } from "@/actions/calendar-actions";
 import { EventDot, getTypeColor } from "./EventBadge";
 import { cn } from "@/lib/utils";

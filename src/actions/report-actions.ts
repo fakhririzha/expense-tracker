@@ -86,7 +86,7 @@ async function convertToUserCurrency(
   
   // Try to get exchange rate
   const rate = await getExchangeRate(fromCurrency, userCurrency);
-  if (rate) return amount * rate * exchangeRate;
+  if (rate) return amount * rate;
   
   // Fallback to stored exchange rate
   return amount * exchangeRate;
@@ -484,8 +484,8 @@ export async function getNetWorthHistory(params: {
       } else if (t.type === "TRANSFER") {
         // Transfers don't affect net worth
       } else if (t.type === "LIABILITY_PAYMENT") {
-        runningAssets -= normalizedAmount;
-        runningLiabilities -= normalizedAmount;
+        runningAssets += normalizedAmount;
+        runningLiabilities += normalizedAmount;
       }
 
       if (!monthMap.has(monthKey)) {
