@@ -393,7 +393,11 @@ export function EditRecurringRuleDialog({
                       <Calendar
                         mode="single"
                         selected={field.value}
-                        onSelect={field.onChange}
+                        onSelect={(selected) => {
+                          if (selected) {
+                            field.onChange(selected);
+                          }
+                        }}
                         initialFocus
                       />
                     </PopoverContent>
