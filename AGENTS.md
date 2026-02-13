@@ -1,36 +1,36 @@
-# AGENTS.md - AI Coding Agent Guide
+# AGENTS.md - Expense Tracker
 
-This file provides essential information for AI coding agents working on the **FinHealth** (Expense Tracker) project.
+This file contains essential information for AI coding agents working on the Expense Tracker project.
 
 ## Project Overview
 
-FinHealth is a personal finance management application built with Next.js. It helps users track expenses, income, investments, and plan for retirement. The application features multi-currency support, real-time stock price tracking via Yahoo Finance, and automated recurring transactions.
+**Expense Tracker** (branded as "FinHealth ✨") is a comprehensive personal finance management application built with Next.js 16 and React 19. It provides expense tracking, investment portfolio management, multi-currency support, and real-time financial insights.
 
-**Key Capabilities:**
-- Multi-account management (Bank, Cash, Investment, Loan, Credit Card)
-- Transaction tracking with categorization
-- Investment portfolio management with real-time price data
-- Automated recurring transactions
-- Financial health scoring and retirement progress tracking
+### Key Features
+- Account management (Bank, Cash, Investment, Loan, Credit Card)
+- Transaction tracking with category classification
+- Investment portfolio with real-time stock prices via Yahoo Finance
+- Recurring transactions with automated processing
 - Multi-currency support with exchange rate conversion
+- Budgeting and savings goals
+- Financial dashboard with net worth, wealth health score, and retirement progress
 
 ## Technology Stack
 
-| Layer | Technology | Version |
-|-------|------------|---------|
-| Framework | Next.js | 16.1.2 |
-| React | React | 19.2.3 (with React Compiler) |
-| Language | TypeScript | 5.x |
-| Styling | Tailwind CSS | 4.x |
-| UI Components | shadcn/ui | New York style |
-| Icons | Lucide React | latest |
-| Database ORM | Prisma | 6.19.2 |
-| Database | MySQL | 8.0+ |
-| Authentication | NextAuth.js | v5 (beta) |
-| State Management | TanStack Query | 5.x |
-| Forms | React Hook Form + Zod | latest |
-| Charts | Recharts | 3.x |
-| Package Manager | pnpm | 9.x+ |
+| Layer | Technology |
+|-------|------------|
+| Framework | Next.js 16.1.2 (App Router) |
+| UI Library | React 19.2.3 |
+| Language | TypeScript 5 |
+| Styling | Tailwind CSS 4 |
+| UI Components | shadcn/ui (New York style) |
+| Database | MySQL 8.0+ |
+| ORM | Prisma 6.19.2 |
+| Authentication | Auth.js v5 (NextAuth) with JWT |
+| State Management | TanStack Query (React Query) |
+| Forms | React Hook Form + Zod |
+| Charts | Recharts |
+| Package Manager | pnpm |
 
 ## Project Structure
 
@@ -38,69 +38,85 @@ FinHealth is a personal finance management application built with Next.js. It he
 expense-tracker/
 ├── prisma/
 │   └── schema.prisma          # Database schema definition
+├── public/                     # Static assets
 ├── src/
-│   ├── actions/               # Server Actions for data mutations
+│   ├── actions/               # Server Actions (data mutations)
 │   │   ├── account-actions.ts
 │   │   ├── auth-actions.ts
+│   │   ├── budget-actions.ts
+│   │   ├── calendar-actions.ts
 │   │   ├── exchange-rate-actions.ts
+│   │   ├── export-actions.ts
+│   │   ├── goal-actions.ts
+│   │   ├── import-actions.ts
 │   │   ├── investment-actions.ts
 │   │   ├── liability-payment-actions.ts
 │   │   ├── recurring-actions.ts
+│   │   ├── report-actions.ts
 │   │   └── transaction-actions.ts
 │   ├── app/                   # Next.js App Router
-│   │   ├── (auth)/            # Auth route group (login, register)
+│   │   ├── (auth)/            # Auth route group
+│   │   │   ├── login/page.tsx
+│   │   │   └── register/page.tsx
 │   │   ├── (dashboard)/       # Dashboard route group
 │   │   │   └── dashboard/
-│   │   │       ├── accounts/
-│   │   │       ├── investments/
-│   │   │       ├── liabilities/
-│   │   │       ├── recurring/
-│   │   │       ├── transactions/
-│   │   │       └── page.tsx   # Dashboard home
+│   │   │       ├── accounts/page.tsx
+│   │   │       ├── budgets/page.tsx
+│   │   │       ├── calendar/page.tsx
+│   │   │       ├── data/page.tsx
+│   │   │       ├── goals/page.tsx
+│   │   │       ├── investments/page.tsx
+│   │   │       ├── liabilities/page.tsx
+│   │   │       ├── page.tsx
+│   │   │       ├── recurring/page.tsx
+│   │   │       ├── reports/page.tsx
+│   │   │       └── transactions/page.tsx
 │   │   ├── api/               # API routes
-│   │   │   ├── auth/[...nextauth]/
-│   │   │   ├── categories/
-│   │   │   ├── cron/recurring/
-│   │   │   └── investments/
-│   │   ├── globals.css
-│   │   ├── layout.tsx
-│   │   └── page.tsx           # Landing page
-│   ├── components/
-│   │   ├── accounts/          # Account-related components
-│   │   ├── dashboard/         # Dashboard widgets
-│   │   ├── investments/       # Investment components
-│   │   ├── liability/         # Liability management components
-│   │   ├── providers/         # Context providers
-│   │   ├── recurring/         # Recurring transaction components
-│   │   ├── transactions/      # Transaction components
-│   │   └── ui/                # shadcn/ui components
+│   │   ├── layout.tsx         # Root layout
+│   │   ├── page.tsx           # Landing page
+│   │   └── globals.css        # Global styles
+│   ├── components/            # React components
+│   │   ├── accounts/
+│   │   ├── budgets/
+│   │   ├── calendar/
+│   │   ├── dashboard/
+│   │   ├── export/
+│   │   ├── goals/
+│   │   ├── investments/
+│   │   ├── liability/
+│   │   ├── providers/
+│   │   ├── recurring/
+│   │   ├── reports/
+│   │   ├── transactions/
+│   │   └── ui/               # shadcn/ui components
 │   ├── contexts/
 │   │   └── CurrencyContext.tsx
-│   ├── hooks/                 # Custom React hooks
+│   ├── hooks/
 │   │   ├── useExchangeRateQuery.ts
 │   │   └── useTradeHistory.ts
 │   ├── lib/                   # Utility libraries
-│   │   ├── db.ts              # Prisma client singleton
+│   │   ├── db.ts             # Prisma client singleton
 │   │   ├── executive-service.ts
 │   │   ├── executive-types.ts
 │   │   ├── finance-service.ts
 │   │   ├── investment-validation.ts
 │   │   ├── liability-payment-validation.ts
-│   │   └── utils.ts           # Utility functions (cn, formatters)
-│   ├── types/                 # TypeScript type definitions
+│   │   ├── unit-conversion.ts
+│   │   └── utils.ts          # cn(), formatters
+│   ├── types/
 │   │   ├── next-auth.d.ts
 │   │   └── trade-history.ts
 │   ├── auth.config.ts         # Auth.js configuration
-│   ├── auth.ts                # NextAuth initialization
-│   └── middleware.ts          # Route protection middleware
-├── .env                       # Environment variables
-├── components.json            # shadcn/ui configuration
-├── next.config.ts             # Next.js configuration
+│   ├── auth.ts               # Auth.js initialization
+│   └── middleware.ts         # Route protection
+├── .env                      # Environment variables
+├── components.json           # shadcn/ui configuration
+├── next.config.ts            # Next.js configuration
 ├── package.json
 ├── postcss.config.mjs
+├── tailwind.config.ts
 ├── tsconfig.json
-├── vercel.json                # Vercel deployment & cron jobs
-└── pnpm-workspace.yaml
+└── vercel.json               # Vercel deployment config
 ```
 
 ## Build and Development Commands
@@ -109,83 +125,56 @@ expense-tracker/
 # Install dependencies
 pnpm install
 
-# Development server (http://localhost:3000)
-pnpm dev
+# Development server
+pnpm dev              # Starts at http://localhost:3000
 
-# Production build
+# Build for production
 pnpm build
 
 # Start production server
 pnpm start
 
-# Linting
+# Lint code
 pnpm lint
 
-# Database operations (via Prisma)
-pnpm prisma generate        # Generate Prisma client
-pnpm prisma migrate dev     # Create and apply migrations
-pnpm prisma migrate deploy  # Deploy migrations to production
-pnpm prisma db push         # Push schema changes (development)
-pnpm prisma studio          # Open Prisma Studio
+# Database operations (via postinstall)
+pnpm prisma generate  # Generate Prisma client
+pnpm prisma migrate dev  # Run migrations in development
+```
+
+### Postinstall Hook
+The `postinstall` script automatically runs Prisma db push and generate when installing dependencies:
+```bash
+pnpm dlx prisma@^6.19.2 db push && pnpm dlx prisma@^6.19.2 generate
 ```
 
 ## Environment Variables
 
-Create a `.env` file with these required variables:
-
-```bash
-# Database (MySQL)
-DATABASE_URL="mysql://USER:PASSWORD@HOST:PORT/DATABASE"
-
-# Auth.js (generate with: openssl rand -base64 32)
-AUTH_SECRET="your-secret-key"
-AUTH_URL="http://localhost:3000"
-
-# Cron Job Secret (for production/Vercel)
-CRON_SECRET="your-cron-secret"
-```
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `DATABASE_URL` | MySQL connection string (e.g., `mysql://user:pass@localhost:3306/expense_tracker`) | Yes |
+| `AUTH_SECRET` | Secret key for JWT signing (generate with `openssl rand -base64 32`) | Yes |
+| `AUTH_URL` | Base URL for auth callbacks (default: `http://localhost:3000`) | Yes |
+| `CRON_SECRET` | Secret for securing cron job endpoints | Yes (production) |
 
 ## Code Style Guidelines
 
 ### TypeScript
 - Use strict TypeScript configuration
 - Define explicit types for function parameters and return values
-- Avoid `any`; use `unknown` with type guards when necessary
+- Avoid `any` - use `unknown` with type guards when necessary
 - Use interfaces for object shapes, types for unions/intersections
 
-### File Naming Conventions
-- **Components**: PascalCase (e.g., `AddTransactionDialog.tsx`)
-- **Utilities/Hooks**: camelCase (e.g., `useExchangeRate.ts`)
-- **Actions**: kebab-case with `-actions` suffix (e.g., `transaction-actions.ts`)
-- **Types**: kebab-case (e.g., `trade-history.ts`)
+### React Components
+- Use **functional components** with hooks
+- Use **Server Components** by default
+- Add `'use client'` directive only when using client-side features (useState, useEffect, etc.)
+- Keep components focused and single-responsibility
 
-### Import Organization
-Order imports as follows:
-1. React/Next.js imports
-2. Third-party library imports
-3. Absolute imports (`@/` aliases)
-4. Relative imports
-5. Type imports
-
-```typescript
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-
-import { format } from 'date-fns';
-
-import { Button } from '@/components/ui/button';
-import { useToast } from '@/hooks/useToast';
-
-import { LocalComponent } from './LocalComponent';
-
-import type { Transaction } from '@/types/transaction';
-```
-
-### Styling with Tailwind CSS
+### Styling (Tailwind CSS)
 - Use Tailwind CSS utility classes
-- Use the `cn()` utility for conditional class merging
-- Follow the shadcn/ui design system (colors via CSS variables)
-- Avoid arbitrary values when possible
+- Use the `cn()` utility from `@/lib/utils` for conditional class merging
+- Follow the existing design system with CSS variables defined in `globals.css`
 
 ```tsx
 import { cn } from '@/lib/utils';
@@ -196,12 +185,24 @@ import { cn } from '@/lib/utils';
   'hover:bg-primary/90',
   isLoading && 'opacity-50 cursor-not-allowed'
 )}>
-  Click me
-</button>
 ```
 
-### Server Actions Pattern
-All data mutations use Server Actions with this pattern:
+### File Naming Conventions
+- **Components**: PascalCase (e.g., `AddTransactionDialog.tsx`)
+- **Utilities/Hooks**: camelCase (e.g., `useExchangeRate.ts`)
+- **Actions**: kebab-case with `-actions` suffix (e.g., `transaction-actions.ts`)
+- **Types**: kebab-case (e.g., `trade-history.ts`)
+
+### Import Organization
+1. React/Next.js imports
+2. Third-party library imports
+3. Absolute imports (`@/` aliases)
+4. Relative imports
+5. Type imports
+
+## Server Actions Pattern
+
+All data mutations use Next.js Server Actions. Here's the standard pattern:
 
 ```typescript
 "use server";
@@ -212,10 +213,10 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 const schema = z.object({
-  // validation schema
+  // define schema
 });
 
-export async function createSomething(data: InputType) {
+export async function createSomething(data: unknown) {
   try {
     // 1. Check authentication
     const session = await auth();
@@ -224,14 +225,14 @@ export async function createSomething(data: InputType) {
     }
 
     // 2. Validate input with Zod
-    const validatedFields = schema.safeParse(data);
-    if (!validatedFields.success) {
-      return { success: false, error: validatedFields.error.issues[0].message };
+    const validated = schema.safeParse(data);
+    if (!validated.success) {
+      return { success: false, error: validated.error.issues[0].message };
     }
 
     // 3. Perform database operation
     const result = await prisma.model.create({
-      data: { ...validatedFields.data, userId: session.user.id },
+      data: { ...validated.data, userId: session.user.id },
     });
 
     // 4. Revalidate affected paths
@@ -246,143 +247,113 @@ export async function createSomething(data: InputType) {
 }
 ```
 
-## Testing Instructions
+## Database Schema
 
-**Current Testing Approach:** Manual testing (automated tests not yet implemented)
+### Key Models
 
-Before submitting changes, verify:
+**User**: Core user entity with Auth.js integration, includes `mainCurrency`, `retirementTarget`, `monthlyBudget`
+
+**FinancialAccount**: User's financial accounts (types: BANK, CASH, INVESTMENT, LOAN, CREDIT_CARD)
+
+**Transaction**: Financial transactions (types: INCOME, EXPENSE, TRANSFER, LIABILITY_PAYMENT)
+
+**InvestmentAsset**: Stock/investment holdings with `symbol`, `quantity`, `avgBuyPrice`
+
+**TradeHistory**: Buy/sell trades for investment assets with realized PnL tracking
+
+**RecurringRule**: Automated recurring transaction rules with various intervals
+
+**Category**: Transaction categories (user-defined or system)
+
+**Budget**: Budgeting rules with period (MONTHLY, QUARTERLY, YEARLY)
+
+**SavingsGoal**: Savings targets with progress tracking
+
+### Important Enums
+```typescript
+enum AccountType { BANK, CASH, INVESTMENT, LOAN, CREDIT_CARD }
+enum TransactionType { INCOME, EXPENSE, TRANSFER, LIABILITY_PAYMENT }
+enum TradeType { BUY, SELL }
+enum RecurringInterval { DAILY, WEEKLY, BIWEEKLY, MONTHLY, QUARTERLY, YEARLY }
+enum BudgetPeriod { MONTHLY, QUARTERLY, YEARLY }
+enum UnitType { UNIT, TROY_OUNCE, GRAM }
+```
+
+## Authentication
+
+- **Strategy**: JWT-based with Prisma adapter
+- **Provider**: Credentials (email/password) using bcrypt
+- **Middleware**: Protects `/dashboard/*` routes, redirects authenticated users from `/login` and `/register`
+- **Session**: Stored in JWT, user ID available via `session.user.id`
+
+Access current user in Server Actions:
+```typescript
+import { auth } from "@/auth";
+
+const session = await auth();
+const userId = session?.user?.id;
+```
+
+## Testing
+
+Currently uses manual testing. Before submitting changes, verify:
 - [ ] Authentication flows work correctly
-- [ ] Account creation and updates function properly
+- [ ] Account CRUD operations function properly
 - [ ] Transactions are recorded accurately
 - [ ] Investment calculations are correct
 - [ ] Currency conversions work as expected
 - [ ] Recurring transactions process correctly
 - [ ] Dashboard metrics display accurately
 
-Run linting before committing:
-```bash
-pnpm lint
-```
-
-## Database Schema Key Points
-
-### Account Types
-- `BANK`, `CASH`, `INVESTMENT` → Assets (positive balance)
-- `LOAN`, `CREDIT_CARD` → Liabilities (negative balance)
-
-### Transaction Types
-- `INCOME`, `EXPENSE`, `TRANSFER`, `LIABILITY_PAYMENT`
-
-### Important Relations
-- User → FinancialAccounts, Transactions, Categories, InvestmentAssets, RecurringRules
-- FinancialAccount → Transactions (from/to), InvestmentAssets
-- InvestmentAsset → TradeHistories
-- Transaction → Category, RecurringRule
-
-## Authentication & Authorization
-
-- JWT-based authentication with NextAuth.js v5
-- Credentials provider (email/password) with bcrypt
-- Prisma adapter for session/user storage
-- Route protection via middleware (`middleware.ts`)
-- Protected routes: `/dashboard/*`
-- Auth routes (redirect if logged in): `/login`, `/register`
-
-## Security Considerations
-
-1. **Input Validation**: All user inputs validated with Zod schemas
-2. **SQL Injection Prevention**: Prisma ORM uses parameterized queries
-3. **XSS Protection**: React's built-in escaping
-4. **CSRF Protection**: Built into NextAuth.js
-5. **Route Protection**: Middleware checks authentication status
-6. **Cron Job Security**: Cron endpoints require `CRON_SECRET` header
-
 ## Deployment
 
 ### Vercel Deployment
-1. Connect GitHub repository to Vercel
-2. Configure environment variables in Vercel dashboard
-3. Ensure MySQL database is accessible from Vercel
-4. Automatic deployment on pushes to main branch
-
-### Cron Jobs
-Vercel cron job configured in `vercel.json`:
-- Path: `/api/cron/recurring`
-- Schedule: Daily at midnight (`0 0 * * *`)
-- Processes pending recurring transactions
+- Cron job configured in `vercel.json` for daily recurring transaction processing at midnight
+- Ensure `CRON_SECRET` environment variable is set
 
 ### Database Migration on Production
 ```bash
 pnpm prisma migrate deploy
 ```
 
-## Common Issues & Solutions
+## Key Utilities
 
-### Database Connection Errors
-- Verify MySQL is running
-- Check `DATABASE_URL` format
-- Ensure database exists
+### `cn()` - Class Name Merger
+Located in `src/lib/utils.ts`. Combines `clsx` and `tailwind-merge` for conditional Tailwind classes.
 
-### Authentication Issues
-- Verify `AUTH_SECRET` is set
-- Clear browser cookies
-- Check `AUTH_URL` matches actual URL
+### Formatters
+- `formatCurrency(amount, currency, locale)` - Format numbers as currency
+- `formatNumber(value, locale)` - Format numbers with 2 decimal places
+- `formatDate(date, options)` - Format dates with Indonesian locale
+- `formatPercentage(value, decimals)` - Format as percentage with +/- sign
+- `getInitials(name)` - Get up to 2 uppercase initials from a name
 
-### Build Errors
-```bash
-rm -rf .next && pnpm build
-pnpm prisma generate
-rm -rf node_modules && pnpm install
-```
+### Prisma Client
+Located in `src/lib/db.ts`. Uses singleton pattern for development hot-reload compatibility.
 
-## External APIs
+## Common Patterns
 
-- **Yahoo Finance**: Real-time stock prices via `yahoo-finance2` package
-- **Exchange Rates**: Cached in database; update via server actions
+### Route Groups
+- `(auth)` - Login/register pages (no sidebar)
+- `(dashboard)` - All dashboard pages (with shared layout)
 
-## Adding New Features
+### Data Fetching
+- Server Components: Fetch directly with Prisma
+- Client Components: Use TanStack Query hooks
 
-When adding a new feature, follow this structure:
+### Form Handling
+- Use React Hook Form with Zod resolvers
+- Validation schemas defined in action files
 
-```
-src/
-├── app/(dashboard)/dashboard/your-feature/
-│   └── page.tsx
-├── components/your-feature/
-│   ├── FeatureComponent.tsx
-│   └── FeatureDialog.tsx
-├── actions/your-feature-actions.ts
-├── hooks/useYourFeature.ts
-├── lib/your-feature-service.ts
-└── types/your-feature.ts
-```
+### Error Handling
+- Server Actions return `{ success: boolean, data?: T, error?: string }`
+- Always check `session?.user?.id` before database operations
 
-For database changes:
-1. Update `prisma/schema.prisma`
-2. Run `pnpm prisma migrate dev --name description`
-3. Run `pnpm prisma generate`
-4. Update related types and services
+## Security Considerations
 
-## Commit Message Format
-
-Follow Conventional Commits:
-```
-<type>(<scope>): <description>
-
-[optional body]
-
-[optional footer]
-```
-
-Types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`
-
-Scopes: `auth`, `api`, `ui`, `db`, `investments`, `transactions`, `accounts`
-
-Example:
-```
-feat(investments): add trade history table
-
-- Implement trade history component
-- Add server action for fetching trades
-- Integrate with portfolio view
-```
+- CSRF protection built into NextAuth.js
+- Input validation with Zod schemas on all inputs
+- SQL injection prevention via Prisma parameterized queries
+- XSS protection via React's built-in escaping
+- Route protection via middleware
+- Cron endpoints protected by `CRON_SECRET` header check
