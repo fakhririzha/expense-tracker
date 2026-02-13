@@ -95,18 +95,8 @@ export function BudgetProgress({ budget, onBack }: BudgetProgressProps) {
     YEARLY: "Yearly",
   }[budget.period];
 
-  // Calculate weekly average based on the actual budget period length
-  const totalDaysInPeriod =
-    budget.period === "MONTHLY"
-      ? 30
-      : budget.period === "QUARTERLY"
-        ? 91
-        : 365;
-  const weeksPassed = Math.max(
-    1,
-    Math.ceil((totalDaysInPeriod - budget.daysRemaining) / 7)
-  );
-  const weeklyAverage = budget.spent / weeksPassed;
+  // Derive weekly average from daily average for accurate calculation
+  const weeklyAverage = budget.dailyAverage * 7;
 
   return (
     <div className="space-y-6">
