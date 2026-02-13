@@ -525,6 +525,7 @@ export async function recordTrade(data: TradeInput) {
  * Fetches the user's assets, obtains market prices, adjusts prices for precious-metal units when necessary, computes investment metrics (unrealized P&L, day change, etc.), and returns each asset augmented with `currentPrice`, `previousClose`, computed metric fields, `quote`, and a human-readable `unitLabel`.
  *
  * @returns An object with `success` boolean, `data` as an array of portfolio items (each including the original asset fields plus `currentPrice`, `previousClose`, computed metrics, `quote`, and `unitLabel`), and `error` when the operation fails.
+ */
 export async function getPortfolio() {
   try {
     const session = await auth();
