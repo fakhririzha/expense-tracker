@@ -377,7 +377,7 @@ export async function getBudgetProgress(id: string): Promise<{ success: boolean;
   }
 }
 
-// Get all budgets with their progress
+// Get all budgets with their progress (optimized - single query for transactions)
 export async function getBudgetsSummary() {
   try {
     const session = await auth();
@@ -385,6 +385,7 @@ export async function getBudgetsSummary() {
       return { success: false, error: "Unauthorized", data: [] };
     }
 
+    // 1. Fetch all active budgets
     const budgets = await prisma.budget.findMany({
       where: {
         userId: session.user.id,
@@ -403,28 +404,101 @@ export async function getBudgetsSummary() {
       orderBy: { createdAt: "desc" },
     });
 
-    const budgetsWithProgress: BudgetWithProgress[] = await Promise.all(
-      budgets.map(async (budget) => {
-        const result = await getBudgetProgress(budget.id);
-        return result.data || {
-          id: budget.id,
-          name: budget.name,
-          amount: budget.amount,
-          period: budget.period,
-          startDate: budget.startDate,
-          endDate: budget.endDate,
-          isActive: budget.isActive,
-          categoryId: budget.categoryId,
-          category: budget.category,
-          spent: 0,
-          remaining: budget.amount,
-          percentage: 0,
-          daysRemaining: 0,
-          dailyAverage: 0,
-          projectedSpending: 0,
-        };
-      })
-    );
+    if (budgets.length === 0) {
+      return { success: true, data: [] };
+    }
+
+    // 2. Determine date ranges needed for each period type
+    const now = new Date();
+    const dateRanges = {
+      MONTHLY: { start: startOfMonth(now), end: endOfMonth(now) },
+      QUARTERLY: { start: startOfQuarter(now), end: endOfQuarter(now) },
+      YEARLY: { start: startOfYear(now), end: endOfYear(now) },
+    };
+
+    // 3. Find the overall date range to fetch all relevant transactions
+    const minDate = new Date(Math.min(...Object.values(dateRanges).map(r => r.start.getTime())));
+    const maxDate = new Date(Math.max(...Object.values(dateRanges).map(r => r.end.getTime())));
+
+    // 4. Collect all category IDs (including null for budgets without category)
+    const categoryIds = budgets
+      .map(b => b.categoryId)
+      .filter((id): id is string => id !== null);
+
+    // 5. Fetch all relevant transactions in a single query
+    const allTransactions = await prisma.transaction.findMany({
+      where: {
+        userId: session.user.id,
+        type: TransactionType.EXPENSE,
+        date: { gte: minDate, lte: maxDate },
+        // Only filter by categoryId if there are category-specific budgets
+        ...(categoryIds.length > 0 && { categoryId: { in: categoryIds } }),
+      },
+      select: {
+        amount: true,
+        date: true,
+        categoryId: true,
+      },
+    });
+
+    // 6. Group transactions by category for efficient lookup
+    const transactionsByCategory = new Map<string | null, typeof allTransactions>();
+    for (const transaction of allTransactions) {
+      const key = transaction.categoryId;
+      if (!transactionsByCategory.has(key)) {
+        transactionsByCategory.set(key, []);
+      }
+      transactionsByCategory.get(key)!.push(transaction);
+    };
+
+    // 7. Calculate progress for each budget using in-memory data
+    const budgetsWithProgress: BudgetWithProgress[] = budgets.map(budget => {
+      const { start, end } = dateRanges[budget.period as keyof typeof dateRanges] || dateRanges.MONTHLY;
+      
+      // Get transactions for this budget's category (or all transactions if no category)
+      const relevantTransactions = budget.categoryId
+        ? (transactionsByCategory.get(budget.categoryId) || [])
+        : allTransactions.filter(t => t.date >= start && t.date <= end);
+      
+      // Filter by date range for category-specific budgets
+      const budgetTransactions = budget.categoryId
+        ? relevantTransactions.filter(t => t.date >= start && t.date <= end)
+        : relevantTransactions;
+
+      // Calculate spent amount
+      const spent = budgetTransactions.reduce((sum, t) => sum + t.amount, 0);
+      const remaining = budget.amount - spent;
+      const percentage = budget.amount > 0 ? (spent / budget.amount) * 100 : 0;
+
+      // Calculate days remaining in period
+      const daysRemaining = Math.max(0, Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+
+      // Calculate daily average
+      const daysPassed = Math.max(1, Math.ceil((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+      const dailyAverage = spent / daysPassed;
+
+      // Project spending for the rest of the period
+      const totalDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+      const projectedSpending = dailyAverage * totalDays;
+
+      return {
+        id: budget.id,
+        name: budget.name,
+        amount: budget.amount,
+        period: budget.period,
+        startDate: budget.startDate,
+        endDate: budget.endDate,
+        isActive: budget.isActive,
+        categoryId: budget.categoryId,
+        category: budget.category,
+        spent,
+        remaining,
+        percentage,
+        daysRemaining,
+        dailyAverage,
+        projectedSpending,
+      };
+    });
 
     return { success: true, data: budgetsWithProgress };
   } catch (error) {
