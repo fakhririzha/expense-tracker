@@ -86,7 +86,7 @@ async function convertToUserCurrency(
   
   // Try to get exchange rate
   const rate = await getExchangeRate(fromCurrency, userCurrency);
-  if (rate) return amount * rate * exchangeRate;
+  if (rate) return amount * rate;
   
   // Fallback to stored exchange rate
   return amount * exchangeRate;
