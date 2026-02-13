@@ -82,59 +82,68 @@ export function ImportDialog({ trigger, onSuccess }: ImportDialogProps) {
     setImportResult(null);
   };
 
+  /**
+   * Processes a CSV file by validating, reading, parsing, and auto-detecting column mapping.
+   * Updates component state with file content and moves to the mapping step on success.
+   *
+   * @param selectedFile - The CSV file to process
+   */
+  const processCSVFile = useCallback(async (selectedFile: File) => {
+    // Validate file type
+    if (!selectedFile.name.endsWith(".csv")) {
+      setError("Please select a CSV file");
+      return;
+    }
+
+    setFile(selectedFile);
+    setError(null);
+
+    // Read file content
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const content = event.target?.result as string;
+      setCSVContent(content);
+
+      // Parse CSV and detect mapping
+      setIsProcessing(true);
+      try {
+        const parseResult = await parseCSVContent(content);
+        if (!parseResult.success) {
+          setError(parseResult.error || "Failed to parse CSV");
+          setIsProcessing(false);
+          return;
+        }
+
+        setHeaders(parseResult.headers);
+
+        // Auto-detect column mapping
+        const detectedMapping = await detectColumnMapping(parseResult.headers);
+        setMapping(detectedMapping);
+
+        // Move to mapping step
+        setStep("mapping");
+      } catch (err) {
+        console.error("Error parsing CSV:", err);
+        setError("Failed to parse CSV file");
+      } finally {
+        setIsProcessing(false);
+      }
+    };
+
+    reader.onerror = () => {
+      setError("Failed to read file");
+    };
+
+    reader.readAsText(selectedFile);
+  }, []);
+
   const handleFileChange = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       const selectedFile = e.target.files?.[0];
       if (!selectedFile) return;
-
-      // Validate file type
-      if (!selectedFile.name.endsWith(".csv")) {
-        setError("Please select a CSV file");
-        return;
-      }
-
-      setFile(selectedFile);
-      setError(null);
-
-      // Read file content
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-        const content = event.target?.result as string;
-        setCSVContent(content);
-
-        // Parse CSV and detect mapping
-        setIsProcessing(true);
-        try {
-          const parseResult = await parseCSVContent(content);
-          if (!parseResult.success) {
-            setError(parseResult.error || "Failed to parse CSV");
-            setIsProcessing(false);
-            return;
-          }
-
-          setHeaders(parseResult.headers);
-
-          // Auto-detect column mapping
-          const detectedMapping = await detectColumnMapping(parseResult.headers);
-          setMapping(detectedMapping);
-
-          // Move to mapping step
-          setStep("mapping");
-        } catch (err) {
-          console.error("Error parsing CSV:", err);
-          setError("Failed to parse CSV file");
-        } finally {
-          setIsProcessing(false);
-        }
-      };
-
-      reader.onerror = () => {
-        setError("Failed to read file");
-      };
-
-      reader.readAsText(selectedFile);
+      processCSVFile(selectedFile);
     },
-    []
+    [processCSVFile]
   );
 
   const handleMappingNext = async () => {
@@ -257,6 +266,14 @@ export function ImportDialog({ trigger, onSuccess }: ImportDialogProps) {
                   "hover:border-primary/50 transition-colors",
                   file && "border-green-500 bg-green-50"
                 )}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (isProcessing) return;
+                  const droppedFile = e.dataTransfer?.files?.[0];
+                  if (!droppedFile) return;
+                  processCSVFile(droppedFile);
+                }}
               >
                 {file ? (
                   <div className="flex items-center justify-center gap-2">
