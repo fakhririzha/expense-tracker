@@ -13,6 +13,7 @@ export type ColumnMapping = {
   type?: string;
   category?: string;
   account?: string;
+  toAccount?: string;
   description?: string;
   currency?: string;
 };
@@ -24,6 +25,7 @@ export type ParsedTransaction = {
   type: string;
   category?: string;
   account: string;
+  toAccount?: string;
   description?: string;
   currency?: string;
   isValid: boolean;
@@ -119,6 +121,7 @@ export async function detectColumnMapping(headers: string[]): Promise<ColumnMapp
   const typePatterns = ["type", "transaction_type", "trans_type", "tx_type"];
   const categoryPatterns = ["category", "cat", "category_name"];
   const accountPatterns = ["account", "account_name", "from_account", "source"];
+  const toAccountPatterns = ["to_account", "to account", "destination", "dest_account", "target_account"];
   const descriptionPatterns = ["description", "desc", "memo", "note", "notes"];
   const currencyPatterns = ["currency", "curr", "ccy"];
 
@@ -135,6 +138,8 @@ export async function detectColumnMapping(headers: string[]): Promise<ColumnMapp
       mapping.category = header;
     } else if (!mapping.account && accountPatterns.some((p) => h.includes(p))) {
       mapping.account = header;
+    } else if (!mapping.toAccount && toAccountPatterns.some((p) => h.includes(p))) {
+      mapping.toAccount = header;
     } else if (
       !mapping.description &&
       descriptionPatterns.some((p) => h.includes(p))
@@ -170,6 +175,7 @@ export async function mapToTransactions(
     const typeValue = mapping.type ? row[mapping.type]?.toUpperCase() : "";
     const categoryValue = mapping.category ? row[mapping.category] : undefined;
     const accountValue = mapping.account ? row[mapping.account] : "";
+    const toAccountValue = mapping.toAccount ? row[mapping.toAccount] : undefined;
     const descriptionValue = mapping.description
       ? row[mapping.description]
       : undefined;
@@ -197,6 +203,16 @@ export async function mapToTransactions(
       errors.push("Type must be INCOME, EXPENSE, or TRANSFER");
     }
 
+    // Validate TRANSFER type requires toAccount
+    if (typeValue === "TRANSFER" && !toAccountValue) {
+      errors.push("To Account is required for TRANSFER transactions");
+    }
+
+    // Validate TRANSFER source and destination are different
+    if (typeValue === "TRANSFER" && toAccountValue && accountValue.toLowerCase() === toAccountValue.toLowerCase()) {
+      errors.push("Source and destination accounts must be different for TRANSFER");
+    }
+
     // Validate date format
     if (dateValue) {
       const parsedDate = new Date(dateValue);
@@ -211,6 +227,7 @@ export async function mapToTransactions(
       type: typeValue,
       category: categoryValue,
       account: accountValue,
+      toAccount: toAccountValue,
       description: descriptionValue,
       currency: currencyValue || "IDR",
       isValid: errors.length === 0,
@@ -337,7 +354,7 @@ export async function importTransactions(
       }
 
       try {
-        // Find or create account
+        // Find or create source account
         let account = accountMap.get(tx.account.toLowerCase());
 
         if (!account && options?.createMissingAccounts) {
@@ -361,6 +378,33 @@ export async function importTransactions(
           continue;
         }
 
+        // For TRANSFER type, find or create destination account
+        let toAccount = null;
+        if (tx.type === "TRANSFER" && tx.toAccount) {
+          toAccount = accountMap.get(tx.toAccount.toLowerCase());
+
+          if (!toAccount && options?.createMissingAccounts) {
+            // Create new destination account
+            toAccount = await prisma.financialAccount.create({
+              data: {
+                name: tx.toAccount,
+                type: "BANK", // Default type
+                currency: tx.currency || "IDR",
+                balance: 0,
+                userId: session.user.id,
+              },
+            });
+            accountMap.set(tx.toAccount.toLowerCase(), toAccount);
+          } else if (!toAccount) {
+            result.failed++;
+            result.errors.push({
+              row: tx.rowNumber,
+              error: `Destination account "${tx.toAccount}" not found`,
+            });
+            continue;
+          }
+        }
+
         // Find or create category
         let category = tx.category
           ? categoryMap.get(tx.category.toLowerCase())
@@ -381,10 +425,7 @@ export async function importTransactions(
         // Parse date
         const parsedDate = new Date(tx.date);
 
-        // Calculate balance change
-        const balanceChange = tx.type === "INCOME" ? tx.amount : -tx.amount;
-
-        // Create transaction and update account balance atomically
+        // Create transaction and update account balance(s) atomically
         await prisma.$transaction(async (txClient: Prisma.TransactionClient) => {
           // Create transaction
           await txClient.transaction.create({
@@ -396,16 +437,31 @@ export async function importTransactions(
               description: tx.description,
               date: parsedDate,
               accountId: account!.id,
+              toAccountId: tx.type === "TRANSFER" ? toAccount!.id : null,
               categoryId: category?.id || null,
               userId: session.user.id,
             },
           });
 
-          // Update account balance
-          await txClient.financialAccount.update({
-            where: { id: account!.id },
-            data: { balance: { increment: balanceChange } },
-          });
+          if (tx.type === "TRANSFER") {
+            // For transfers: decrement source account, increment destination account
+            await txClient.financialAccount.update({
+              where: { id: account!.id },
+              data: { balance: { decrement: tx.amount } },
+            });
+
+            await txClient.financialAccount.update({
+              where: { id: toAccount!.id },
+              data: { balance: { increment: tx.amount } },
+            });
+          } else {
+            // For income/expense: update single account balance
+            const balanceChange = tx.type === "INCOME" ? tx.amount : -tx.amount;
+            await txClient.financialAccount.update({
+              where: { id: account!.id },
+              data: { balance: { increment: balanceChange } },
+            });
+          }
         });
 
         result.imported++;
@@ -674,10 +730,11 @@ export async function importBudgets(
  */
 export async function getImportTemplate(type: "transactions" | "accounts" | "budgets") {
   const templates = {
-    transactions: `Date,Amount,Type,Category,Account,Description,Currency
-2024-01-15,50000,INCOME,Salary,Bank Account,Monthly salary,IDR
-2024-01-16,25000,EXPENSE,Food,Cash,Groceries,IDR
-2024-01-17,10000,EXPENSE,Transport,Bank Account,Taxi fare,IDR`,
+    transactions: `Date,Amount,Type,Category,Account,To Account,Description,Currency
+2024-01-15,50000,INCOME,Salary,Bank Account,,Monthly salary,IDR
+2024-01-16,25000,EXPENSE,Food,Cash,,Groceries,IDR
+2024-01-17,10000,EXPENSE,Transport,Bank Account,,Taxi fare,IDR
+2024-01-18,30000,TRANSFER,,Bank Account,Savings,Transfer to savings,IDR`,
     accounts: `Name,Type,Currency,Balance,Description
 Bank Account,BANK,IDR,1000000,Main bank account
 Cash,CASH,IDR,500000,Pocket money
