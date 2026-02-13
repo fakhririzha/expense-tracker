@@ -191,8 +191,8 @@ export function IncomeVsExpenseChart({
           <div className="rounded-lg border p-3">
             <p className="text-sm text-muted-foreground">Best Month</p>
             <p className="font-medium">{bestMonth.monthLabel}</p>
-            <p className="text-lg font-bold text-green-600">
-              +{formatCurrency(bestMonth.net, mainCurrency)}
+            <p className={`text-lg font-bold ${bestMonth.net >= 0 ? "text-green-600" : "text-destructive"}`}>
+              {bestMonth.net > 0 ? "+" : ""}{formatCurrency(bestMonth.net, mainCurrency)}
             </p>
           </div>
           <div className="rounded-lg border p-3">
