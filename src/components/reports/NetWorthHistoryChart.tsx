@@ -24,6 +24,7 @@ interface NetWorthHistoryChartProps {
   data: NetWorthPoint[];
   title?: string;
   description?: string;
+  mainCurrency: string;
 }
 
 // Chart colors
@@ -36,12 +37,17 @@ const LIABILITIES_COLOR = "#ef4444"; // Red
  *
  * If `data` is empty or missing, renders a placeholder card with the provided `title` and `description`.
  *
+ * @param data - Array of net worth data points
+ * @param title - Optional custom title
+ * @param description - Optional custom description
+ * @param mainCurrency - The user's main currency for formatting
  * @returns A React element displaying the net worth history chart and related summary/range statistics
  */
 export function NetWorthHistoryChart({
   data,
   title = "Net Worth History",
   description = "Track your net worth over time",
+  mainCurrency,
 }: NetWorthHistoryChartProps) {
   if (!data || data.length === 0) {
     return (
@@ -93,25 +99,25 @@ export function NetWorthHistoryChart({
           <div className="rounded-lg border p-3">
             <p className="text-sm text-muted-foreground">Current Net Worth</p>
             <p className={`text-xl font-bold ${currentNetWorth >= 0 ? "text-blue-600" : "text-destructive"}`}>
-              {formatCurrency(currentNetWorth)}
+              {formatCurrency(currentNetWorth, mainCurrency)}
             </p>
           </div>
           <div className="rounded-lg border p-3">
             <p className="text-sm text-muted-foreground">Total Assets</p>
             <p className="text-xl font-bold text-green-600">
-              {formatCurrency(currentAssets)}
+              {formatCurrency(currentAssets, mainCurrency)}
             </p>
           </div>
           <div className="rounded-lg border p-3">
             <p className="text-sm text-muted-foreground">Total Liabilities</p>
             <p className="text-xl font-bold text-destructive">
-              {formatCurrency(currentLiabilities)}
+              {formatCurrency(currentLiabilities, mainCurrency)}
             </p>
           </div>
           <div className="rounded-lg border p-3">
             <p className="text-sm text-muted-foreground">Change</p>
             <p className={`text-xl font-bold ${netWorthChange >= 0 ? "text-green-600" : "text-destructive"}`}>
-              {netWorthChange >= 0 ? "+" : ""}{formatCurrency(netWorthChange)}
+              {netWorthChange >= 0 ? "+" : ""}{formatCurrency(netWorthChange, mainCurrency)}
               <span className="text-sm font-normal ml-1">
                 ({netWorthChange >= 0 ? "+" : ""}{netWorthChangePercent}%)
               </span>
@@ -139,7 +145,7 @@ export function NetWorthHistoryChart({
                 className="fill-muted-foreground"
               />
               <YAxis
-                tickFormatter={(value) => formatCurrency(value, "IDR", "id-ID").replace("Rp", "").trim()}
+                tickFormatter={(value) => formatCurrency(value, mainCurrency, "id-ID").replace(/[^0-9.,]/g, "").trim()}
                 className="fill-muted-foreground"
                 tick={{ fontSize: 12 }}
               />
@@ -150,7 +156,7 @@ export function NetWorthHistoryChart({
                     assets: "Assets",
                     liabilities: "Liabilities",
                   };
-                  return [formatCurrency(value as number), labels[name as string] || name];
+                  return [formatCurrency(value as number, mainCurrency), labels[name as string] || name];
                 }}
                 labelFormatter={(label) => `Date: ${formatXAxis(label as string)}`}
                 contentStyle={{
@@ -204,13 +210,13 @@ export function NetWorthHistoryChart({
           <div className="rounded-lg border p-3">
             <p className="text-sm text-muted-foreground">Highest Net Worth</p>
             <p className="text-lg font-bold text-green-600">
-              {formatCurrency(highestNetWorth)}
+              {formatCurrency(highestNetWorth, mainCurrency)}
             </p>
           </div>
           <div className="rounded-lg border p-3">
             <p className="text-sm text-muted-foreground">Lowest Net Worth</p>
             <p className={`text-lg font-bold ${lowestNetWorth >= 0 ? "text-blue-600" : "text-destructive"}`}>
-              {formatCurrency(lowestNetWorth)}
+              {formatCurrency(lowestNetWorth, mainCurrency)}
             </p>
           </div>
         </div>

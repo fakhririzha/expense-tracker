@@ -25,6 +25,7 @@ interface IncomeVsExpenseChartProps {
   data: IncomeVsExpensePoint[];
   title?: string;
   description?: string;
+  mainCurrency: string;
 }
 
 // Chart colors
@@ -38,12 +39,14 @@ const NET_COLOR = "#3b82f6"; // Blue
  * @param data - Array of income and expense points to plot
  * @param title - Optional card header title
  * @param description - Optional card header description
+ * @param mainCurrency - The user's main currency for formatting
  * @returns The Income vs Expense chart element
  */
 export function IncomeVsExpenseChart({
   data,
   title = "Income vs Expense",
   description = "Compare your income and expenses over time",
+  mainCurrency,
 }: IncomeVsExpenseChartProps) {
   if (!data || data.length === 0) {
     return (
@@ -85,25 +88,25 @@ export function IncomeVsExpenseChart({
           <div className="rounded-lg border p-3">
             <p className="text-sm text-muted-foreground">Total Income</p>
             <p className="text-xl font-bold text-green-600">
-              {formatCurrency(totalIncome)}
+              {formatCurrency(totalIncome, mainCurrency)}
             </p>
           </div>
           <div className="rounded-lg border p-3">
             <p className="text-sm text-muted-foreground">Total Expense</p>
             <p className="text-xl font-bold text-destructive">
-              {formatCurrency(totalExpense)}
+              {formatCurrency(totalExpense, mainCurrency)}
             </p>
           </div>
           <div className="rounded-lg border p-3">
             <p className="text-sm text-muted-foreground">Net Flow</p>
             <p className={`text-xl font-bold ${totalNet >= 0 ? "text-green-600" : "text-destructive"}`}>
-              {totalNet >= 0 ? "+" : ""}{formatCurrency(totalNet)}
+              {totalNet >= 0 ? "+" : ""}{formatCurrency(totalNet, mainCurrency)}
             </p>
           </div>
           <div className="rounded-lg border p-3">
             <p className="text-sm text-muted-foreground">Avg Monthly Net</p>
             <p className={`text-xl font-bold ${averageNet >= 0 ? "text-green-600" : "text-destructive"}`}>
-              {averageNet >= 0 ? "+" : ""}{formatCurrency(averageNet)}
+              {averageNet >= 0 ? "+" : ""}{formatCurrency(averageNet, mainCurrency)}
             </p>
           </div>
         </div>
@@ -127,7 +130,7 @@ export function IncomeVsExpenseChart({
                 className="fill-muted-foreground"
               />
               <YAxis
-                tickFormatter={(value) => formatCurrency(value, "IDR", "id-ID").replace("Rp", "").trim()}
+                tickFormatter={(value) => formatCurrency(value, mainCurrency, "id-ID").replace(/[^0-9.,]/g, "").trim()}
                 className="fill-muted-foreground"
                 tick={{ fontSize: 12 }}
               />
@@ -138,7 +141,7 @@ export function IncomeVsExpenseChart({
                     expense: "Expense",
                     net: "Net",
                   };
-                  return [formatCurrency(value as number), labels[name as string] || name];
+                  return [formatCurrency(value as number, mainCurrency), labels[name as string] || name];
                 }}
                 labelFormatter={(label) => `Month: ${label}`}
                 contentStyle={{
@@ -189,14 +192,14 @@ export function IncomeVsExpenseChart({
             <p className="text-sm text-muted-foreground">Best Month</p>
             <p className="font-medium">{bestMonth.monthLabel}</p>
             <p className="text-lg font-bold text-green-600">
-              +{formatCurrency(bestMonth.net)}
+              +{formatCurrency(bestMonth.net, mainCurrency)}
             </p>
           </div>
           <div className="rounded-lg border p-3">
             <p className="text-sm text-muted-foreground">Worst Month</p>
             <p className="font-medium">{worstMonth.monthLabel}</p>
             <p className={`text-lg font-bold ${worstMonth.net >= 0 ? "text-green-600" : "text-destructive"}`}>
-              {worstMonth.net >= 0 ? "+" : ""}{formatCurrency(worstMonth.net)}
+              {worstMonth.net >= 0 ? "+" : ""}{formatCurrency(worstMonth.net, mainCurrency)}
             </p>
           </div>
         </div>

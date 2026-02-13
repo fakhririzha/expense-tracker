@@ -23,6 +23,7 @@ interface SpendingTrendsChartProps {
   data: SpendingTrendPoint[];
   title?: string;
   description?: string;
+  mainCurrency: string;
 }
 
 // Chart colors
@@ -37,12 +38,14 @@ const EXPENSE_COLOR = "#ef4444"; // Red for expenses
  * @param data - Array of spending trend data points
  * @param title - Optional custom title (default: "Spending Trends")
  * @param description - Optional custom description
+ * @param mainCurrency - The user's main currency for formatting
  * @returns The Spending Trends Chart React element
  */
 export function SpendingTrendsChart({
   data,
   title = "Spending Trends",
   description = "Your spending over time",
+  mainCurrency,
 }: SpendingTrendsChartProps) {
   if (!data || data.length === 0) {
     return (
@@ -76,13 +79,13 @@ export function SpendingTrendsChart({
           <div className="rounded-lg border p-3">
             <p className="text-sm text-muted-foreground">Total Spending</p>
             <p className="text-xl font-bold text-destructive">
-              {formatCurrency(total)}
+              {formatCurrency(total, mainCurrency)}
             </p>
           </div>
           <div className="rounded-lg border p-3">
             <p className="text-sm text-muted-foreground">Average per Period</p>
             <p className="text-xl font-bold">
-              {formatCurrency(average)}
+              {formatCurrency(average, mainCurrency)}
             </p>
           </div>
         </div>
@@ -113,12 +116,12 @@ export function SpendingTrendsChart({
                 interval="preserveStartEnd"
               />
               <YAxis
-                tickFormatter={(value) => formatCurrency(value, "IDR", "id-ID").replace("Rp", "").trim()}
+                tickFormatter={(value) => formatCurrency(value, mainCurrency, "id-ID").replace(/[^0-9.,]/g, "").trim()}
                 className="fill-muted-foreground"
                 tick={{ fontSize: 12 }}
               />
               <Tooltip
-                formatter={(value) => [formatCurrency(value as number), "Spending"]}
+                formatter={(value) => [formatCurrency(value as number, mainCurrency), "Spending"]}
                 labelFormatter={(label) => `Period: ${label}`}
                 contentStyle={{
                   backgroundColor: "hsl(var(--card))",

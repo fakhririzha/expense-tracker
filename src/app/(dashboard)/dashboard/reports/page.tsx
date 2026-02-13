@@ -169,7 +169,7 @@ export default function ReportsPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-green-600">
-                    {formatCurrency(totalIncome)}
+                    {formatCurrency(totalIncome, mainCurrency)}
                   </div>
                   <p className="text-xs text-muted-foreground">
                     {incomeCategories.length} income sources
@@ -183,7 +183,7 @@ export default function ReportsPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-destructive">
-                    {formatCurrency(totalExpenses)}
+                    {formatCurrency(totalExpenses, mainCurrency)}
                   </div>
                   <p className="text-xs text-muted-foreground">
                     {expenseCategories.length} expense categories
@@ -201,7 +201,7 @@ export default function ReportsPage() {
                 </CardHeader>
                 <CardContent>
                   <div className={`text-2xl font-bold ${netFlow >= 0 ? "text-green-600" : "text-destructive"}`}>
-                    {netFlow >= 0 ? "+" : ""}{formatCurrency(netFlow)}
+                    {netFlow >= 0 ? "+" : ""}{formatCurrency(netFlow, mainCurrency)}
                   </div>
                   <p className="text-xs text-muted-foreground">
                     {totalIncome > 0 ? `${((netFlow / totalIncome) * 100).toFixed(1)}% savings rate` : "N/A"}
@@ -215,7 +215,7 @@ export default function ReportsPage() {
                 </CardHeader>
                 <CardContent>
                   <div className={`text-2xl font-bold ${currentNetWorth >= 0 ? "text-blue-600" : "text-destructive"}`}>
-                    {formatCurrency(currentNetWorth)}
+                    {formatCurrency(currentNetWorth, mainCurrency)}
                   </div>
                   <p className="text-xs text-muted-foreground">
                     Current estimate
@@ -228,7 +228,7 @@ export default function ReportsPage() {
             <div className="grid gap-6 md:grid-cols-2">
               {/* Monthly Summary */}
               {monthlySummary && (
-                <MonthlySummaryCard data={monthlySummary} />
+                <MonthlySummaryCard data={monthlySummary} mainCurrency={mainCurrency} />
               )}
               
               {/* Spending Trends Mini */}
@@ -236,6 +236,7 @@ export default function ReportsPage() {
                 data={spendingTrends}
                 title="Spending Overview"
                 description="Your spending pattern in the selected period"
+                mainCurrency={mainCurrency}
               />
             </div>
 
@@ -275,6 +276,7 @@ export default function ReportsPage() {
               data={spendingTrends}
               title="Spending Trends"
               description="Track your spending over time"
+              mainCurrency={mainCurrency}
             />
           </TabsContent>
 
@@ -300,6 +302,7 @@ export default function ReportsPage() {
               data={incomeVsExpense}
               title="Income vs Expense"
               description="Compare your income and expenses over time"
+              mainCurrency={mainCurrency}
             />
           </TabsContent>
 
@@ -309,6 +312,7 @@ export default function ReportsPage() {
               data={netWorthHistory}
               title="Net Worth History"
               description="Track your net worth over time"
+              mainCurrency={mainCurrency}
             />
           </TabsContent>
         </Tabs>

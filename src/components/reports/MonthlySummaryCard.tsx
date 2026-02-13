@@ -14,6 +14,7 @@ import type { MonthlySummary } from "@/actions/report-actions";
 interface MonthlySummaryCardProps {
   data: MonthlySummary;
   title?: string;
+  mainCurrency: string;
 }
 
 const monthNames = [
@@ -29,9 +30,10 @@ const monthNames = [
  *
  * @param value - The change amount in the same currency as displayed; positive for increase, negative for decrease, zero for no change.
  * @param label - Comparison label shown after "vs" (for example, "last month").
+ * @param mainCurrency - The user's main currency for formatting.
  * @returns The JSX element representing the change indicator.
  */
-function ChangeIndicator({ value, label }: { value: number; label: string }) {
+function ChangeIndicator({ value, label, mainCurrency }: { value: number; label: string; mainCurrency: string }) {
   const isPositive = value > 0;
   const isNeutral = value === 0;
   
@@ -45,7 +47,7 @@ function ChangeIndicator({ value, label }: { value: number; label: string }) {
         <ArrowDownIcon className="h-3 w-3 text-destructive" />
       )}
       <span className={`text-xs ${isNeutral ? "text-muted-foreground" : isPositive ? "text-green-600" : "text-destructive"}`}>
-        {isNeutral ? "No change" : `${isPositive ? "+" : ""}${formatCurrency(Math.abs(value))}`}
+        {isNeutral ? "No change" : `${isPositive ? "+" : ""}${formatCurrency(Math.abs(value), mainCurrency)}`}
       </span>
       <span className="text-xs text-muted-foreground">vs {label}</span>
     </div>
@@ -57,11 +59,13 @@ function ChangeIndicator({ value, label }: { value: number; label: string }) {
  *
  * @param data - MonthlySummary used to populate totals, top categories, previous-month comparisons, and metadata.
  * @param title - Optional custom title; defaults to "<Month> <Year> Summary" when omitted.
+ * @param mainCurrency - The user's main currency for formatting.
  * @returns The rendered Monthly Summary Card element.
  */
 export function MonthlySummaryCard({
   data,
   title,
+  mainCurrency,
 }: MonthlySummaryCardProps) {
   const monthName = monthNames[data.month - 1];
   const defaultTitle = `${monthName} ${data.year} Summary`;
@@ -85,36 +89,39 @@ export function MonthlySummaryCard({
           <div className="text-center">
             <p className="text-sm text-muted-foreground">Income</p>
             <p className="text-xl font-bold text-green-600">
-              {formatCurrency(data.totalIncome)}
+              {formatCurrency(data.totalIncome, mainCurrency)}
             </p>
             {data.previousMonthComparison && (
               <ChangeIndicator 
                 value={data.previousMonthComparison.incomeChange} 
-                label="last month" 
+                label="last month"
+                mainCurrency={mainCurrency}
               />
             )}
           </div>
           <div className="text-center">
             <p className="text-sm text-muted-foreground">Expenses</p>
             <p className="text-xl font-bold text-destructive">
-              {formatCurrency(data.totalExpense)}
+              {formatCurrency(data.totalExpense, mainCurrency)}
             </p>
             {data.previousMonthComparison && (
               <ChangeIndicator 
                 value={-data.previousMonthComparison.expenseChange} 
-                label="last month" 
+                label="last month"
+                mainCurrency={mainCurrency}
               />
             )}
           </div>
           <div className="text-center">
             <p className="text-sm text-muted-foreground">Net Flow</p>
             <p className={`text-xl font-bold ${data.netFlow >= 0 ? "text-green-600" : "text-destructive"}`}>
-              {data.netFlow >= 0 ? "+" : ""}{formatCurrency(data.netFlow)}
+              {data.netFlow >= 0 ? "+" : ""}{formatCurrency(data.netFlow, mainCurrency)}
             </p>
             {data.previousMonthComparison && (
               <ChangeIndicator 
                 value={data.previousMonthComparison.netChange} 
-                label="last month" 
+                label="last month"
+                mainCurrency={mainCurrency}
               />
             )}
           </div>
@@ -135,7 +142,7 @@ export function MonthlySummaryCard({
                     <span className="text-sm">{category.categoryName}</span>
                   </div>
                   <div className="text-right">
-                    <span className="text-sm font-medium">{formatCurrency(category.amount)}</span>
+                    <span className="text-sm font-medium">{formatCurrency(category.amount, mainCurrency)}</span>
                     <span className="text-xs text-muted-foreground ml-2">
                       {category.percentage.toFixed(1)}%
                     </span>
@@ -161,7 +168,7 @@ export function MonthlySummaryCard({
                     <span className="text-sm">{category.categoryName}</span>
                   </div>
                   <div className="text-right">
-                    <span className="text-sm font-medium">{formatCurrency(category.amount)}</span>
+                    <span className="text-sm font-medium">{formatCurrency(category.amount, mainCurrency)}</span>
                     <span className="text-xs text-muted-foreground ml-2">
                       {category.percentage.toFixed(1)}%
                     </span>
