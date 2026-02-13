@@ -233,15 +233,19 @@ export async function updateTransaction(
       return { success: false, error: "Transaction not found" };
     }
 
+    const { amount, type, accountId, categoryId, recurringRuleId, ...rest } = data;
+
+    // Compute the new type (either from the patch or keep existing)
+    const newType = type ?? existingTransaction.type;
+
     // Block editing of LIABILITY_PAYMENT transactions - they should be managed through the liability payment module
-    if (existingTransaction.type === "LIABILITY_PAYMENT") {
+    // Also block any attempt to change a transaction's type TO LIABILITY_PAYMENT
+    if (existingTransaction.type === "LIABILITY_PAYMENT" || newType === "LIABILITY_PAYMENT") {
       return { 
         success: false, 
         error: "Liability payment transactions cannot be edited here. Please use the Liabilities page to manage payments." 
       };
     }
-
-    const { amount, type, accountId, categoryId, recurringRuleId, ...rest } = data;
 
     // Validate category belongs to user OR is a system category (IDOR prevention)
     if (categoryId !== undefined) {
