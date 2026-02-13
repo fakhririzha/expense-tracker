@@ -47,8 +47,13 @@ export interface MonthSummary {
 }
 
 /**
- * Get all calendar events for a specific month
- * Includes both recurring rules with nextDueDate in the month and scheduled transactions
+ * Retrieve calendar events for a given month, including active recurring rules due in that month and scheduled transactions.
+ *
+ * @param params.year - The calendar year to query.
+ * @param params.month - The calendar month to query (1-12).
+ * @param params.accountId - Optional account id to filter events by account.
+ * @param params.type - Optional transaction type to filter events.
+ * @returns An object with a `success` flag and `data` containing an array of `CalendarEvent` entries for the month; on failure `success` is `false` and `error` contains a human-readable message.
  */
 export async function getCalendarEvents(params: {
   year: number;
@@ -199,7 +204,14 @@ export async function getCalendarEvents(params: {
 }
 
 /**
- * Get upcoming bills for the next N days
+ * Retrieve upcoming bills and scheduled transactions occurring within the next `days` days.
+ *
+ * Returns calendar events representing active recurring rules due in the date range and scheduled transactions;
+ * when a transaction corresponds to a recurring rule on the same day it is omitted to avoid duplication.
+ *
+ * @param params.days - Number of days from today to include (inclusive)
+ * @param params.accountId - Optional account ID to limit results to a specific financial account
+ * @returns An object with `success` (operation result), `data` (an array of `CalendarEvent` items sorted by date ascending), and an optional `error` message (e.g., `"Unauthorized"` when the user is not authenticated)
  */
 export async function getUpcomingBills(params: {
   days: number;
@@ -338,7 +350,13 @@ export async function getUpcomingBills(params: {
 }
 
 /**
- * Get events for a specific date
+ * Retrieve calendar events scheduled for a specific date.
+ *
+ * Includes active recurring rules due on that date and transactions dated that day. If a transaction is linked to a recurring rule that is also present for the same day, the transaction is omitted to avoid duplication. Results are sorted by amount in descending order.
+ *
+ * @param date - The target date to fetch events for (day-level).
+ * @param accountId - Optional financial account ID to filter events.
+ * @returns An object with `success` indicating the operation result, `data` containing the list of `CalendarEvent` entries for the date (recurring events and transactions, sorted by amount descending), and an optional `error` message (for example `"Unauthorized"` when the user is not authenticated). 
  */
 export async function getEventsForDate(params: {
   date: Date;
@@ -474,7 +492,12 @@ export async function getEventsForDate(params: {
 }
 
 /**
- * Get month summary (total income, expenses, net)
+ * Compute income, expenses, and net totals for a specific month using the user's main currency.
+ *
+ * @param year - Calendar year (e.g., 2026)
+ * @param month - Month number (1-12)
+ * @param accountId - Optional account id to restrict transactions to a single account
+ * @returns An object with `success` and `data`. When `success` is `true`, `data` is a `MonthSummary` containing `totalIncome`, `totalExpenses`, `net`, and `currency`; when `success` is `false`, `data` is `null`.
  */
 export async function getMonthSummary(params: {
   year: number;

@@ -79,12 +79,12 @@ interface AddBudgetDialogProps {
 }
 
 /**
- * Render a dialog that lets the user create a budget.
+ * Renders a modal dialog for creating a budget.
  *
- * The dialog loads available categories when opened, validates input against
- * the budget schema, submits the form to create the budget, and surfaces
- * any submission errors at the form root. On successful creation the dialog
- * closes, the form resets, and the optional `onSuccess` callback is invoked.
+ * Loads expense categories when opened, validates input against the budget schema,
+ * submits the form to create a budget, surfaces submission errors at the form root,
+ * and on success closes the dialog, resets the form, and invokes the optional
+ * `onSuccess` callback.
  *
  * @param onSuccess - Optional callback invoked after a budget is successfully created
  * @returns The Add Budget dialog component
@@ -107,6 +107,11 @@ export function AddBudgetDialog({ onSuccess }: AddBudgetDialogProps) {
   });
 
   useEffect(() => {
+    /**
+     * Load categories from the server, keep only those with type "EXPENSE", and update the component's categories state.
+     *
+     * Logs an error to the console if the fetch fails or an exception is thrown.
+     */
     async function loadCategories() {
       try {
         const response = await fetch("/api/categories");

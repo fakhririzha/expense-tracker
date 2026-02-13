@@ -151,6 +151,11 @@ export function EditGoalDialog({
 
   // Load accounts when dialog opens
   useEffect(() => {
+    /**
+     * Loads accounts from the server and stores asset accounts (BANK, CASH, INVESTMENT) in component state.
+     *
+     * Fetches "/api/accounts/by-type", filters the response to accounts with type `BANK`, `CASH`, or `INVESTMENT`, and updates the local `accounts` state via `setAccounts`. Any network or parsing errors are logged to the console.
+     */
     async function loadAccounts() {
       try {
         const response = await fetch("/api/accounts/by-type");

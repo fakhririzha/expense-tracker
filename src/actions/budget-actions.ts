@@ -44,7 +44,11 @@ export interface BudgetWithProgress {
   projectedSpending: number;
 }
 
-// Get all budgets for the current user
+/**
+ * Fetches all budgets for the authenticated user, including each budget's category summary (id, name, icon, color).
+ *
+ * @returns An object where `success` is `true` and `data` is an array of budgets with category metadata on success; `success` is `false`, `error` contains a message, and `data` is an empty array on failure or when the user is unauthorized.
+ */
 export async function getBudgets() {
   try {
     const session = await auth();
@@ -74,7 +78,11 @@ export async function getBudgets() {
   }
 }
 
-// Get a single budget by ID
+/**
+ * Fetches a budget by ID for the authenticated user, including its category metadata.
+ *
+ * @returns `{ success: true, data: Budget }` when the budget is found; `{ success: false, error: string }` when the user is unauthorized, the budget is not found, or an error occurs. The returned `data` includes the budget fields and a `category` object with `id`, `name`, `icon`, and `color`.
+ */
 export async function getBudget(id: string) {
   try {
     const session = await auth();
@@ -107,7 +115,15 @@ export async function getBudget(id: string) {
   }
 }
 
-// Create a new budget
+/**
+ * Create a new budget for the authenticated user.
+ *
+ * Validates the provided budget payload, enforces category ownership (or system category) to prevent IDOR,
+ * persists the budget linked to the current user, and revalidates dashboard cache paths.
+ *
+ * @param data - The budget input to create (validated against `budgetSchema`)
+ * @returns `success: true` and the created budget in `data` on success; `success: false` and an `error` message otherwise
+ */
 export async function createBudget(data: BudgetInput) {
   try {
     const session = await auth();
@@ -165,7 +181,15 @@ export async function createBudget(data: BudgetInput) {
   }
 }
 
-// Update an existing budget
+/**
+ * Update an existing budget for the authenticated user.
+ *
+ * Validates the provided partial budget fields and verifies category ownership when a `categoryId` is supplied.
+ *
+ * @param id - The ID of the budget to update
+ * @param data - Partial fields of the budget to apply (validated against the budget schema)
+ * @returns An object with `success: true` and the updated budget in `data` on success; otherwise `success: false` and an `error` message.
+ */
 export async function updateBudget(id: string, data: Partial<BudgetInput>) {
   try {
     const session = await auth();
@@ -234,7 +258,12 @@ export async function updateBudget(id: string, data: Partial<BudgetInput>) {
   }
 }
 
-// Delete a budget
+/**
+ * Delete a budget owned by the current user and revalidate dashboard cache paths.
+ *
+ * @param id - The ID of the budget to delete
+ * @returns `{ success: true }` on success; `{ success: false, error: string }` on failure (possible errors include `"Unauthorized"`, `"Budget not found"`, or `"Failed to delete budget"`)
+ */
 export async function deleteBudget(id: string) {
   try {
     const session = await auth();
@@ -262,7 +291,12 @@ export async function deleteBudget(id: string) {
   }
 }
 
-// Helper function to get date range for budget period
+/**
+ * Compute the inclusive start and end dates that cover a budget's configured period.
+ *
+ * @param budget - Object containing `period` (e.g. "MONTHLY", "QUARTERLY", "YEARLY"), `startDate` (base date for the period), and optional `endDate` (to extend the period).
+ * @returns An object with `start` and `end` Dates that delimit the budget period.
+ */
 function getBudgetDateRange(budget: { period: string; startDate: Date; endDate?: Date | null }): { start: Date; end: Date } {
   // Use budget's startDate as the base for period calculations
   const baseDate = budget.startDate;
@@ -293,7 +327,12 @@ function getBudgetDateRange(budget: { period: string; startDate: Date; endDate?:
   }
 }
 
-// Get spending progress for a single budget
+/**
+ * Compute spending progress and projections for a specific budget.
+ *
+ * @param id - The budget's ID
+ * @returns An object with a `success` flag; on success `data` contains the budget enriched with progress metrics (`spent`, `remaining`, `percentage`, `daysRemaining`, `dailyAverage`, `projectedSpending`), on failure `error` contains a human-readable message
+ */
 export async function getBudgetProgress(id: string): Promise<{ success: boolean; error?: string; data?: BudgetWithProgress }> {
   try {
     const session = await auth();
@@ -389,7 +428,11 @@ export async function getBudgetProgress(id: string): Promise<{ success: boolean;
   }
 }
 
-// Get all budgets with their progress (optimized - single query for transactions)
+/**
+ * Fetches all active budgets for the current user and computes per-budget progress metrics for each budget's current period.
+ *
+ * @returns An object containing a `success` boolean, `data` — an array of `BudgetWithProgress` objects (one per active budget, empty on failure), and an `error` string when the operation fails.
+ */
 export async function getBudgetsSummary() {
   try {
     const session = await auth();
@@ -522,7 +565,21 @@ export async function getBudgetsSummary() {
   }
 }
 
-// Get budget vs actual comparison by category
+/**
+ * Compare active budgets to actual expenses for the current month by category.
+ *
+ * Returns an object describing success and a data array where each entry represents a category's budget vs actual comparison.
+ *
+ * @returns An object with a `success` flag and `data` array. Each data entry contains:
+ * - `budgetId`: the budget's id or `null` when no budget exists for the category
+ * - `budgetName`: the budget's name or `null` when no budget exists
+ * - `category`: category metadata (`id`, `name`, `icon`, `color`)
+ * - `budgeted`: the budgeted amount for the category
+ * - `actual`: the total expenses for the category in the current month
+ * - `variance`: `budgeted - actual`
+ * - `percentageUsed`: percent of the budget consumed (0–100+, `100` used for uncategorized-only entries)
+ * - `isOverBudget`: `true` when `actual` is greater than `budgeted`, `false` otherwise
+ */
 export async function getBudgetVsActual() {
   try {
     const session = await auth();
@@ -640,7 +697,12 @@ export async function getBudgetVsActual() {
   }
 }
 
-// Get transactions for a specific budget
+/**
+ * Fetches expense transactions that fall within a budget's calculated period and, if set, its category.
+ *
+ * @param budgetId - The ID of the budget whose transactions should be retrieved
+ * @returns `{ success: true, data: Transaction[] }` with transactions (includes category and account summaries) ordered by date descending on success; `{ success: false, error: string, data: [] }` on failure, unauthorized access, or when the budget is not found.
+ */
 export async function getBudgetTransactions(budgetId: string) {
   try {
     const session = await auth();

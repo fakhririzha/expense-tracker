@@ -15,6 +15,17 @@ interface CalendarDayProps {
   maxVisibleDots?: number;
 }
 
+/**
+ * Render a calendar day button that displays the day number, event indicators, and visual states for today, selection, and current-month.
+ *
+ * @param date - The Date object for the day to render.
+ * @param events - Array of calendar events to represent as dots for this day.
+ * @param isCurrentMonth - If false, the cell is visually dimmed to indicate it's outside the current month.
+ * @param isSelected - If true, apply selected styling to the cell.
+ * @param onClick - Optional click handler invoked when the day cell is pressed.
+ * @param maxVisibleDots - Maximum number of event dots to show before collapsing the remainder into a "+N" badge (defaults to 3).
+ * @returns A JSX element representing the calendar day cell.
+ */
 export function CalendarDay({
   date,
   events,
@@ -81,7 +92,18 @@ export function CalendarDay({
   );
 }
 
-// Compact version for smaller displays
+/**
+ * Render a compact calendar-day button that displays the day number and, when present, a single colored dot representing the dominant event type.
+ *
+ * The component visually differentiates today, selection, and out-of-month states, and forwards clicks via `onClick`.
+ *
+ * @param date - The date to display in the cell.
+ * @param events - List of calendar events used to determine the dominant event type for the indicator dot.
+ * @param isCurrentMonth - If false, the cell is visually dimmed to indicate it is outside the current month.
+ * @param isSelected - If true, the cell is styled to indicate selection.
+ * @param onClick - Optional click handler invoked when the cell is activated.
+ * @returns A JSX element representing a compact calendar day cell with an optional dominant-type color indicator.
+ */
 export function CalendarDayCompact({
   date,
   events,

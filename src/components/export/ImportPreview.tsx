@@ -18,7 +18,12 @@ interface ImportPreviewProps {
 }
 
 /**
- * Component for previewing import data with validation status
+ * Preview a list of parsed transactions with validation counts and a tabular sample.
+ *
+ * Renders a summary with counts of valid and invalid transactions and a scrollable table showing up to `maxRows` transactions. Invalid rows are visually highlighted and display their error messages; transaction type and validity are shown with color-coded badges.
+ *
+ * @param transactions - Transactions to preview, each with validation status and display fields
+ * @param maxRows - Maximum number of rows to show in the preview (default: 20)
  */
 export function ImportPreview({ transactions, maxRows = 20 }: ImportPreviewProps) {
   const validCount = transactions.filter((t) => t.isValid).length;

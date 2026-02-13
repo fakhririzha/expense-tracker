@@ -47,6 +47,19 @@ const typeConfig = {
   },
 };
 
+/**
+ * Renders a card widget listing upcoming financial events with urgency badges and an optional total.
+ *
+ * Displays up to `maxItems` events sorted by date, formats dates as "Today", "Tomorrow", or "EEE, MMM d",
+ * highlights urgency (overdue, today, tomorrow) with contextual badges, and optionally shows the summed total of `EXPENSE` items.
+ *
+ * @param events - Array of calendar events to display.
+ * @param title - Header title for the widget.
+ * @param maxItems - Maximum number of events to show.
+ * @param showTotal - Whether to render the total expenses row.
+ * @param className - Optional additional CSS class names applied to the Card container.
+ * @returns The rendered Upcoming Bills widget.
+ */
 export function UpcomingBillsWidget({
   events,
   title = "Upcoming Bills",

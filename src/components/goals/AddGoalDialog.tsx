@@ -94,15 +94,13 @@ interface AddGoalDialogProps {
 }
 
 /**
- * Render a dialog that lets the user create a savings goal.
+ * Render a dialog for creating a savings goal.
  *
- * The dialog loads available accounts when opened, validates input against
- * the goal schema, submits the form to create the goal, and surfaces
- * any submission errors at the form root. On successful creation the dialog
- * closes, the form resets, and the optional `onSuccess` callback is invoked.
+ * Loads asset-type accounts when opened, validates input against the goal schema,
+ * submits the form to create the goal, and surfaces submission errors at the form root.
+ * On successful creation the dialog closes, the form resets, and the optional callback is invoked.
  *
  * @param onSuccess - Optional callback invoked after a goal is successfully created
- * @returns The Add Goal dialog component
  */
 export function AddGoalDialog({ onSuccess }: AddGoalDialogProps) {
   const [open, setOpen] = useState(false);
@@ -124,6 +122,13 @@ export function AddGoalDialog({ onSuccess }: AddGoalDialogProps) {
   });
 
   useEffect(() => {
+    /**
+     * Load asset accounts from the API and update the component's accounts state.
+     *
+     * Fetches account data, filters for accounts whose type is "BANK", "CASH", or "INVESTMENT",
+     * and calls `setAccounts` with the filtered list. Any network or parsing errors are logged
+     * to the console.
+     */
     async function loadAccounts() {
       try {
         const response = await fetch("/api/accounts/by-type");

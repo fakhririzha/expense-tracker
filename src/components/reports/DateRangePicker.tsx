@@ -34,6 +34,12 @@ const presets: { label: string; value: PresetKey }[] = [
   { label: "Custom", value: "custom" },
 ];
 
+/**
+ * Compute a DateRange for a named preset relative to the current date.
+ *
+ * @param preset - The preset key specifying which range to produce: `"thisMonth"`, `"lastMonth"`, `"last3Months"`, `"last6Months"`, `"thisYear"`, or `"custom"`.
+ * @returns The corresponding `DateRange` (with `from` and optionally `to` properties) for the requested preset based on today's date, or `undefined` for `"custom"`.
+ */
 function getPresetRange(preset: PresetKey): DateRange | undefined {
   const today = new Date();
   
@@ -70,6 +76,17 @@ function getPresetRange(preset: PresetKey): DateRange | undefined {
   }
 }
 
+/**
+ * Render a preset-based date range picker that also supports selecting a custom range via a calendar popover.
+ *
+ * Initializes to "This Month" when no `value` is provided, updates the selected preset and calls `onChange`
+ * when a preset or calendar range is chosen, and opens the calendar when the "Custom" preset is selected.
+ *
+ * @param value - The currently selected date range, or `undefined` when none is selected
+ * @param onChange - Callback invoked with the new `DateRange` or `undefined` when the selection changes
+ * @param className - Optional additional CSS class names applied to the component root
+ * @returns The DateRangePicker React element
+ */
 export function DateRangePicker({
   value,
   onChange,

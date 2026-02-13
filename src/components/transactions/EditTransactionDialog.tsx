@@ -197,6 +197,11 @@ export function EditTransactionDialog({
 
   // Fetch categories from database based on transaction type
   useEffect(() => {
+    /**
+     * Fetches categories for the currently selected transaction type and updates component state.
+     *
+     * If the request fails or an error occurs, logs the failure to the console.
+     */
     async function loadCategories() {
       try {
         const response = await fetch(`/api/categories?type=${selectedType}`);

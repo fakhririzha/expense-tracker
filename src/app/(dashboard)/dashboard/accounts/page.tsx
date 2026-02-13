@@ -43,6 +43,13 @@ const ACCOUNT_TYPE_LABELS: Record<string, string> = {
   CREDIT_CARD: "Credit Card",
 };
 
+/**
+ * Renders the Accounts page with summary cards, an accounts table, and dialogs for adding, editing, and deleting accounts.
+ *
+ * Loads accounts and summary data on mount and refreshes the displayed data after successful add/edit/delete actions.
+ *
+ * @returns The React element for the Accounts management page.
+ */
 export default function AccountsPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [summary, setSummary] = useState<AccountsSummaryData | null>(null);

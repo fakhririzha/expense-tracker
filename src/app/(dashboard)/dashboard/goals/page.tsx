@@ -19,6 +19,14 @@ import { useEffect, useState } from "react";
 type SortOption = "progress" | "targetDate" | "amount" | "name";
 type FilterOption = "all" | "inProgress" | "completed";
 
+/**
+ * Renders the "Savings Goals" dashboard page with goal list, summary, filters, sorting, and dialogs.
+ *
+ * Fetches goals summary and stats on mount, manages loading state, client-side filtering and sorting,
+ * and exposes handlers for creating, editing, adding progress to, and deleting goals (which trigger a data reload).
+ *
+ * @returns The JSX element for the Savings Goals dashboard, including summary cards, filter/sort controls, goal cards, and modal dialogs.
+ */
 export default function GoalsPage() {
   const [goals, setGoals] = useState<GoalWithProgress[]>([]);
   const [stats, setStats] = useState({

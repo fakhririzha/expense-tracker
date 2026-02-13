@@ -35,6 +35,13 @@ interface BudgetVsActual {
   isOverBudget: boolean;
 }
 
+/**
+ * Render the Budgets dashboard page with summaries, filters, and budget management UI.
+ *
+ * Loads budget summary and budget-vs-actual data on mount and provides interfaces to create, edit, view progress, filter by period, and compare budgets against actuals.
+ *
+ * @returns The Budgets page React element
+ */
 export default function BudgetsPage() {
   const [budgets, setBudgets] = useState<BudgetWithProgress[]>([]);
   const [comparisonData, setComparisonData] = useState<BudgetVsActual[]>([]);

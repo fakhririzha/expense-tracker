@@ -60,6 +60,16 @@ const exportCards = [
   },
 ];
 
+/**
+ * Renders the Data Management page for exporting, importing, and downloading CSV templates.
+ *
+ * The page provides: an Export Data section with per-entity CSV exports and a full JSON backup; an
+ * Import Data section with a transactions importer and downloadable CSV templates (transactions,
+ * accounts, budgets) that show download state; and a concise Import/Export guide describing formats
+ * and requirements.
+ *
+ * @returns The React element for the Data Management UI.
+ */
 export default function DataManagementPage() {
   const [isDownloadingTemplate, setIsDownloadingTemplate] = useState<string | null>(null);
 

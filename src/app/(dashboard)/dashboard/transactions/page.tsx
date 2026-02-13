@@ -34,6 +34,13 @@ interface Account {
   name: string;
 }
 
+/**
+ * Render the Transactions page, including filters, a transactions table, and dialogs for adding, editing, and deleting transactions.
+ *
+ * Loads transactions and accounts based on current filter options, derives unique categories from loaded transactions, and exposes handlers to open edit and delete flows. After create/edit/delete actions the data is refreshed by re-applying the current filters.
+ *
+ * @returns The rendered Transactions page element.
+ */
 export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);

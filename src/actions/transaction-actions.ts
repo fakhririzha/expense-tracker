@@ -204,6 +204,15 @@ export async function createTransaction(data: TransactionInput) {
   }
 }
 
+/**
+ * Update an existing transaction and adjust affected account balances.
+ *
+ * Validates that the transaction and provided references belong to the current user, prevents editing of `LIABILITY_PAYMENT` transactions, requires a `toAccountId` when changing a transaction to `TRANSFER`, and revalidates related dashboard caches after applying balance changes and updating the record.
+ *
+ * @param id - The ID of the transaction to update
+ * @param data - Partial transaction fields to apply; `categoryId` and `recurringRuleId` will be validated for ownership and normalized to `null` when empty
+ * @returns `{ success: true }` on success, `{ success: false, error: string }` on failure
+ */
 export async function updateTransaction(
   id: string,
   data: Partial<TransactionInput>

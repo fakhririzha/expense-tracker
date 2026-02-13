@@ -32,19 +32,11 @@ const ASSETS_COLOR = "#22c55e"; // Green
 const LIABILITIES_COLOR = "#ef4444"; // Red
 
 /**
- * Renders a line chart showing net worth history over time.
+ * Renders a card containing summary statistics and a responsive line chart of net worth, assets, and liabilities over time.
  *
- * Features:
- * - Net worth line (blue)
- * - Assets line (green)
- * - Liabilities line (red)
- * - Tooltips with exact values
- * - Summary statistics and change indicators
+ * If `data` is empty or missing, renders a placeholder card with the provided `title` and `description`.
  *
- * @param data - Array of net worth data points
- * @param title - Optional custom title
- * @param description - Optional custom description
- * @returns The Net Worth History Chart React element
+ * @returns A React element displaying the net worth history chart and related summary/range statistics
  */
 export function NetWorthHistoryChart({
   data,

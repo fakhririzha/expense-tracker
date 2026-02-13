@@ -44,6 +44,19 @@ const typeConfig = {
   },
 };
 
+/**
+ * Renders a clickable transaction badge showing an icon, name, and formatted amount, with a compact variant.
+ *
+ * The badge appearance (colors and icon) is determined by the transaction `type`. Amounts are formatted using the Indonesian locale (`id-ID`) with the provided `currency` and no fractional digits.
+ *
+ * @param type - Transaction type that controls the badge's icon and color scheme
+ * @param name - Display name for the transaction
+ * @param amount - Numeric amount to display (formatted as currency)
+ * @param currency - Currency code used to format `amount` (e.g., "IDR")
+ * @param compact - When true, renders a condensed badge showing only a color dot and the name
+ * @param onClick - Optional click handler for the badge button
+ * @returns A JSX element representing the event badge (compact or full) suitable for rendering in the UI
+ */
 export function EventBadge({
   type,
   name,
@@ -101,6 +114,12 @@ export function EventBadge({
   );
 }
 
+/**
+ * Render a small colored dot that visually represents a transaction type.
+ *
+ * @param type - The transaction type used to select the dot's color
+ * @returns A span element styled as a small colored dot corresponding to `type`
+ */
 export function EventDot({ type }: { type: TransactionType }) {
   const config = typeConfig[type];
 
@@ -112,14 +131,32 @@ export function EventDot({ type }: { type: TransactionType }) {
   );
 }
 
+/**
+ * Get the color utility class for a given transaction type.
+ *
+ * @param type - The transaction type to retrieve the color for
+ * @returns The color utility class associated with the provided `type`
+ */
 export function getTypeColor(type: TransactionType): string {
   return typeConfig[type].color;
 }
 
+/**
+ * Get the text color utility class for a transaction type.
+ *
+ * @param type - The transaction type to look up
+ * @returns The text/icon color utility class associated with `type`
+ */
 export function getTypeTextColor(type: TransactionType): string {
   return typeConfig[type].textColor;
 }
 
+/**
+ * Returns the Tailwind background color utility for a transaction type.
+ *
+ * @param type - The transaction type to look up
+ * @returns The background color utility class associated with `type`
+ */
 export function getTypeBgColor(type: TransactionType): string {
   return typeConfig[type].bgColor;
 }

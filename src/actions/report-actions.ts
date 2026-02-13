@@ -57,7 +57,9 @@ export interface MonthlySummary {
 // ==================== HELPER FUNCTIONS ====================
 
 /**
- * Get user's main currency from session
+ * Retrieves the current user's main currency from the active session or user record.
+ *
+ * @returns The user's main currency code (e.g., "USD"); returns "IDR" if there is no authenticated user or no currency is set.
  */
 async function getUserCurrency(): Promise<string> {
   const session = await auth();
@@ -72,7 +74,14 @@ async function getUserCurrency(): Promise<string> {
 }
 
 /**
- * Convert amount to user's main currency
+ * Convert an amount from a source currency into the current user's main currency.
+ *
+ * Attempts to use a direct exchange rate lookup when the source currency differs from the user's currency; falls back to the provided `exchangeRate` when no direct rate is available.
+ *
+ * @param amount - The numeric amount in `fromCurrency`
+ * @param fromCurrency - The ISO currency code of the input amount
+ * @param exchangeRate - Fallback or stored exchange rate to use if a direct rate cannot be obtained
+ * @returns The amount converted into the user's main currency
  */
 async function convertToUserCurrency(
   amount: number,
@@ -93,7 +102,11 @@ async function convertToUserCurrency(
 }
 
 /**
- * Format date for grouping
+ * Produce a string key representing the given date according to the specified grouping.
+ *
+ * @param date - The date to format.
+ * @param groupBy - The granularity to use: "day" yields `YYYY-MM-DD`, "week" yields the start-of-week date `YYYY-MM-DD` (week starts on Sunday), and "month" yields `YYYY-MM`.
+ * @returns The formatted date key for the specified group.
  */
 function formatDateByGroup(date: Date, groupBy: "day" | "week" | "month"): string {
   const d = new Date(date);
@@ -112,7 +125,11 @@ function formatDateByGroup(date: Date, groupBy: "day" | "week" | "month"): strin
 }
 
 /**
- * Get label for grouped date
+ * Produce a human-friendly label for a date according to the requested grouping.
+ *
+ * @param date - The date to format into a label.
+ * @param groupBy - Grouping granularity: `"day"` -> `D Mon` (e.g., `12 Feb`), `"week"` -> `Week of D Mon` (e.g., `Week of 12 Feb`), `"month"` -> `Mon YYYY` (e.g., `Feb 2026`).
+ * @returns The formatted label string for the given date and grouping.
  */
 function getLabelForGroup(date: Date, groupBy: "day" | "week" | "month"): string {
   const d = new Date(date);
@@ -133,7 +150,12 @@ function getLabelForGroup(date: Date, groupBy: "day" | "week" | "month"): string
 // ==================== SERVER ACTIONS ====================
 
 /**
- * Get spending trends over time (daily/weekly/monthly)
+ * Aggregate expense transactions into a time series grouped by day, week, or month.
+ *
+ * @param startDate - Inclusive start date for the range to analyze
+ * @param endDate - Inclusive end date for the range to analyze
+ * @param groupBy - Grouping granularity: `"day"`, `"week"`, or `"month"`
+ * @returns An array of spending trend points where each point contains a period key, the total amount converted to the user's main currency, and a human-friendly label
  */
 export async function getSpendingTrends(params: {
   startDate: Date;
@@ -203,7 +225,12 @@ export async function getSpendingTrends(params: {
 }
 
 /**
- * Get category breakdown for a period
+ * Aggregate transactions within a date range by category and compute totals and percentages.
+ *
+ * @param startDate - Inclusive start of the date range to include transactions from
+ * @param endDate - Inclusive end of the date range to include transactions up to
+ * @param type - Transaction type to include (`"INCOME"` or `"EXPENSE"`)
+ * @returns An object with a `success` flag; when `success` is `true`, `data` is an array of CategoryBreakdownItem objects (one per category, including amount, transactionCount, and percentage) sorted by amount descending
  */
 export async function getCategoryBreakdown(params: {
   startDate: Date;
@@ -287,8 +314,13 @@ export async function getCategoryBreakdown(params: {
 }
 
 /**
- * Get income vs expense comparison by month
- */
+ * Compute monthly totals of income and expense over a recent span of months.
+ *
+ * Aggregates all INCOME and EXPENSE transactions in the window and returns a sorted
+ * month-by-month breakdown including income, expense, and net values.
+ *
+ * @param months - Number of months to include, counting the current month (for example, `1` includes only the current month).
+ * @returns An array of `IncomeVsExpensePoint` objects sorted by month; each entry contains `month` (YYYY-MM), `year`, `monthLabel`, `income`, `expense`, and `net`.
 export async function getIncomeVsExpense(params: {
   months: number;
 }): Promise<{ success: boolean; data?: IncomeVsExpensePoint[]; error?: string }> {
@@ -375,7 +407,12 @@ export async function getIncomeVsExpense(params: {
 }
 
 /**
- * Get net worth history
+ * Reconstructs monthly net worth history for a past span of months.
+ *
+ * Builds a month-by-month series by combining current account balances with historical transactions (converted to the user's main currency) to produce assets, liabilities, and net worth for each month in the requested window.
+ *
+ * @param months - Number of months to include, counting backward from the current month (defines the start of the window)
+ * @returns An array of `NetWorthPoint` objects (one per month) containing `date` (YYYY-MM), `assets`, `liabilities`, and `netWorth`
  */
 export async function getNetWorthHistory(params: {
   months: number;
@@ -524,8 +561,13 @@ export async function getNetWorthHistory(params: {
 }
 
 /**
- * Get monthly summary
- */
+ * Compute a currency-normalized financial summary for a specific month.
+ *
+ * Produces totals for income and expenses, net flow, transaction count, top income and expense categories (up to 5 each), and an optional comparison to the previous month.
+ *
+ * @param year - The four-digit year for the summary (e.g., 2026)
+ * @param month - The month number (1-12) for the summary
+ * @returns An object containing the `MonthlySummary` for the requested month when successful; otherwise an error message is returned in the wrapper object.
 export async function getMonthlySummary(params: {
   year: number;
   month: number;

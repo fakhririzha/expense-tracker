@@ -33,18 +33,12 @@ const EXPENSE_COLOR = "#ef4444"; // Red
 const NET_COLOR = "#3b82f6"; // Blue
 
 /**
- * Renders a bar chart comparing income vs expense by month with a net line.
+ * Display an income vs expense chart with grouped bars and a net trend line to compare monthly financial flows.
  *
- * Features:
- * - Grouped bars for income (green) and expense (red)
- * - Net line (blue) showing the difference
- * - Tooltips with exact values
- * - Summary statistics
- *
- * @param data - Array of income vs expense data points
- * @param title - Optional custom title
- * @param description - Optional custom description
- * @returns The Income vs Expense Chart React element
+ * @param data - Array of income and expense points to plot
+ * @param title - Optional card header title
+ * @param description - Optional card header description
+ * @returns The Income vs Expense chart element
  */
 export function IncomeVsExpenseChart({
   data,

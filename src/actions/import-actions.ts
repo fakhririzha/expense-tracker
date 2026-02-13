@@ -53,8 +53,10 @@ const transactionImportSchema = z.object({
 });
 
 /**
- * Sanitize a string to prevent CSV/Excel formula injection.
- * Prefixes dangerous characters (=, +, -, @) with a zero-width space.
+ * Prevent CSV/Excel formula injection by prefixing values that start with `=`, `+`, `-`, or `@` with a zero-width space.
+ *
+ * @param value - The cell content to sanitize; may be `null` or `undefined`.
+ * @returns The sanitized string, or `undefined` if `value` is `null`, `undefined`, or an empty string.
  */
 function sanitizeCsvCell(value: string | null | undefined): string | undefined {
   if (!value) return undefined;
@@ -66,7 +68,13 @@ function sanitizeCsvCell(value: string | null | undefined): string | undefined {
 }
 
 /**
- * Parse CSV content and return structured data
+ * Parse CSV content into row objects and a normalized list of header names.
+ *
+ * @returns An object containing:
+ *  - `success`: `true` if parsing succeeded, `false` otherwise.
+ *  - `data`: An array of row objects (each key is a header name and each value is a string).
+ *  - `headers`: An array of header names converted to lowercase.
+ *  - `error`: An optional error message present when `success` is `false`.
  */
 export async function parseCSVContent(csvContent: string) {
   try {
@@ -124,7 +132,14 @@ export async function parseCSVContent(csvContent: string) {
 }
 
 /**
- * Auto-detect column mapping from headers
+ * Detects CSV headers that correspond to known import fields.
+ *
+ * Matches provided header names against common patterns for date, amount, type,
+ * category, account, destination account (toAccount), description, and currency,
+ * and selects the first matching header for each field.
+ *
+ * @param headers - The list of CSV header names to analyze
+ * @returns A ColumnMapping where each key is assigned the first matching header name, or remains undefined if no match was found
  */
 export async function detectColumnMapping(headers: string[]): Promise<ColumnMapping> {
   const mapping: ColumnMapping = {};
@@ -170,7 +185,14 @@ export async function detectColumnMapping(headers: string[]): Promise<ColumnMapp
 }
 
 /**
- * Map parsed CSV data to transactions with validation
+ * Convert parsed CSV rows into validated ParsedTransaction objects.
+ *
+ * Each returned entry contains extracted fields, a boolean `isValid`, a list of `errors`
+ * discovered during validation, and `rowNumber` reflecting the original CSV row (1-based plus header).
+ *
+ * @param data - Array of CSV rows where each row is a mapping from header name to cell value
+ * @param mapping - Mapping from logical transaction fields to CSV header names
+ * @returns An array of ParsedTransaction objects with validation results and source row numbers
  */
 export async function mapToTransactions(
   data: Record<string, string>[],
@@ -254,7 +276,11 @@ export async function mapToTransactions(
 }
 
 /**
- * Preview import without actually importing
+ * Produce a preview of parsing and mapping for a CSV import without persisting any data.
+ *
+ * @param csvContent - Raw CSV text to parse
+ * @param mapping - Mapping from logical fields to CSV column names used to convert rows into transactions
+ * @returns An object containing `success`, an array of mapped `transactions`, a `summary` with `total`, `valid`, and `invalid` counts, and an optional `error` message when parsing or mapping fails
  */
 export async function previewImport(
   csvContent: string,
@@ -307,8 +333,15 @@ export async function previewImport(
 }
 
 /**
- * Import transactions from parsed data
- */
+ * Persist an array of parsed transactions to the database, creating related entities as allowed.
+ *
+ * Processes each ParsedTransaction: invalid rows are recorded as failures; valid rows are inserted as transactions,
+ * accounts and categories are looked up or optionally created, and account balances are updated atomically.
+ *
+ * @param transactions - Array of parsed transaction rows (each with fields like date, amount, type, account, toAccount, category, description, currency, isValid, errors, rowNumber). Rows with `isValid === false` are recorded as failures and not persisted.
+ * @param options.createMissingCategories - When true, missing categories referenced by transactions will be created for the user.
+ * @param options.createMissingAccounts - When true, missing accounts referenced by transactions will be created for the user.
+ * @returns An ImportResult summarizing the operation: `success` is `true` if one or more transactions were imported, `imported` is the count of successfully persisted rows, `failed` is the count of rows that failed to import, and `errors` lists per-row error details.
 export async function importTransactions(
   transactions: ParsedTransaction[],
   options?: {
@@ -508,7 +541,17 @@ export async function importTransactions(
 }
 
 /**
- * Import accounts from CSV
+ * Import multiple account records, validating each row and creating accounts for the authenticated user.
+ *
+ * Validates required `name` and allowed `type` (BANK, CASH, INVESTMENT, LOAN, CREDIT_CARD), skips rows with errors or duplicate names, creates new accounts with optional `currency`, `balance`, and `description`, and triggers dashboard accounts revalidation.
+ *
+ * @param accounts - Array of account objects to import. Each object should include:
+ *   - `name`: account display name (required)
+ *   - `type`: account type (required; one of BANK, CASH, INVESTMENT, LOAN, CREDIT_CARD)
+ *   - `currency`: optional ISO currency code (defaults to "IDR")
+ *   - `balance`: optional starting balance (defaults to 0)
+ *   - `description`: optional description text
+ * @returns An ImportResult summarizing the operation: counts of imported and failed rows and per-row error details. `success` is `true` if at least one account was imported, `false` otherwise.
  */
 export async function importAccounts(
   accounts: Array<{
@@ -619,7 +662,22 @@ export async function importAccounts(
 }
 
 /**
- * Import budgets from CSV
+ * Import multiple budgets and create corresponding budget records for the authenticated user.
+ *
+ * Each input row is validated and either created or reported as a failure. Validation rules:
+ * - `name` is required.
+ * - `amount` must be greater than zero.
+ * - `period` must be one of `MONTHLY`, `QUARTERLY`, or `YEARLY` (case-insensitive).
+ * If `category` is provided, the function attempts to link it to an existing user or system category; if not found, the budget is created without a category. Row numbers in reported errors start at 2 (header = row 1).
+ *
+ * @param budgets - Array of budget records to import. Each item should contain:
+ *   - `name`: display name of the budget
+ *   - `amount`: positive numeric budget amount
+ *   - `period`: budget period (`MONTHLY` | `QUARTERLY` | `YEARLY`)
+ *   - `category` (optional): category name to link the budget to
+ *   - `startDate` (optional): ISO date string for the budget start (defaults to now)
+ *   - `endDate` (optional): ISO date string for the budget end
+ * @returns The import result including counts (`imported`, `failed`), per-row `errors`, and `success` which is `true` if at least one budget was created.
  */
 export async function importBudgets(
   budgets: Array<{
@@ -740,7 +798,10 @@ export async function importBudgets(
 }
 
 /**
- * Get template CSV for download
+ * Return a CSV template string for the requested import type.
+ *
+ * @param type - The import template type: "transactions", "accounts", or "budgets"
+ * @returns A CSV-formatted template string matching the requested `type`
  */
 export async function getImportTemplate(type: "transactions" | "accounts" | "budgets") {
   const templates = {

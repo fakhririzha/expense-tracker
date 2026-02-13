@@ -30,6 +30,13 @@ import {
 } from "lucide-react";
 import { TransactionType } from "@prisma/client";
 
+/**
+ * Renders the Bills Calendar page with calendar view, filters, summary cards, and sidebar widgets.
+ *
+ * Displays calendar events for the selected month, an upcoming-bills list for the next 7 days, and a monthly summary (total income, total expenses, net). Provides month navigation, transaction-type filtering, and a manual refresh; shows loading skeletons while data is fetched.
+ *
+ * @returns The page's JSX element containing the calendar UI.
+ */
 export default function CalendarPage() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [upcomingBills, setUpcomingBills] = useState<CalendarEvent[]>([]);
