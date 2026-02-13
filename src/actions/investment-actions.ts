@@ -13,7 +13,12 @@ import {
     getMultipleAssetPrices,
     searchSymbols,
 } from "@/lib/finance-service";
-import { Prisma } from "@prisma/client";
+import {
+    isPreciousMetal,
+    convertPrice,
+    getUnitLabel,
+} from "@/lib/unit-conversion";
+import { Prisma, UnitType } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -24,6 +29,7 @@ const investmentAssetSchema = z.object({
   avgBuyPrice: z.number().positive("Average buy price must be positive"),
   currency: z.string().default("IDR"),
   accountId: z.string().min(1, "Investment account is required"),
+  unitType: z.enum(["UNIT", "TROY_OUNCE", "GRAM"]).optional(),
 });
 
 const tradeSchema = z.object({
@@ -72,10 +78,12 @@ async function withSerializableTransaction<T>(
 }
 
 /**
- * Create or update an investment asset by recording a BUY trade, updating the asset's quantity and average buy price, and adjusting the specified investment account balance.
+ * Create a new investment asset or add to an existing one by recording a BUY trade, updating the asset's quantity and average buy price, and adjusting the specified investment account's balance.
  *
- * @param data - Input describing the asset to create or add to; must include `symbol`, `quantity`, `avgBuyPrice`, and `accountId` (may include `name` and `currency`)
- * @returns On success, `{ success: true, data: <asset>, created: true }` or `{ success: true, data: <asset>, updated: true }` plus `account` balance context; on failure, `{ success: false, error: <message> }`.
+ * Determines storage unit type for the asset (respecting an explicit `unitType`, defaulting to `TROY_OUNCE` for precious metals, otherwise `UNIT`), validates the account has sufficient funds, and performs the asset and account updates inside a serializable transaction to prevent race conditions. Triggers revalidation of relevant dashboard paths on success.
+ *
+ * @param data - Fields describing the asset and initial purchase (must include `symbol`, `quantity`, `avgBuyPrice`, and `accountId`; may include `name`, `currency`, and `unitType`)
+ * @returns On success, an object with `success: true` and either `created: true` or `updated: true`, `data` containing the created/updated asset, and `account` containing `id`, `name`, `balanceBefore`, and `balanceAfter`. On failure, an object with `success: false` and `error` describing the problem.
  */
 export async function createInvestmentAsset(data: InvestmentAssetInput) {
   try {
@@ -92,8 +100,26 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
       };
     }
 
-    const { symbol, accountId, ...rest } = validatedFields.data;
-    const totalAmount = rest.quantity * rest.avgBuyPrice;
+    const { symbol, accountId, unitType, ...rest } = validatedFields.data;
+    
+    // Determine the unit type for storage
+    // For precious metals: if user selects GRAM, we store prices in GRAM
+    // Yahoo Finance returns TROY_OUNCE prices, so we'll convert when fetching current prices
+    let storageUnitType: UnitType;
+    const storageAvgBuyPrice = rest.avgBuyPrice;
+    
+    if (unitType) {
+      // User explicitly selected a unit type
+      storageUnitType = unitType as UnitType;
+    } else if (isPreciousMetal(symbol)) {
+      // Auto-detect for precious metals - default to TROY_OUNCE (Yahoo's unit)
+      storageUnitType = "TROY_OUNCE";
+    } else {
+      // Default for non-precious metals
+      storageUnitType = "UNIT";
+    }
+    
+    const totalAmount = rest.quantity * storageAvgBuyPrice;
 
     // Validate investment account and sufficient funds
     const validationResult = await validateBuyTransaction(
@@ -243,6 +269,7 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
           quantity,
           avgBuyPrice,
           currency,
+          unitType: storageUnitType,
           accountId: account.id,
         },
       });
@@ -271,6 +298,7 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
           balanceAfter,
           date: new Date(),
           notes: `Initial purchase of ${symbol}`,
+          unitType: storageUnitType,
         },
       });
 
@@ -491,6 +519,13 @@ export async function recordTrade(data: TradeInput) {
   }
 }
 
+/**
+ * Retrieve the authenticated user's investment assets enriched with current prices and computed metrics.
+ *
+ * Fetches the user's assets, obtains market prices, adjusts prices for precious-metal units when necessary, computes investment metrics (unrealized P&L, day change, etc.), and returns each asset augmented with `currentPrice`, `previousClose`, computed metric fields, `quote`, and a human-readable `unitLabel`.
+ *
+ * @returns An object with `success` boolean, `data` as an array of portfolio items (each including the original asset fields plus `currentPrice`, `previousClose`, computed metrics, `quote`, and `unitLabel`), and `error` when the operation fails.
+ */
 export async function getPortfolio() {
   try {
     const session = await auth();
@@ -517,6 +552,7 @@ export async function getPortfolio() {
       userId: string;
       createdAt: Date;
       updatedAt: Date;
+      unitType: UnitType;
     }
 
     // Fetch current prices for all assets
@@ -526,8 +562,16 @@ export async function getPortfolio() {
     // Calculate metrics for each asset
     const portfolioWithMetrics = assets.map((asset: AssetItem) => {
       const quote = prices.get(asset.symbol);
-      const currentPrice = quote?.regularMarketPrice ?? asset.avgBuyPrice;
-      const previousClose = quote?.regularMarketPreviousClose ?? currentPrice;
+      // Yahoo Finance returns prices in TROY_OUNCE for precious metals
+      // Convert to user's display unit if needed
+      let currentPrice = quote?.regularMarketPrice ?? asset.avgBuyPrice;
+      let previousClose = quote?.regularMarketPreviousClose ?? currentPrice;
+      
+      // If this is a precious metal and user's unit is GRAM, convert prices
+      if (isPreciousMetal(asset.symbol) && asset.unitType === "GRAM") {
+        currentPrice = convertPrice(currentPrice, "TROY_OUNCE", "GRAM");
+        previousClose = convertPrice(previousClose, "TROY_OUNCE", "GRAM");
+      }
 
       const metrics = calculateInvestmentMetrics(
         asset.quantity,
@@ -542,6 +586,7 @@ export async function getPortfolio() {
         previousClose,
         ...metrics,
         quote,
+        unitLabel: getUnitLabel(asset.unitType),
       };
     });
 
@@ -737,9 +782,18 @@ export async function getInvestmentAccountsAction() {
 }
 
 /**
- * Retrieve the authenticated user's investment assets with quantity greater than zero for use in a sell dialog selector.
+ * Retrieve the authenticated user's investment assets with quantity greater than zero for use in sell dialogs.
  *
- * @returns `{ success: true, data: Array<{ id: string; symbol: string; name: string | null; quantity: number; avgBuyPrice: number; currency: string }> }` on success; `{ success: false, error: string, data: [] }` on failure.
+ * @returns An object with `success: true` and `data` containing an array of sellable assets when successful; otherwise `success: false`, `error` with a message, and an empty `data` array.
+ *
+ * Each asset in `data` contains:
+ * - `id` — Asset UUID.
+ * - `symbol` — Asset symbol (uppercase).
+ * - `name` — Asset display name or `null`.
+ * - `quantity` — Owned quantity (greater than zero).
+ * - `avgBuyPrice` — Average purchase price per unit.
+ * - `currency` — Currency code for prices (e.g., "IDR").
+ * - `unitType` — Unit type (`UNIT`, `TROY_OUNCE`, or `GRAM`).
  */
 export async function getSellableInvestments() {
   try {
@@ -762,6 +816,7 @@ export async function getSellableInvestments() {
         quantity: true,
         avgBuyPrice: true,
         currency: true,
+        unitType: true,
       },
       orderBy: { symbol: "asc" },
     });

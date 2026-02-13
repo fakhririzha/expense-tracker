@@ -11,6 +11,7 @@ const TransactionTypeEnum = {
   INCOME: "INCOME",
   EXPENSE: "EXPENSE",
   TRANSFER: "TRANSFER",
+  LIABILITY_PAYMENT: "LIABILITY_PAYMENT",
 } as const;
 
 type TransactionType = (typeof TransactionTypeEnum)[keyof typeof TransactionTypeEnum];
@@ -20,7 +21,7 @@ const transactionSchema = z
     amount: z.number().positive("Amount must be positive"),
     currency: z.string().default("IDR"),
     exchangeRate: z.number().positive().default(1),
-    type: z.enum(["INCOME", "EXPENSE", "TRANSFER"]),
+    type: z.enum(["INCOME", "EXPENSE", "TRANSFER", "LIABILITY_PAYMENT"]),
     description: z.string().optional(),
     date: z.date().default(() => new Date()),
     accountId: z.string().min(1, "From account is required"),
@@ -35,17 +36,21 @@ const transactionSchema = z
       if (data.type === "TRANSFER") {
         return data.toAccountId && data.toAccountId.length > 0;
       }
+      // For LIABILITY_PAYMENT type, toAccountId is required (target liability account)
+      if (data.type === "LIABILITY_PAYMENT") {
+        return data.toAccountId && data.toAccountId.length > 0;
+      }
       return true;
     },
     {
-      message: "To account is required for transfers",
+      message: "To account is required for transfers and liability payments",
       path: ["toAccountId"],
     }
   )
   .refine(
     (data) => {
-      // From and To accounts must be different for transfers
-      if (data.type === "TRANSFER" && data.toAccountId) {
+      // From and To accounts must be different for transfers and liability payments
+      if ((data.type === "TRANSFER" || data.type === "LIABILITY_PAYMENT") && data.toAccountId) {
         return data.accountId !== data.toAccountId;
       }
       return true;
@@ -199,6 +204,15 @@ export async function createTransaction(data: TransactionInput) {
   }
 }
 
+/**
+ * Update an existing transaction and adjust affected account balances.
+ *
+ * Validates that the transaction and provided references belong to the current user, prevents editing of `LIABILITY_PAYMENT` transactions, requires a `toAccountId` when changing a transaction to `TRANSFER`, and revalidates related dashboard caches after applying balance changes and updating the record.
+ *
+ * @param id - The ID of the transaction to update
+ * @param data - Partial transaction fields to apply; `categoryId` and `recurringRuleId` will be validated for ownership and normalized to `null` when empty
+ * @returns `{ success: true }` on success, `{ success: false, error: string }` on failure
+ */
 export async function updateTransaction(
   id: string,
   data: Partial<TransactionInput>
@@ -220,6 +234,18 @@ export async function updateTransaction(
     }
 
     const { amount, type, accountId, categoryId, recurringRuleId, ...rest } = data;
+
+    // Compute the new type (either from the patch or keep existing)
+    const newType = type ?? existingTransaction.type;
+
+    // Block editing of LIABILITY_PAYMENT transactions - they should be managed through the liability payment module
+    // Also block any attempt to change a transaction's type TO LIABILITY_PAYMENT
+    if (existingTransaction.type === "LIABILITY_PAYMENT" || newType === "LIABILITY_PAYMENT") {
+      return { 
+        success: false, 
+        error: "Liability payment transactions cannot be edited here. Please use the Liabilities page to manage payments." 
+      };
+    }
 
     // Validate category belongs to user OR is a system category (IDOR prevention)
     if (categoryId !== undefined) {
@@ -274,16 +300,36 @@ export async function updateTransaction(
         });
       }
 
-      // Apply new balance change (non-TRANSFER only for now per user request)
+      // Apply new balance change
       const newAmount = amount ?? existingTransaction.amount;
       const newType = type ?? existingTransaction.type;
       const newAccountId = accountId ?? existingTransaction.accountId;
-      const newBalanceChange = newType === "INCOME" ? newAmount : -newAmount;
 
-      await tx.financialAccount.update({
-        where: { id: newAccountId },
-        data: { balance: { increment: newBalanceChange } },
-      });
+      if (newType === "TRANSFER") {
+        // For transfers: we need toAccountId - but current UI doesn't support editing transfers
+        // This is a safeguard - transfers should be deleted and recreated if account changes needed
+        const newToAccountId = data.toAccountId ?? existingTransaction.toAccountId;
+        if (!newToAccountId) {
+          throw new Error("To account is required for transfers");
+        }
+        // Decrement source account
+        await tx.financialAccount.update({
+          where: { id: newAccountId },
+          data: { balance: { decrement: newAmount } },
+        });
+        // Increment destination account
+        await tx.financialAccount.update({
+          where: { id: newToAccountId },
+          data: { balance: { increment: newAmount } },
+        });
+      } else {
+        // For income/expense: apply to single account
+        const newBalanceChange = newType === "INCOME" ? newAmount : -newAmount;
+        await tx.financialAccount.update({
+          where: { id: newAccountId },
+          data: { balance: { increment: newBalanceChange } },
+        });
+      }
 
       // Update transaction
       await tx.transaction.update({

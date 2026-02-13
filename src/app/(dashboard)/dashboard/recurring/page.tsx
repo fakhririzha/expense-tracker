@@ -2,6 +2,7 @@
 
 import { deleteRecurringRule, getRecurringRules } from "@/actions/recurring-actions";
 import { AddRecurringRuleDialog } from "@/components/recurring/AddRecurringRuleDialog";
+import { EditRecurringRuleDialog } from "@/components/recurring/EditRecurringRuleDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -47,9 +48,16 @@ const TYPE_LABELS: Record<string, string> = {
   TRANSFER: "Transfer",
 };
 
+/**
+ * Renders the Recurring Transactions page with lists of active and inactive recurring rules and controls to add, edit, and delete rules.
+ *
+ * @returns The page UI as a React element.
+ */
 export default function RecurringPage() {
   const [rules, setRules] = useState<RecurringRule[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [editingRule, setEditingRule] = useState<RecurringRule | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -80,6 +88,11 @@ export default function RecurringPage() {
     } else {
       alert(result.error || "Failed to delete recurring rule");
     }
+  };
+
+  const handleEdit = (rule: RecurringRule) => {
+    setEditingRule(rule);
+    setIsEditDialogOpen(true);
   };
 
   const activeRules = rules.filter((r) => r.isActive);
@@ -197,10 +210,7 @@ export default function RecurringPage() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => {
-                                // TODO: Open edit dialog
-                                console.log("Edit rule:", rule);
-                              }}
+                              onClick={() => handleEdit(rule)}
                             >
                               <Pencil className="h-4 w-4" />
                             </Button>
@@ -275,6 +285,14 @@ export default function RecurringPage() {
           )}
         </>
       )}
+
+      {/* Edit Dialog */}
+      <EditRecurringRuleDialog
+        rule={editingRule}
+        open={isEditDialogOpen}
+        onOpenChange={setIsEditDialogOpen}
+        onSuccess={loadData}
+      />
     </div>
   );
 }

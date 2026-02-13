@@ -2,6 +2,7 @@
 
 import { deleteAccount, getAccounts, getAccountsSummary } from "@/actions/account-actions";
 import { AddAccountDialog } from "@/components/accounts/AddAccountDialog";
+import { EditAccountDialog } from "@/components/accounts/EditAccountDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -42,10 +43,19 @@ const ACCOUNT_TYPE_LABELS: Record<string, string> = {
   CREDIT_CARD: "Credit Card",
 };
 
+/**
+ * Renders the Accounts page with summary cards, an accounts table, and dialogs for adding, editing, and deleting accounts.
+ *
+ * Loads accounts and summary data on mount and refreshes the displayed data after successful add/edit/delete actions.
+ *
+ * @returns The React element for the Accounts management page.
+ */
 export default function AccountsPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [summary, setSummary] = useState<AccountsSummaryData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [editingAccount, setEditingAccount] = useState<Account | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -84,6 +94,11 @@ export default function AccountsPage() {
     } else {
       alert(result.error || "Failed to delete account");
     }
+  };
+
+  const handleEdit = (account: Account) => {
+    setEditingAccount(account);
+    setIsEditDialogOpen(true);
   };
 
   return (
@@ -223,10 +238,7 @@ export default function AccountsPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => {
-                              // TODO: Open edit dialog
-                              console.log("Edit account:", account);
-                            }}
+                            onClick={() => handleEdit(account)}
                           >
                             <Pencil className="h-4 w-4" />
                           </Button>
@@ -247,6 +259,14 @@ export default function AccountsPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Edit Account Dialog */}
+      <EditAccountDialog
+        account={editingAccount}
+        open={isEditDialogOpen}
+        onOpenChange={setIsEditDialogOpen}
+        onSuccess={loadData}
+      />
     </div>
   );
 }

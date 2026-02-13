@@ -15,9 +15,14 @@ import { CurrencyProvider } from "@/contexts/CurrencyContext";
 import prisma from "@/lib/db";
 import { getInitials } from "@/lib/utils";
 import {
+    BarChart3,
+    Calendar,
     CreditCard,
+    Database,
+    Goal,
     LayoutDashboard,
     LogOut,
+    PieChart,
     Receipt,
     RefreshCw,
     Settings,
@@ -31,9 +36,14 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/dashboard/transactions", label: "Transactions", icon: Receipt },
   { href: "/dashboard/accounts", label: "Accounts", icon: Wallet },
+  { href: "/dashboard/budgets", label: "Budgets", icon: PieChart },
+  { href: "/dashboard/goals", label: "Goals", icon: Goal },
   { href: "/dashboard/liabilities", label: "Liabilities", icon: CreditCard },
   { href: "/dashboard/investments", label: "Investments", icon: TrendingUp },
   { href: "/dashboard/recurring", label: "Recurring", icon: RefreshCw },
+  { href: "/dashboard/calendar", label: "Calendar", icon: Calendar },
+  { href: "/dashboard/reports", label: "Reports", icon: BarChart3 },
+  { href: "/dashboard/data", label: "Data", icon: Database },
 ];
 
 /**
@@ -118,13 +128,13 @@ export default async function DashboardLayout({
                       </p>
                     </div>
                   </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem asChild>
+                  {/* <DropdownMenuSeparator /> */}
+                  {/* <DropdownMenuItem asChild>
                     <Link href="/dashboard/settings">
                       <Settings className="mr-2 h-4 w-4" />
                       Settings
                     </Link>
-                  </DropdownMenuItem>
+                  </DropdownMenuItem> */}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
                     <form action={logout}>

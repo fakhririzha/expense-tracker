@@ -2,7 +2,7 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
   // output   = "../node_modules/.prisma/client"
   previewFeatures = ["relationJoins"]
   binaryTargets   = ["native", "rhel-openssl-3.0.x"]
@@ -42,6 +42,8 @@ model User {
   investmentAssets  InvestmentAsset[]
   tradeHistory      TradeHistory[]
   recurringRules    RecurringRule[]
+  budgets           Budget[]
+  savingsGoals      SavingsGoal[]
 }
 
 model AuthAccount {
@@ -116,6 +118,7 @@ model FinancialAccount {
   investmentAssets InvestmentAsset[]
   tradeHistories   TradeHistory[]
   transactions     Transaction[]
+  savingsGoals     SavingsGoal[]
 
   @@index([userId])
 }
@@ -147,6 +150,7 @@ model Category {
   user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   transactions Transaction[]
+  budgets      Budget[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -208,12 +212,13 @@ model Transaction {
 // ==================== INVESTMENT MODELS ====================
 
 model InvestmentAsset {
-  id          String  @id @default(cuid())
+  id          String   @id @default(cuid())
   symbol      String // e.g., AAPL, BTC-USD
   name        String? // e.g., Apple Inc.
   quantity    Float
   avgBuyPrice Float // Cost basis per unit
-  currency    String  @default("IDR") // Asset's trading currency
+  currency    String   @default("IDR") // Asset's trading currency
+  unitType    UnitType @default(UNIT) // Unit of quantity
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -237,6 +242,12 @@ enum TradeType {
   SELL
 }
 
+enum UnitType {
+  UNIT // Stocks, ETFs - 1 share = 1 unit
+  TROY_OUNCE // Precious metals from Yahoo Finance
+  GRAM // User preference for metals
+}
+
 model TradeHistory {
   id           String    @id @default(cuid())
   type         TradeType
@@ -246,6 +257,7 @@ model TradeHistory {
   fees         Float     @default(0)
   date         DateTime  @default(now())
   notes        String?
+  unitType     UnitType  @default(UNIT)
 
   // Realized PnL (only for SELL trades)
   realizedPnL Float?
@@ -361,4 +373,61 @@ model LiabilityPaymentAudit {
   @@index([transactionId])
   @@index([executedBy])
   @@index([executedAt])
+}
+
+// ==================== BUDGETING ====================
+
+enum BudgetPeriod {
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+model Budget {
+  id        String       @id @default(cuid())
+  name      String
+  amount    Float
+  period    BudgetPeriod
+  startDate DateTime
+  endDate   DateTime?
+  isActive  Boolean      @default(true)
+
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([categoryId])
+}
+
+// ==================== SAVINGS GOALS ====================
+
+model SavingsGoal {
+  id            String    @id @default(cuid())
+  name          String
+  targetAmount  Float
+  currentAmount Float     @default(0)
+  targetDate    DateTime?
+  icon          String? // emoji or icon name
+  color         String? // hex color for UI
+  description   String?
+  isCompleted   Boolean   @default(false)
+
+  // Optional: Link to account for auto-tracking
+  accountId String?
+  account   FinancialAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([accountId])
 }

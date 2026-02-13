@@ -26,6 +26,7 @@ import {
 import {
     Form,
     FormControl,
+    FormDescription,
     FormField,
     FormItem,
     FormLabel,
@@ -37,7 +38,15 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { isPreciousMetal } from "@/lib/unit-conversion";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Check, ChevronsUpDown, Loader2, Plus, Search } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -59,6 +68,7 @@ const investmentFormSchema = z.object({
   avgBuyPrice: z.number().positive("Average buy price must be positive"),
   currency: z.string(),
   accountId: z.string().min(1, "Investment account is required"),
+  unitType: z.enum(["UNIT", "TROY_OUNCE", "GRAM"]).optional(),
 });
 
 type InvestmentFormValues = z.infer<typeof investmentFormSchema>;
@@ -98,8 +108,13 @@ export function AddInvestmentDialog({ onSuccess }: AddInvestmentDialogProps) {
       avgBuyPrice: 0,
       currency: "IDR",
       accountId: "",
+      unitType: undefined,
     },
   });
+  
+  // Watch symbol to detect precious metals
+  const watchedSymbol = form.watch("symbol");
+  const isSymbolPreciousMetal = isPreciousMetal(watchedSymbol);
 
   // Debounced search function
   const debouncedSearch = useCallback(
@@ -139,6 +154,12 @@ export function AddInvestmentDialog({ onSuccess }: AddInvestmentDialogProps) {
     setSelectedSymbol(result);
     form.setValue("symbol", result.symbol);
     form.setValue("name", result.longname || result.shortname || "");
+    // Auto-set unit type for precious metals (default to GRAM for user convenience)
+    if (isPreciousMetal(result.symbol)) {
+      form.setValue("unitType", "GRAM");
+    } else {
+      form.setValue("unitType", "UNIT");
+    }
     setSearchOpen(false);
   };
 
@@ -308,6 +329,33 @@ export function AddInvestmentDialog({ onSuccess }: AddInvestmentDialogProps) {
                 </FormItem>
               )}
             />
+
+            {isSymbolPreciousMetal && (
+              <FormField
+                control={form.control}
+                name="unitType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Unit Type</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select unit" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="GRAM">Per Gram</SelectItem>
+                        <SelectItem value="TROY_OUNCE">Per Troy Ounce</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      Gold/Silver prices are fetched in troy ounces. Select &quot;Per Gram&quot; to see prices per gram.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <FormField
               control={form.control}
