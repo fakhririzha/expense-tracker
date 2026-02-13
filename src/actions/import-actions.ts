@@ -87,7 +87,7 @@ export async function parseCSVContent(csvContent: string) {
             headers,
           });
         },
-        error: (error) => {
+        error: (error: { message: string }) => {
           resolve({
             success: false,
             data: [],
