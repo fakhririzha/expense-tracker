@@ -342,6 +342,7 @@ export async function previewImport(
  * @param options.createMissingCategories - When true, missing categories referenced by transactions will be created for the user.
  * @param options.createMissingAccounts - When true, missing accounts referenced by transactions will be created for the user.
  * @returns An ImportResult summarizing the operation: `success` is `true` if one or more transactions were imported, `imported` is the count of successfully persisted rows, `failed` is the count of rows that failed to import, and `errors` lists per-row error details.
+ */
 export async function importTransactions(
   transactions: ParsedTransaction[],
   options?: {
