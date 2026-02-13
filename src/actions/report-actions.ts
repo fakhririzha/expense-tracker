@@ -321,6 +321,7 @@ export async function getCategoryBreakdown(params: {
  *
  * @param months - Number of months to include, counting the current month (for example, `1` includes only the current month).
  * @returns An array of `IncomeVsExpensePoint` objects sorted by month; each entry contains `month` (YYYY-MM), `year`, `monthLabel`, `income`, `expense`, and `net`.
+ */
 export async function getIncomeVsExpense(params: {
   months: number;
 }): Promise<{ success: boolean; data?: IncomeVsExpensePoint[]; error?: string }> {
@@ -568,6 +569,7 @@ export async function getNetWorthHistory(params: {
  * @param year - The four-digit year for the summary (e.g., 2026)
  * @param month - The month number (1-12) for the summary
  * @returns An object containing the `MonthlySummary` for the requested month when successful; otherwise an error message is returned in the wrapper object.
+ */
 export async function getMonthlySummary(params: {
   year: number;
   month: number;
