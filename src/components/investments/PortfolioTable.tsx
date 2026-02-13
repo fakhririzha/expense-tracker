@@ -9,7 +9,7 @@ import {
     getSortedRowModel,
     useReactTable,
 } from "@tanstack/react-table";
-import { ArrowUpDown, Eye, Loader2, RefreshCw, TrendingDown, TrendingUp } from "lucide-react";
+import { ArrowUpDown, Eye, Info, Loader2, RefreshCw, TrendingDown, TrendingUp } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,14 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { formatCurrency, formatPercentage } from "@/lib/utils";
+import { UnitType } from "@prisma/client";
 import { TradeHistoryDialog } from "./TradeHistoryDialog";
 
 export interface PortfolioAsset {
@@ -39,6 +46,8 @@ export interface PortfolioAsset {
   unrealizedPnLPercent: number;
   dayChange: number;
   dayChangePercent: number;
+  unitType: UnitType;
+  unitLabel: string;
 }
 
 interface PortfolioTableProps {
@@ -110,10 +119,24 @@ export function PortfolioTable({
       header: "Quantity",
       cell: ({ row }) => {
         const quantity = row.getValue("quantity") as number;
-        return quantity.toLocaleString(undefined, {
-          minimumFractionDigits: 0,
-          maximumFractionDigits: 4,
-        });
+        const unitLabel = row.original.unitLabel;
+        const isNonUnit = row.original.unitType !== "UNIT";
+        
+        return (
+          <div className="flex items-center gap-1">
+            <span>
+              {quantity.toLocaleString(undefined, {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 4,
+              })}
+            </span>
+            {isNonUnit && (
+              <span className="text-muted-foreground text-sm">
+                {unitLabel}
+              </span>
+            )}
+          </div>
+        );
       },
     },
     {
@@ -122,7 +145,17 @@ export function PortfolioTable({
       cell: ({ row }) => {
         const price = row.getValue("avgBuyPrice") as number;
         const currency = row.original.currency;
-        return formatCurrency(price, currency);
+        const unitLabel = row.original.unitLabel;
+        const isNonUnit = row.original.unitType !== "UNIT";
+        
+        return (
+          <div>
+            <span>{formatCurrency(price, currency)}</span>
+            {isNonUnit && (
+              <span className="text-muted-foreground text-sm">/{unitLabel}</span>
+            )}
+          </div>
+        );
       },
     },
     {
@@ -143,10 +176,29 @@ export function PortfolioTable({
         const currency = row.original.currency;
         const dayChangePercent = row.original.dayChangePercent;
         const isPositive = dayChangePercent >= 0;
+        const unitLabel = row.original.unitLabel;
+        const isNonUnit = row.original.unitType !== "UNIT";
 
         return (
           <div>
-            <div>{formatCurrency(price, currency)}</div>
+            <div className="flex items-center gap-1">
+              <span>{formatCurrency(price, currency)}</span>
+              {isNonUnit && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="text-muted-foreground text-sm flex items-center">
+                        /{unitLabel}
+                        <Info className="h-3 w-3 ml-1" />
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Precious metal prices are converted from troy ounces</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+            </div>
             <div
               className={`text-sm flex items-center gap-1 ${
                 isPositive ? "text-green-600" : "text-red-600"

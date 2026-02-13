@@ -13,7 +13,12 @@ import {
     getMultipleAssetPrices,
     searchSymbols,
 } from "@/lib/finance-service";
-import { Prisma } from "@prisma/client";
+import {
+    isPreciousMetal,
+    convertPrice,
+    getUnitLabel,
+} from "@/lib/unit-conversion";
+import { Prisma, UnitType } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -24,6 +29,7 @@ const investmentAssetSchema = z.object({
   avgBuyPrice: z.number().positive("Average buy price must be positive"),
   currency: z.string().default("IDR"),
   accountId: z.string().min(1, "Investment account is required"),
+  unitType: z.enum(["UNIT", "TROY_OUNCE", "GRAM"]).optional(),
 });
 
 const tradeSchema = z.object({
@@ -92,8 +98,26 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
       };
     }
 
-    const { symbol, accountId, ...rest } = validatedFields.data;
-    const totalAmount = rest.quantity * rest.avgBuyPrice;
+    const { symbol, accountId, unitType, ...rest } = validatedFields.data;
+    
+    // Determine the unit type for storage
+    // For precious metals: if user selects GRAM, we store prices in GRAM
+    // Yahoo Finance returns TROY_OUNCE prices, so we'll convert when fetching current prices
+    let storageUnitType: UnitType;
+    const storageAvgBuyPrice = rest.avgBuyPrice;
+    
+    if (unitType) {
+      // User explicitly selected a unit type
+      storageUnitType = unitType as UnitType;
+    } else if (isPreciousMetal(symbol)) {
+      // Auto-detect for precious metals - default to TROY_OUNCE (Yahoo's unit)
+      storageUnitType = "TROY_OUNCE";
+    } else {
+      // Default for non-precious metals
+      storageUnitType = "UNIT";
+    }
+    
+    const totalAmount = rest.quantity * storageAvgBuyPrice;
 
     // Validate investment account and sufficient funds
     const validationResult = await validateBuyTransaction(
@@ -243,6 +267,7 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
           quantity,
           avgBuyPrice,
           currency,
+          unitType: storageUnitType,
           accountId: account.id,
         },
       });
@@ -271,6 +296,7 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
           balanceAfter,
           date: new Date(),
           notes: `Initial purchase of ${symbol}`,
+          unitType: storageUnitType,
         },
       });
 
@@ -517,6 +543,7 @@ export async function getPortfolio() {
       userId: string;
       createdAt: Date;
       updatedAt: Date;
+      unitType: UnitType;
     }
 
     // Fetch current prices for all assets
@@ -526,8 +553,16 @@ export async function getPortfolio() {
     // Calculate metrics for each asset
     const portfolioWithMetrics = assets.map((asset: AssetItem) => {
       const quote = prices.get(asset.symbol);
-      const currentPrice = quote?.regularMarketPrice ?? asset.avgBuyPrice;
-      const previousClose = quote?.regularMarketPreviousClose ?? currentPrice;
+      // Yahoo Finance returns prices in TROY_OUNCE for precious metals
+      // Convert to user's display unit if needed
+      let currentPrice = quote?.regularMarketPrice ?? asset.avgBuyPrice;
+      let previousClose = quote?.regularMarketPreviousClose ?? currentPrice;
+      
+      // If this is a precious metal and user's unit is GRAM, convert prices
+      if (isPreciousMetal(asset.symbol) && asset.unitType === "GRAM") {
+        currentPrice = convertPrice(currentPrice, "TROY_OUNCE", "GRAM");
+        previousClose = convertPrice(previousClose, "TROY_OUNCE", "GRAM");
+      }
 
       const metrics = calculateInvestmentMetrics(
         asset.quantity,
@@ -542,6 +577,7 @@ export async function getPortfolio() {
         previousClose,
         ...metrics,
         quote,
+        unitLabel: getUnitLabel(asset.unitType),
       };
     });
 
@@ -739,7 +775,7 @@ export async function getInvestmentAccountsAction() {
 /**
  * Retrieve the authenticated user's investment assets with quantity greater than zero for use in a sell dialog selector.
  *
- * @returns `{ success: true, data: Array<{ id: string; symbol: string; name: string | null; quantity: number; avgBuyPrice: number; currency: string }> }` on success; `{ success: false, error: string, data: [] }` on failure.
+ * @returns `{ success: true, data: Array<{ id: string; symbol: string; name: string | null; quantity: number; avgBuyPrice: number; currency: string; unitType: UnitType }> }` on success; `{ success: false, error: string, data: [] }` on failure.
  */
 export async function getSellableInvestments() {
   try {
@@ -762,6 +798,7 @@ export async function getSellableInvestments() {
         quantity: true,
         avgBuyPrice: true,
         currency: true,
+        unitType: true,
       },
       orderBy: { symbol: "asc" },
     });

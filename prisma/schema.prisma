@@ -212,12 +212,13 @@ model Transaction {
 // ==================== INVESTMENT MODELS ====================
 
 model InvestmentAsset {
-  id          String  @id @default(cuid())
+  id          String   @id @default(cuid())
   symbol      String // e.g., AAPL, BTC-USD
   name        String? // e.g., Apple Inc.
   quantity    Float
   avgBuyPrice Float // Cost basis per unit
-  currency    String  @default("IDR") // Asset's trading currency
+  currency    String   @default("IDR") // Asset's trading currency
+  unitType    UnitType @default(UNIT) // Unit of quantity
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -241,6 +242,12 @@ enum TradeType {
   SELL
 }
 
+enum UnitType {
+  UNIT // Stocks, ETFs - 1 share = 1 unit
+  TROY_OUNCE // Precious metals from Yahoo Finance
+  GRAM // User preference for metals
+}
+
 model TradeHistory {
   id           String    @id @default(cuid())
   type         TradeType
@@ -250,6 +257,7 @@ model TradeHistory {
   fees         Float     @default(0)
   date         DateTime  @default(now())
   notes        String?
+  unitType     UnitType  @default(UNIT)
 
   // Realized PnL (only for SELL trades)
   realizedPnL Float?
