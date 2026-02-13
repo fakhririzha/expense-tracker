@@ -61,6 +61,7 @@ interface Account {
 
 interface ExportDialogProps {
   trigger?: React.ReactNode;
+  defaultType?: ExportType;
 }
 
 const exportOptions: {
@@ -116,10 +117,10 @@ const exportOptions: {
 /**
  * Dialog for exporting data to CSV or JSON format
  */
-export function ExportDialog({ trigger }: ExportDialogProps) {
+export function ExportDialog({ trigger, defaultType }: ExportDialogProps) {
   const [open, setOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  const [exportType, setExportType] = useState<ExportType>("transactions");
+  const [exportType, setExportType] = useState<ExportType>(defaultType ?? "transactions");
   const [accounts, setAccounts] = useState<Account[]>([]);
 
   // Filter options for transactions

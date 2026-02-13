@@ -6,6 +6,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { formatCurrency } from "@/lib/utils";
 import { PiggyBank, Target, CheckCircle2, TrendingUp } from "lucide-react";
 
@@ -37,6 +38,7 @@ export function GoalSummary({
   completedCount,
   totalGoals,
 }: GoalSummaryProps) {
+  const { mainCurrency } = useCurrency();
   const overallProgress = totalTarget > 0 ? (totalSaved / totalTarget) * 100 : 0;
 
   return (
@@ -48,7 +50,7 @@ export function GoalSummary({
           <PiggyBank className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">{formatCurrency(totalSaved, "IDR")}</div>
+          <div className="text-2xl font-bold">{formatCurrency(totalSaved, mainCurrency)}</div>
           <p className="text-xs text-muted-foreground">
             across {totalGoals} goal{totalGoals !== 1 ? "s" : ""}
           </p>
@@ -64,7 +66,7 @@ export function GoalSummary({
         <CardContent>
           <div className="text-2xl font-bold">{overallProgress.toFixed(1)}%</div>
           <p className="text-xs text-muted-foreground">
-            of {formatCurrency(totalTarget, "IDR")} total target
+            of {formatCurrency(totalTarget, mainCurrency)} total target
           </p>
         </CardContent>
       </Card>

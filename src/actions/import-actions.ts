@@ -53,6 +53,19 @@ const transactionImportSchema = z.object({
 });
 
 /**
+ * Sanitize a string to prevent CSV/Excel formula injection.
+ * Prefixes dangerous characters (=, +, -, @) with a zero-width space.
+ */
+function sanitizeCsvCell(value: string | null | undefined): string | undefined {
+  if (!value) return undefined;
+  // Prefix with zero-width space to prevent formula injection
+  if (/^[=+\-@]/.test(value)) {
+    return '\u200B' + value;
+  }
+  return value;
+}
+
+/**
  * Parse CSV content and return structured data
  */
 export async function parseCSVContent(csvContent: string) {
@@ -173,12 +186,13 @@ export async function mapToTransactions(
     const dateValue = mapping.date ? row[mapping.date] : "";
     const amountValue = mapping.amount ? row[mapping.amount] : "";
     const typeValue = mapping.type ? row[mapping.type]?.toUpperCase() : "";
-    const categoryValue = mapping.category ? row[mapping.category] : undefined;
-    const accountValue = mapping.account ? row[mapping.account] : "";
-    const toAccountValue = mapping.toAccount ? row[mapping.toAccount] : undefined;
-    const descriptionValue = mapping.description
+    // Sanitize text fields to prevent CSV/Excel formula injection
+    const categoryValue = sanitizeCsvCell(mapping.category ? row[mapping.category] : undefined);
+    const accountValue = sanitizeCsvCell(mapping.account ? row[mapping.account] : "") ?? "";
+    const toAccountValue = sanitizeCsvCell(mapping.toAccount ? row[mapping.toAccount] : undefined);
+    const descriptionValue = sanitizeCsvCell(mapping.description
       ? row[mapping.description]
-      : undefined;
+      : undefined);
     const currencyValue = mapping.currency ? row[mapping.currency] : "IDR";
 
     // Validate required fields

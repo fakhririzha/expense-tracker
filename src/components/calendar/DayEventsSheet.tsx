@@ -33,9 +33,16 @@ export function DayEventsSheet({
   const expenseEvents = events.filter((e) => e.type === "EXPENSE");
   const transferEvents = events.filter((e) => e.type === "TRANSFER");
 
-  // Calculate totals
-  const totalIncome = incomeEvents.reduce((sum, e) => sum + e.amount, 0);
-  const totalExpenses = expenseEvents.reduce((sum, e) => sum + e.amount, 0);
+  // Calculate grouped totals by currency to avoid mixing currencies
+  const incomeGroupedTotals = incomeEvents.reduce<Map<string, number>>((acc, e) => {
+    acc.set(e.currency, (acc.get(e.currency) || 0) + e.amount);
+    return acc;
+  }, new Map());
+
+  const expenseGroupedTotals = expenseEvents.reduce<Map<string, number>>((acc, e) => {
+    acc.set(e.currency, (acc.get(e.currency) || 0) + e.amount);
+    return acc;
+  }, new Map());
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -53,29 +60,47 @@ export function DayEventsSheet({
         <div className="mt-6 space-y-6">
           {/* Summary */}
           {events.length > 0 && (
-            <div className="grid grid-cols-2 gap-3">
-              {totalIncome > 0 && (
-                <div className="bg-green-50 dark:bg-green-950/30 rounded-lg p-3">
+            <div className="space-y-3">
+              {incomeGroupedTotals.size > 0 && (
+                <div className="space-y-1">
                   <p className="text-xs text-muted-foreground">Income</p>
-                  <p className="text-lg font-semibold text-green-600">
-                    {new Intl.NumberFormat("id-ID", {
-                      style: "currency",
-                      currency: events.find((e) => e.type === "INCOME")?.currency || "IDR",
-                      minimumFractionDigits: 0,
-                    }).format(totalIncome)}
-                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {Array.from(incomeGroupedTotals.entries()).map(([currency, total]) => (
+                      <div
+                        key={currency}
+                        className="bg-green-50 dark:bg-green-950/30 rounded-lg px-3 py-1.5"
+                      >
+                        <p className="text-sm font-semibold text-green-600">
+                          {new Intl.NumberFormat("id-ID", {
+                            style: "currency",
+                            currency,
+                            minimumFractionDigits: 0,
+                          }).format(total)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
-              {totalExpenses > 0 && (
-                <div className="bg-red-50 dark:bg-red-950/30 rounded-lg p-3">
+              {expenseGroupedTotals.size > 0 && (
+                <div className="space-y-1">
                   <p className="text-xs text-muted-foreground">Expenses</p>
-                  <p className="text-lg font-semibold text-red-600">
-                    {new Intl.NumberFormat("id-ID", {
-                      style: "currency",
-                      currency: events.find((e) => e.type === "EXPENSE")?.currency || "IDR",
-                      minimumFractionDigits: 0,
-                    }).format(totalExpenses)}
-                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {Array.from(expenseGroupedTotals.entries()).map(([currency, total]) => (
+                      <div
+                        key={currency}
+                        className="bg-red-50 dark:bg-red-950/30 rounded-lg px-3 py-1.5"
+                      >
+                        <p className="text-sm font-semibold text-red-600">
+                          {new Intl.NumberFormat("id-ID", {
+                            style: "currency",
+                            currency,
+                            minimumFractionDigits: 0,
+                          }).format(total)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

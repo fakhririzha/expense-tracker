@@ -42,15 +42,42 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
-const editTransactionFormSchema = z.object({
-  amount: z.number().positive("Amount must be positive"),
-  type: z.enum(["INCOME", "EXPENSE", "TRANSFER"]),
-  description: z.string().optional(),
-  date: z.date(),
-  accountId: z.string().min(1, "Account is required"),
-  toAccountId: z.string().optional(),
-  categoryId: z.string().optional(),
-});
+const editTransactionFormSchema = z
+  .object({
+    amount: z.number().positive("Amount must be positive"),
+    type: z.enum(["INCOME", "EXPENSE", "TRANSFER"]),
+    description: z.string().optional(),
+    date: z.date(),
+    accountId: z.string().min(1, "Account is required"),
+    toAccountId: z.string().optional(),
+    categoryId: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      // For TRANSFER type, toAccountId is required
+      if (data.type === "TRANSFER") {
+        return !!data.toAccountId && data.toAccountId.length > 0;
+      }
+      return true;
+    },
+    {
+      message: "Destination account is required for transfers",
+      path: ["toAccountId"],
+    }
+  )
+  .refine(
+    (data) => {
+      // From and To accounts must be different for transfers
+      if (data.type === "TRANSFER" && data.toAccountId) {
+        return data.accountId !== data.toAccountId;
+      }
+      return true;
+    },
+    {
+      message: "Source and destination accounts must be different",
+      path: ["toAccountId"],
+    }
+  );
 
 type EditTransactionFormValues = z.infer<typeof editTransactionFormSchema>;
 
@@ -73,6 +100,7 @@ interface Transaction {
   type: "INCOME" | "EXPENSE" | "TRANSFER" | "LIABILITY_PAYMENT";
   description: string | null;
   date: Date;
+  toAccountId: string | null;
   account: {
     id: string;
     name: string;
@@ -139,7 +167,7 @@ export function EditTransactionDialog({
         description: transaction.description || "",
         date: new Date(transaction.date),
         accountId: transaction.account.id,
-        toAccountId: "",
+        toAccountId: transaction.toAccountId || "",
         categoryId: transaction.category?.id || "",
       });
     }
@@ -196,6 +224,7 @@ export function EditTransactionDialog({
         description: data.description,
         date: data.date,
         accountId: data.accountId,
+        toAccountId: data.toAccountId,
         categoryId: data.categoryId,
       });
 

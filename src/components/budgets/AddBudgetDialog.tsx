@@ -41,15 +41,28 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
-const budgetFormSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  amount: z.number().positive("Amount must be positive"),
-  period: z.enum(["MONTHLY", "QUARTERLY", "YEARLY"]),
-  startDate: z.date(),
-  endDate: z.date().optional(),
-  categoryId: z.string().optional(),
-  isActive: z.boolean(),
-});
+const budgetFormSchema = z
+  .object({
+    name: z.string().min(1, "Name is required"),
+    amount: z.number().positive("Amount must be positive"),
+    period: z.enum(["MONTHLY", "QUARTERLY", "YEARLY"]),
+    startDate: z.date(),
+    endDate: z.date().optional(),
+    categoryId: z.string().optional(),
+    isActive: z.boolean(),
+  })
+  .refine(
+    (data) => {
+      if (data.endDate && data.startDate) {
+        return data.endDate > data.startDate;
+      }
+      return true;
+    },
+    {
+      message: "End date must be after start date",
+      path: ["endDate"],
+    }
+  );
 
 type BudgetFormValues = z.infer<typeof budgetFormSchema>;
 

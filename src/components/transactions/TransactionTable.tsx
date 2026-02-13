@@ -49,6 +49,7 @@ export interface Transaction {
   description: string | null;
   date: Date;
   isRecurring: boolean;
+  toAccountId: string | null;
   account: {
     id: string;
     name: string;

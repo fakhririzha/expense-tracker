@@ -172,6 +172,15 @@ export async function updateGoal(id: string, data: Partial<GoalInput>) {
       return { success: false, error: "Unauthorized" };
     }
 
+    // Validate input with schema
+    const validatedFields = goalSchema.partial().safeParse(data);
+    if (!validatedFields.success) {
+      return {
+        success: false,
+        error: validatedFields.error.issues[0].message,
+      };
+    }
+
     const existingGoal = await prisma.savingsGoal.findFirst({
       where: { id, userId: session.user.id },
     });
@@ -181,31 +190,29 @@ export async function updateGoal(id: string, data: Partial<GoalInput>) {
     }
 
     // Validate account belongs to user (IDOR prevention)
-    if (data.accountId !== undefined) {
-      const sanitizedAccountId = data.accountId?.trim() || null;
-      if (sanitizedAccountId) {
-        const account = await prisma.financialAccount.findFirst({
-          where: {
-            id: sanitizedAccountId,
-            userId: session.user.id,
-          },
-        });
-        if (!account) {
-          return { success: false, error: "Account not found" };
-        }
+    const sanitizedAccountId = validatedFields.data.accountId?.trim() || null;
+    if (sanitizedAccountId) {
+      const account = await prisma.financialAccount.findFirst({
+        where: {
+          id: sanitizedAccountId,
+          userId: session.user.id,
+        },
+      });
+      if (!account) {
+        return { success: false, error: "Account not found" };
       }
     }
 
     // Check if goal should be marked as completed
-    const newCurrentAmount = data.currentAmount ?? existingGoal.currentAmount;
-    const newTargetAmount = data.targetAmount ?? existingGoal.targetAmount;
+    const newCurrentAmount = validatedFields.data.currentAmount ?? existingGoal.currentAmount;
+    const newTargetAmount = validatedFields.data.targetAmount ?? existingGoal.targetAmount;
     const isCompleted = newCurrentAmount >= newTargetAmount;
 
     const goal = await prisma.savingsGoal.update({
       where: { id },
       data: {
-        ...data,
-        accountId: data.accountId !== undefined ? (data.accountId?.trim() || null) : undefined,
+        ...validatedFields.data,
+        accountId: sanitizedAccountId,
         isCompleted,
       },
       include: {
@@ -269,32 +276,45 @@ export async function addProgress(id: string, amount: number) {
       return { success: false, error: "Amount must be positive" };
     }
 
-    const goal = await prisma.savingsGoal.findFirst({
-      where: { id, userId: session.user.id },
-    });
+    // Use transaction to prevent race conditions
+    const updatedGoal = await prisma.$transaction(async (tx) => {
+      // Fetch goal and validate within transaction
+      const goal = await tx.savingsGoal.findFirst({
+        where: { id, userId: session.user.id },
+      });
 
-    if (!goal) {
-      return { success: false, error: "Goal not found" };
-    }
+      if (!goal) {
+        throw new Error("Goal not found");
+      }
 
-    const newCurrentAmount = goal.currentAmount + amount;
-    const isCompleted = newCurrentAmount >= goal.targetAmount;
-
-    const updatedGoal = await prisma.savingsGoal.update({
-      where: { id },
-      data: {
-        currentAmount: newCurrentAmount,
-        isCompleted,
-      },
-      include: {
-        account: {
-          select: {
-            id: true,
-            name: true,
-            currency: true,
+      // Use atomic increment for currentAmount
+      const updated = await tx.savingsGoal.update({
+        where: { id, userId: session.user.id },
+        data: {
+          currentAmount: { increment: amount },
+        },
+        include: {
+          account: {
+            select: {
+              id: true,
+              name: true,
+              currency: true,
+            },
           },
         },
-      },
+      });
+
+      // Calculate and set isCompleted after atomic change
+      const isCompleted = updated.currentAmount >= goal.targetAmount;
+      if (isCompleted !== goal.isCompleted) {
+        await tx.savingsGoal.update({
+          where: { id },
+          data: { isCompleted },
+        });
+        updated.isCompleted = isCompleted;
+      }
+
+      return updated;
     });
 
     revalidatePath("/dashboard");
@@ -303,6 +323,9 @@ export async function addProgress(id: string, amount: number) {
     return { success: true, data: updatedGoal };
   } catch (error) {
     console.error("Add progress error:", error);
+    if (error instanceof Error && error.message === "Goal not found") {
+      return { success: false, error: "Goal not found" };
+    }
     return { success: false, error: "Failed to add progress" };
   }
 }
@@ -319,36 +342,49 @@ export async function withdrawProgress(id: string, amount: number) {
       return { success: false, error: "Amount must be positive" };
     }
 
-    const goal = await prisma.savingsGoal.findFirst({
-      where: { id, userId: session.user.id },
-    });
+    // Use transaction to prevent race conditions
+    const updatedGoal = await prisma.$transaction(async (tx) => {
+      // Fetch goal and validate within transaction
+      const goal = await tx.savingsGoal.findFirst({
+        where: { id, userId: session.user.id },
+      });
 
-    if (!goal) {
-      return { success: false, error: "Goal not found" };
-    }
+      if (!goal) {
+        throw new Error("Goal not found");
+      }
 
-    if (amount > goal.currentAmount) {
-      return { success: false, error: "Cannot withdraw more than current amount" };
-    }
+      if (amount > goal.currentAmount) {
+        throw new Error("Cannot withdraw more than current amount");
+      }
 
-    const newCurrentAmount = goal.currentAmount - amount;
-    const isCompleted = newCurrentAmount >= goal.targetAmount;
-
-    const updatedGoal = await prisma.savingsGoal.update({
-      where: { id },
-      data: {
-        currentAmount: newCurrentAmount,
-        isCompleted,
-      },
-      include: {
-        account: {
-          select: {
-            id: true,
-            name: true,
-            currency: true,
+      // Use atomic decrement for currentAmount
+      const updated = await tx.savingsGoal.update({
+        where: { id, userId: session.user.id },
+        data: {
+          currentAmount: { decrement: amount },
+        },
+        include: {
+          account: {
+            select: {
+              id: true,
+              name: true,
+              currency: true,
+            },
           },
         },
-      },
+      });
+
+      // Calculate and set isCompleted after atomic change
+      const isCompleted = updated.currentAmount >= goal.targetAmount;
+      if (isCompleted !== goal.isCompleted) {
+        await tx.savingsGoal.update({
+          where: { id },
+          data: { isCompleted },
+        });
+        updated.isCompleted = isCompleted;
+      }
+
+      return updated;
     });
 
     revalidatePath("/dashboard");
@@ -357,6 +393,14 @@ export async function withdrawProgress(id: string, amount: number) {
     return { success: true, data: updatedGoal };
   } catch (error) {
     console.error("Withdraw progress error:", error);
+    if (error instanceof Error) {
+      if (error.message === "Goal not found") {
+        return { success: false, error: "Goal not found" };
+      }
+      if (error.message === "Cannot withdraw more than current amount") {
+        return { success: false, error: "Cannot withdraw more than current amount" };
+      }
+    }
     return { success: false, error: "Failed to withdraw progress" };
   }
 }

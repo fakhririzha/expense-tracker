@@ -25,10 +25,12 @@ import {
   type NetWorthPoint,
   type MonthlySummary,
 } from "@/actions/report-actions";
+import { useCurrency } from "@/contexts/CurrencyContext";
 
 export default function ReportsPage() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [groupBy, setGroupBy] = useState<"day" | "week" | "month">("week");
+  const { mainCurrency } = useCurrency();
   
   // Data states
   const [spendingTrends, setSpendingTrends] = useState<SpendingTrendPoint[]>([]);
@@ -235,10 +237,12 @@ export default function ReportsPage() {
               <CategoryBreakdownChart
                 data={expenseCategories}
                 type="EXPENSE"
+                mainCurrency={mainCurrency}
               />
               <CategoryBreakdownChart
                 data={incomeCategories}
                 type="INCOME"
+                mainCurrency={mainCurrency}
               />
             </div>
           </TabsContent>
@@ -273,10 +277,12 @@ export default function ReportsPage() {
               <CategoryBreakdownChart
                 data={expenseCategories}
                 type="EXPENSE"
+                mainCurrency={mainCurrency}
               />
               <CategoryBreakdownChart
                 data={incomeCategories}
                 type="INCOME"
+                mainCurrency={mainCurrency}
               />
             </div>
           </TabsContent>

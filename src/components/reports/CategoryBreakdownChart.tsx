@@ -23,6 +23,7 @@ interface CategoryBreakdownChartProps {
   title?: string;
   description?: string;
   onCategoryClick?: (categoryId: string | null) => void;
+  mainCurrency: string;
 }
 
 // Predefined color palette for categories
@@ -46,14 +47,14 @@ interface TooltipPayloadItem {
   payload: CategoryBreakdownItem & { color: string };
 }
 
-function CategoryTooltip({ active, payload }: { active?: boolean; payload?: TooltipPayloadItem[] }) {
+function CategoryTooltip({ active, payload, mainCurrency }: { active?: boolean; payload?: TooltipPayloadItem[]; mainCurrency: string }) {
   if (active && payload && payload.length) {
     const item = payload[0].payload;
     return (
       <div className="bg-card border rounded-lg p-3 shadow-lg">
         <p className="font-medium">{item.categoryName}</p>
         <p className="text-sm text-muted-foreground">
-          Amount: {formatCurrency(item.amount)}
+          Amount: {formatCurrency(item.amount, mainCurrency)}
         </p>
         <p className="text-sm text-muted-foreground">
           Percentage: {item.percentage.toFixed(1)}%
@@ -89,6 +90,7 @@ export function CategoryBreakdownChart({
   title,
   description,
   onCategoryClick,
+  mainCurrency,
 }: CategoryBreakdownChartProps) {
   const defaultTitle = type === "EXPENSE" ? "Expense by Category" : "Income by Category";
   const defaultDescription = type === "EXPENSE" 
@@ -138,7 +140,7 @@ export function CategoryBreakdownChart({
         </span>
       </div>
       <div className="text-right">
-        <p className="text-sm font-medium">{formatCurrency(item.amount)}</p>
+        <p className="text-sm font-medium">{formatCurrency(item.amount, mainCurrency)}</p>
         <p className="text-xs text-muted-foreground">
           {item.percentage.toFixed(1)}%
         </p>
@@ -157,7 +159,7 @@ export function CategoryBreakdownChart({
         <div className="mb-4 text-center">
           <p className="text-sm text-muted-foreground">Total {type.toLowerCase()}</p>
           <p className={`text-2xl font-bold ${type === "EXPENSE" ? "text-destructive" : "text-green-600"}`}>
-            {formatCurrency(total)}
+            {formatCurrency(total, mainCurrency)}
           </p>
           <p className="text-xs text-muted-foreground">
             {data.length} categories • {data.reduce((sum, item) => sum + item.transactionCount, 0)} transactions
@@ -182,7 +184,7 @@ export function CategoryBreakdownChart({
                   <Cell key={`cell-${index}`} fill={entry.color} />
                 ))}
               </Pie>
-              <Tooltip content={<CategoryTooltip />} />
+              <Tooltip content={<CategoryTooltip mainCurrency={mainCurrency} />} />
             </PieChart>
           </ResponsiveContainer>
         </div>

@@ -5,6 +5,21 @@ import prisma from "@/lib/db";
 import { format } from "date-fns";
 
 /**
+ * Sanitizes a CSV cell value to prevent formula injection attacks.
+ * Cells starting with "=", "+", "-", or "@" are prefixed with a single quote.
+ * Internal quotes are doubled and the cell is wrapped in double quotes.
+ */
+function sanitizeCsvCell(value: string): string {
+  const strValue = String(value);
+  // Check if the value starts with a formula injection character
+  const dangerousPrefix = /^[=+\-@]/.test(strValue);
+  // Double any internal quotes
+  const escaped = strValue.replace(/"/g, '""');
+  // Prefix with single quote if dangerous, then wrap in double quotes
+  return `"${dangerousPrefix ? "'" : ""}${escaped}"`;
+}
+
+/**
  * Export transactions to CSV format
  */
 export async function exportTransactionsCSV(params?: {
@@ -77,10 +92,8 @@ export async function exportTransactionsCSV(params?: {
 
     // Combine headers and rows
     const csv = [
-      headers.join(","),
-      ...rows.map((row) =>
-        row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")
-      ),
+      headers.map((h) => sanitizeCsvCell(h)).join(","),
+      ...rows.map((row) => row.map((cell) => sanitizeCsvCell(cell)).join(",")),
     ].join("\n");
 
     return {
@@ -257,10 +270,8 @@ export async function exportAccountsCSV() {
 
     // Combine headers and rows
     const csv = [
-      headers.join(","),
-      ...rows.map((row) =>
-        row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")
-      ),
+      headers.map((h) => sanitizeCsvCell(h)).join(","),
+      ...rows.map((row) => row.map((cell) => sanitizeCsvCell(cell)).join(",")),
     ].join("\n");
 
     return {
@@ -319,10 +330,8 @@ export async function exportBudgetsCSV() {
 
     // Combine headers and rows
     const csv = [
-      headers.join(","),
-      ...rows.map((row) =>
-        row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")
-      ),
+      headers.map((h) => sanitizeCsvCell(h)).join(","),
+      ...rows.map((row) => row.map((cell) => sanitizeCsvCell(cell)).join(",")),
     ].join("\n");
 
     return {
@@ -368,10 +377,8 @@ export async function exportCategoriesCSV() {
 
     // Combine headers and rows
     const csv = [
-      headers.join(","),
-      ...rows.map((row) =>
-        row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")
-      ),
+      headers.map((h) => sanitizeCsvCell(h)).join(","),
+      ...rows.map((row) => row.map((cell) => sanitizeCsvCell(cell)).join(",")),
     ].join("\n");
 
     return {
@@ -428,10 +435,8 @@ export async function exportInvestmentsCSV() {
 
     // Combine headers and rows
     const csv = [
-      headers.join(","),
-      ...rows.map((row) =>
-        row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")
-      ),
+      headers.map((h) => sanitizeCsvCell(h)).join(","),
+      ...rows.map((row) => row.map((cell) => sanitizeCsvCell(cell)).join(",")),
     ].join("\n");
 
     return {
@@ -489,10 +494,8 @@ export async function exportRecurringRulesCSV() {
 
     // Combine headers and rows
     const csv = [
-      headers.join(","),
-      ...rows.map((row) =>
-        row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")
-      ),
+      headers.map((h) => sanitizeCsvCell(h)).join(","),
+      ...rows.map((row) => row.map((cell) => sanitizeCsvCell(cell)).join(",")),
     ].join("\n");
 
     return {

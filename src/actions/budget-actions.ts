@@ -173,6 +173,15 @@ export async function updateBudget(id: string, data: Partial<BudgetInput>) {
       return { success: false, error: "Unauthorized" };
     }
 
+    // Validate the partial payload
+    const validatedFields = budgetSchema.partial().safeParse(data);
+    if (!validatedFields.success) {
+      return {
+        success: false,
+        error: validatedFields.error.issues[0].message,
+      };
+    }
+
     const existingBudget = await prisma.budget.findFirst({
       where: { id, userId: session.user.id },
     });
@@ -254,29 +263,32 @@ export async function deleteBudget(id: string) {
 }
 
 // Helper function to get date range for budget period
-function getBudgetDateRange(budget: { period: string; startDate: Date }): { start: Date; end: Date } {
-  const now = new Date();
+function getBudgetDateRange(budget: { period: string; startDate: Date; endDate?: Date | null }): { start: Date; end: Date } {
+  // Use budget's startDate as the base for period calculations
+  const baseDate = budget.startDate;
+  // Use endDate if provided, otherwise derive from startDate
+  const effectiveEndDate = budget.endDate ?? budget.startDate;
   
   switch (budget.period) {
     case "MONTHLY":
       return {
-        start: startOfMonth(now),
-        end: endOfMonth(now),
+        start: startOfMonth(baseDate),
+        end: budget.endDate ? endOfMonth(budget.endDate) : endOfMonth(baseDate),
       };
     case "QUARTERLY":
       return {
-        start: startOfQuarter(now),
-        end: endOfQuarter(now),
+        start: startOfQuarter(baseDate),
+        end: budget.endDate ? endOfQuarter(budget.endDate) : endOfQuarter(baseDate),
       };
     case "YEARLY":
       return {
-        start: startOfYear(now),
-        end: endOfYear(now),
+        start: startOfYear(baseDate),
+        end: budget.endDate ? endOfYear(budget.endDate) : endOfYear(baseDate),
       };
     default:
       return {
-        start: startOfMonth(now),
-        end: endOfMonth(now),
+        start: startOfMonth(baseDate),
+        end: budget.endDate ? endOfMonth(budget.endDate) : endOfMonth(baseDate),
       };
   }
 }
@@ -425,14 +437,17 @@ export async function getBudgetsSummary() {
       .map(b => b.categoryId)
       .filter((id): id is string => id !== null);
 
+    // Check if any budget has no category (uncategorized budget)
+    const hasUncategorized = budgets.some(b => b.categoryId === null);
+
     // 5. Fetch all relevant transactions in a single query
     const allTransactions = await prisma.transaction.findMany({
       where: {
         userId: session.user.id,
         type: TransactionType.EXPENSE,
         date: { gte: minDate, lte: maxDate },
-        // Only filter by categoryId if there are category-specific budgets
-        ...(categoryIds.length > 0 && { categoryId: { in: categoryIds } }),
+        // Only filter by categoryId if there are category-specific budgets AND none is uncategorized
+        ...(categoryIds.length > 0 && !hasUncategorized && { categoryId: { in: categoryIds } }),
       },
       select: {
         amount: true,

@@ -116,6 +116,7 @@ export default function DataManagementPage() {
                   {card.description}
                 </p>
                 <ExportDialog
+                  defaultType={card.type}
                   trigger={
                     <Button variant="outline" size="sm" className="w-full">
                       <FileDown className="mr-2 h-4 w-4" />
@@ -146,6 +147,7 @@ export default function DataManagementPage() {
               or migrating to another device.
             </p>
             <ExportDialog
+              defaultType="all"
               trigger={
                 <Button>
                   <Package className="mr-2 h-4 w-4" />
