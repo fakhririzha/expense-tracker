@@ -2,6 +2,7 @@
 
 import { getAccounts } from "@/actions/account-actions";
 import { updateTransaction } from "@/actions/transaction-actions";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -36,7 +37,7 @@ import {
 import { cn } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
-import { CalendarIcon } from "lucide-react";
+import { AlertCircle, CalendarIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -226,6 +227,25 @@ export function EditTransactionDialog({
             Update the transaction details below.
           </DialogDescription>
         </DialogHeader>
+        
+        {/* Show informative message for LIABILITY_PAYMENT transactions */}
+        {transaction?.type === "LIABILITY_PAYMENT" ? (
+          <div className="space-y-4">
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                <strong>Liability Payment transactions cannot be edited here.</strong>
+                <br />
+                These transactions involve special accounting rules and should be managed through the Liabilities page to ensure proper balance tracking.
+              </AlertDescription>
+            </Alert>
+            <div className="flex justify-end">
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        ) : (
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField
@@ -482,6 +502,7 @@ export function EditTransactionDialog({
             </DialogFooter>
           </form>
         </Form>
+        )}
       </DialogContent>
     </Dialog>
   );
