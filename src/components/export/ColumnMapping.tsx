@@ -22,6 +22,7 @@ const fieldOptions: { value: keyof ColumnMappingType; label: string; required: b
   { value: "amount", label: "Amount", required: true },
   { value: "type", label: "Type", required: true },
   { value: "account", label: "Account", required: true },
+  { value: "toAccount", label: "To Account", required: false },
   { value: "category", label: "Category", required: false },
   { value: "description", label: "Description", required: false },
   { value: "currency", label: "Currency", required: false },
