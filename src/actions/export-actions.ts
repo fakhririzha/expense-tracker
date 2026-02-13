@@ -127,6 +127,7 @@ export async function exportTransactionsCSV(params?: {
  * The backup includes accounts, transactions (with account, category and to-account names), categories, budgets (with category name), investment assets, trade history (with asset symbol), recurring rules, and savings goals. The function returns serialized JSON, a generated filename, and a summary of record counts for each dataset, or an error object if export fails or the user is unauthorized.
  *
  * @returns An object with `success: true`, `data` (the backup as a formatted JSON string), `filename` (generated backup filename), and `summary` (counts per dataset); or an object with `success: false` and an `error` message on failure.
+ */
 export async function exportAllData() {
   try {
     const session = await auth();
