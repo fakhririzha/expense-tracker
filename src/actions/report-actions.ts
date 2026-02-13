@@ -484,8 +484,8 @@ export async function getNetWorthHistory(params: {
       } else if (t.type === "TRANSFER") {
         // Transfers don't affect net worth
       } else if (t.type === "LIABILITY_PAYMENT") {
-        runningAssets -= normalizedAmount;
-        runningLiabilities -= normalizedAmount;
+        runningAssets += normalizedAmount;
+        runningLiabilities += normalizedAmount;
       }
 
       if (!monthMap.has(monthKey)) {
