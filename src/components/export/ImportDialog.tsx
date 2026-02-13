@@ -41,7 +41,10 @@ interface ImportDialogProps {
 type ImportStep = "upload" | "mapping" | "preview" | "importing" | "result";
 
 /**
- * Dialog for importing transactions from CSV files
+ * A multi-step dialog UI for importing transactions from a CSV file.
+ *
+ * @param trigger - Optional React node used as the dialog trigger; when omitted a default "Import Data" button is rendered.
+ * @param onSuccess - Optional callback invoked after a successful import when one or more transactions were imported.
  */
 export function ImportDialog({ trigger, onSuccess }: ImportDialogProps) {
   const [open, setOpen] = useState(false);

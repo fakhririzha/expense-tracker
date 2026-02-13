@@ -5,6 +5,13 @@ import { Switch as SwitchPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
 
+/**
+ * Render a styled toggle switch component that supports "default" and "sm" sizes and adapts to state and theme variants.
+ *
+ * @param size - Size variant of the switch; "default" (default) or "sm"
+ * @param className - Additional CSS class names applied to the root element
+ * @returns A JSX element rendering the themed toggle switch
+ */
 function Switch({
   className,
   size = "default",

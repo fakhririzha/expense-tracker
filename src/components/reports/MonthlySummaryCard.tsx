@@ -21,7 +21,16 @@ const monthNames = [
   "July", "August", "September", "October", "November", "December"
 ];
 
-// Change indicator component defined outside render
+/**
+ * Render a compact change indicator showing a signed currency delta and a comparison label.
+ *
+ * Displays an icon that reflects increase, decrease, or no change, the formatted change amount
+ * (prefixed with "+" for positive values or "No change" for zero), and a "vs {label}" suffix.
+ *
+ * @param value - The change amount in the same currency as displayed; positive for increase, negative for decrease, zero for no change.
+ * @param label - Comparison label shown after "vs" (for example, "last month").
+ * @returns The JSX element representing the change indicator.
+ */
 function ChangeIndicator({ value, label }: { value: number; label: string }) {
   const isPositive = value > 0;
   const isNeutral = value === 0;
@@ -44,16 +53,11 @@ function ChangeIndicator({ value, label }: { value: number; label: string }) {
 }
 
 /**
- * Renders a summary card for a specific month.
+ * Display a monthly financial summary card including totals, top categories, month-over-month comparisons, and the savings rate.
  *
- * Features:
- * - Total income, expenses, and net flow
- * - Top expense and income categories
- * - Comparison to previous month with change indicators
- *
- * @param data - Monthly summary data
- * @param title - Optional custom title
- * @returns The Monthly Summary Card React element
+ * @param data - MonthlySummary used to populate totals, top categories, previous-month comparisons, and metadata.
+ * @param title - Optional custom title; defaults to "<Month> <Year> Summary" when omitted.
+ * @returns The rendered Monthly Summary Card element.
  */
 export function MonthlySummaryCard({
   data,

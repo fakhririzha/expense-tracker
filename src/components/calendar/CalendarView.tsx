@@ -33,6 +33,19 @@ interface CalendarViewProps {
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const WEEKDAYS_SHORT = ["S", "M", "T", "W", "T", "F", "S"];
 
+/**
+ * Render an interactive monthly calendar with event display, month navigation, day selection, and an optional compact layout.
+ *
+ * Renders weekday headers, a 7-column day grid (including adjacent-month days), highlights the selected day, groups events by date, and opens a day events sheet when a day is selected.
+ *
+ * @param events - Array of calendar events to display in the month view.
+ * @param initialMonth - Optional date used to initialize the displayed month; defaults to the current date.
+ * @param onMonthChange - Optional callback invoked with the new month Date when the displayed month changes.
+ * @param filterType - Event type filter; use `"ALL"` to show all events or a specific TransactionType to limit displayed events.
+ * @param compact - When true, render a compact day cell layout and shorter weekday labels.
+ * @param className - Optional additional CSS classes applied to the calendar container.
+ * @returns The calendar rendered as a React element.
+ */
 export function CalendarView({
   events,
   initialMonth,
@@ -190,7 +203,11 @@ export function CalendarView({
   );
 }
 
-// Legend component for event types
+/**
+ * Renders a compact legend mapping Income, Expense, and Transfer to colored dots.
+ *
+ * @returns The legend JSX element associating each event type with a colored indicator and label.
+ */
 export function CalendarLegend() {
   return (
     <div className="flex items-center gap-4 text-sm">

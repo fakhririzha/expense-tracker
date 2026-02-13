@@ -48,6 +48,11 @@ const TYPE_LABELS: Record<string, string> = {
   TRANSFER: "Transfer",
 };
 
+/**
+ * Renders the Recurring Transactions page with lists of active and inactive recurring rules and controls to add, edit, and delete rules.
+ *
+ * @returns The page UI as a React element.
+ */
 export default function RecurringPage() {
   const [rules, setRules] = useState<RecurringRule[]>([]);
   const [isLoading, setIsLoading] = useState(true);

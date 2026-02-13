@@ -5,9 +5,13 @@ import prisma from "@/lib/db";
 import { format } from "date-fns";
 
 /**
- * Sanitizes a CSV cell value to prevent formula injection attacks.
- * Cells starting with "=", "+", "-", or "@" are prefixed with a single quote.
- * Internal quotes are doubled and the cell is wrapped in double quotes.
+ * Sanitizes a CSV cell to prevent spreadsheet formula injection.
+ *
+ * If the cell begins with "=", "+", "-", or "@", it is prefixed with a single quote.
+ * Internal double quotes are escaped by doubling them, and the entire cell is wrapped in double quotes.
+ *
+ * @param value - The input value to sanitize
+ * @returns The sanitized CSV cell as a quoted string
  */
 function sanitizeCsvCell(value: string): string {
   const strValue = String(value);
@@ -20,7 +24,10 @@ function sanitizeCsvCell(value: string): string {
 }
 
 /**
- * Export transactions to CSV format
+ * Export the current user's transactions filtered by the provided parameters as a CSV string.
+ *
+ * @param params - Optional filters for the export: `startDate` and `endDate` restrict the transaction date range, `accountId` limits to a specific account, and `type` filters by transaction type.
+ * @returns An object with `success: true` containing `data` (the CSV string), `filename` (generated filename), and `count` (number of exported transactions) when the export succeeds; otherwise `success: false` with an `error` message.
  */
 export async function exportTransactionsCSV(params?: {
   startDate?: Date;
@@ -109,8 +116,11 @@ export async function exportTransactionsCSV(params?: {
 }
 
 /**
- * Export all user data for backup
- */
+ * Create a complete JSON backup of the authenticated user's data.
+ *
+ * The backup includes accounts, transactions (with account, category and to-account names), categories, budgets (with category name), investment assets, trade history (with asset symbol), recurring rules, and savings goals. The function returns serialized JSON, a generated filename, and a summary of record counts for each dataset, or an error object if export fails or the user is unauthorized.
+ *
+ * @returns An object with `success: true`, `data` (the backup as a formatted JSON string), `filename` (generated backup filename), and `summary` (counts per dataset); or an object with `success: false` and an `error` message on failure.
 export async function exportAllData() {
   try {
     const session = await auth();
@@ -232,7 +242,17 @@ export async function exportAllData() {
 }
 
 /**
- * Export accounts to CSV format
+ * Export the current user's accounts as a CSV string.
+ *
+ * Fetches the authenticated user's financial accounts and constructs a CSV containing
+ * the columns: Name, Type, Currency, Balance, Description, Is Active, Created At.
+ *
+ * @returns An object with:
+ * - `success`: `true` if export succeeded, `false` otherwise.
+ * - `data`: the CSV string when `success` is `true`.
+ * - `filename`: generated filename for the CSV when `success` is `true`.
+ * - `count`: number of exported accounts when `success` is `true`.
+ * - `error`: error message when `success` is `false`.
  */
 export async function exportAccountsCSV() {
   try {
@@ -287,7 +307,9 @@ export async function exportAccountsCSV() {
 }
 
 /**
- * Export budgets to CSV format
+ * Export the current user's budgets as a CSV string.
+ *
+ * @returns On success, an object with `success: true`, `data` (the CSV content), `filename` (generated filename), and `count` (number of budgets exported); on failure, an object with `success: false` and an `error` message (for example `"Unauthorized"` or `"Failed to export budgets"`).
  */
 export async function exportBudgetsCSV() {
   try {
@@ -347,7 +369,13 @@ export async function exportBudgetsCSV() {
 }
 
 /**
- * Export categories to CSV format
+ * Export the current user's categories to a CSV-formatted string.
+ *
+ * Authenticates the caller, retrieves categories that belong to the user or are system-wide,
+ * and returns a CSV containing Name, Type, Icon, Color, and Is System columns. Cells are sanitized
+ * to prevent CSV formula injection.
+ *
+ * @returns An object with `success: true` containing `data` (CSV string), `filename` (generated filename), and `count` (number of categories) on success; otherwise `success: false` with an `error` message such as `"Unauthorized"` or a generic failure message.
  */
 export async function exportCategoriesCSV() {
   try {
@@ -394,7 +422,9 @@ export async function exportCategoriesCSV() {
 }
 
 /**
- * Export investment assets to CSV format
+ * Export the current user's investment assets as a CSV string suitable for download.
+ *
+ * @returns An object with `success: true` containing `data` (CSV content), `filename` (generated filename), and `count` (number of records) on success; `success: false` with an `error` message on failure or if unauthorized.
  */
 export async function exportInvestmentsCSV() {
   try {
@@ -452,7 +482,9 @@ export async function exportInvestmentsCSV() {
 }
 
 /**
- * Export recurring rules to CSV format
+ * Export the user's recurring rules as a CSV string suitable for download.
+ *
+ * @returns On success, an object with `success: true`, `data` containing the CSV text, `filename` with a timestamped filename, and `count` of exported rules; on failure, an object with `success: false` and an `error` message.
  */
 export async function exportRecurringRulesCSV() {
   try {

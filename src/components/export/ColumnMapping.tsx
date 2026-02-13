@@ -28,7 +28,15 @@ const fieldOptions: { value: keyof ColumnMappingType; label: string; required: b
 ];
 
 /**
- * Component for mapping CSV columns to system fields
+ * Render a UI for mapping CSV header names to predefined system fields.
+ *
+ * Shows a select for each target field, marks required fields, prevents selecting the same header for multiple fields,
+ * allows skipping fields, and displays a summary of mapped and missing required fields.
+ *
+ * @param headers - Available CSV header names to choose from
+ * @param mapping - Current mapping from system field keys to selected header names
+ * @param onMappingChange - Callback invoked with the updated mapping object when selections change
+ * @returns The React element that renders the column-mapping form
  */
 export function ColumnMapping({ headers, mapping, onMappingChange }: ColumnMappingProps) {
   const handleFieldChange = (field: keyof ColumnMappingType, value: string) => {

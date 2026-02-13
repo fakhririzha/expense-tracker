@@ -21,6 +21,18 @@ interface DayEventsSheetProps {
   onEventClick?: (event: CalendarEvent) => void;
 }
 
+/**
+ * Renders a sheet-style UI showing a day's calendar events, grouped by type with per-currency income and expense totals.
+ *
+ * Renders a header with the formatted date and event count, a compact summary of totals per currency for income and expenses, and separate lists for Income, Expenses, and Transfers. Each event row is clickable if an `onEventClick` handler is provided. If no events exist, shows an empty-state message.
+ *
+ * @param date - The date whose events are displayed.
+ * @param events - Array of calendar events to render and group.
+ * @param open - Controls whether the sheet is visible.
+ * @param onOpenChange - Called when the sheet open state changes.
+ * @param onEventClick - Optional callback invoked with an event when its row is clicked.
+ * @returns The sheet UI element for the specified date's events.
+ */
 export function DayEventsSheet({
   date,
   events,
@@ -182,6 +194,14 @@ export function DayEventsSheet({
   );
 }
 
+/**
+ * Render a clickable event row that shows an icon, title, category/account meta, and a compact amount badge.
+ *
+ * Renders a horizontally laid-out card for a CalendarEvent. Displays a recurring or receipt icon based on the event source, the event name, optional category and account names, and an EventBadge with the amount. Invokes `onClick` when the row or badge is clicked.
+ *
+ * @param event - The calendar event to display
+ * @param onClick - Optional handler called when the card is clicked
+ */
 function EventCard({
   event,
   onClick,

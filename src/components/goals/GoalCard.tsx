@@ -28,17 +28,16 @@ interface GoalCardProps {
 }
 
 /**
- * Renders a card displaying goal information with progress tracking.
+ * Display a card for a goal showing its progress, amounts, target information, and action controls.
  *
- * Shows goal name, icon, color, target amount, current amount, and a progress bar with
- * color coding based on progress percentage (red/orange/yellow/light green/green).
- * Includes edit, add progress, and delete actions via dropdown menu.
+ * The card presents goal name, icon, color indicator, progress bar, current/target amounts, remaining amount,
+ * optional monthly target and target-date status, and a menu with actions to add/withdraw progress, edit, or delete the goal.
  *
- * @param goal - The goal data with progress information
- * @param onEdit - Callback invoked when edit action is clicked
- * @param onAddProgress - Callback invoked when add progress action is clicked
- * @param onDelete - Callback invoked after successful deletion
- * @returns The Goal Card React element
+ * @param goal - Goal data including progress, amounts, dates, display metadata, and completion state
+ * @param onEdit - Called with `goal` when the Edit action is selected
+ * @param onAddProgress - Called with `goal` when the Add/Withdraw Progress action is selected
+ * @param onDelete - Called after the goal has been successfully deleted
+ * @returns The React element rendering the goal card
  */
 export function GoalCard({ goal, onEdit, onAddProgress, onDelete }: GoalCardProps) {
   const [isDeleting, setIsDeleting] = useState(false);

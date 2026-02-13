@@ -47,6 +47,17 @@ interface TooltipPayloadItem {
   payload: CategoryBreakdownItem & { color: string };
 }
 
+/**
+ * Render a custom tooltip that displays category breakdown details.
+ *
+ * Shows the category name, formatted amount, percentage (one decimal place), and transaction count
+ * when the tooltip is active and a payload is available.
+ *
+ * @param active - Whether the tooltip is currently active (visible)
+ * @param payload - Recharts tooltip payload array; the first payload item's `payload` object is used
+ * @param mainCurrency - Currency code used to format the displayed amount
+ * @returns A JSX element with category details when active and payload are present, `null` otherwise
+ */
 function CategoryTooltip({ active, payload, mainCurrency }: { active?: boolean; payload?: TooltipPayloadItem[]; mainCurrency: string }) {
   if (active && payload && payload.length) {
     const item = payload[0].payload;

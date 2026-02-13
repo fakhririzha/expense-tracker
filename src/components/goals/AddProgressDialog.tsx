@@ -42,16 +42,15 @@ interface AddProgressDialogProps {
 }
 
 /**
- * Renders a dialog for adding or withdrawing progress from a savings goal.
+ * Render a dialog that lets the user add to or withdraw progress from a savings goal.
  *
- * Shows current progress, allows selecting add or withdraw action,
- * and submits the appropriate server action on form submission.
+ * Displays current progress, a live preview of the resulting progress based on the entered amount and selected action, and submits the update to the server.
  *
- * @param goal - The goal to update, or null if no goal is selected
+ * @param goal - The goal to update, or `null` to render nothing
  * @param open - Whether the dialog is open
- * @param onOpenChange - Callback to control dialog open state
- * @param onSuccess - Optional callback invoked after successful update
- * @returns The Add Progress dialog React element
+ * @param onOpenChange - Callback invoked when the dialog open state should change
+ * @param onSuccess - Optional callback invoked after a successful update
+ * @returns The dialog React element, or `null` when `goal` is `null`
  */
 export function AddProgressDialog({
   goal,

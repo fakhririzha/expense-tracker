@@ -41,14 +41,13 @@ interface BudgetVsActualChartProps {
 }
 
 /**
- * Renders a bar chart comparing budgeted vs actual spending by category.
+ * Render a bar chart comparing budgeted and actual spending by category.
  *
- * Shows budgeted amounts in blue and actual spending in green/red
- * depending on whether the budget was exceeded. Includes tooltips
- * with detailed information and a legend.
+ * If no categories have budgeted or actual amounts greater than zero, renders
+ * an empty-state card prompting the user to create budgets.
  *
  * @param data - Array of budget vs actual comparison data
- * @returns The Budget vs Actual Chart React element
+ * @returns The chart component element, or an empty-state card when there is no data
  */
 export function BudgetVsActualChart({ data }: BudgetVsActualChartProps) {
   // Filter out categories with no budget and no spending

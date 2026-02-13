@@ -120,6 +120,12 @@ export function EditBudgetDialog({
 
   // Load categories when dialog opens
   useEffect(() => {
+    /**
+     * Load expense categories from the server and update the component state.
+     *
+     * Fetches data from `/api/categories`, filters the results to categories with `type === "EXPENSE"`,
+     * and calls `setCategories` with the filtered list. Any fetch or parsing errors are logged to the console.
+     */
     async function loadCategories() {
       try {
         const response = await fetch("/api/categories");

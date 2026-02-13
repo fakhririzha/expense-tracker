@@ -42,7 +42,13 @@ export interface GoalWithProgress {
   monthlyTarget: number | null;
 }
 
-// Get all goals for the current user
+/**
+ * Retrieve all savings goals belonging to the authenticated user, including each goal's basic account info.
+ *
+ * If the user is not authenticated the function returns a failure result with an empty `data` array.
+ *
+ * @returns An object with `success: true` and `data` containing an array of savings goals (each including its associated account `id`, `name`, and `currency`) on success; otherwise `success: false`, an `error` message, and `data` as an empty array.
+ */
 export async function getGoals() {
   try {
     const session = await auth();
@@ -71,7 +77,12 @@ export async function getGoals() {
   }
 }
 
-// Get a single goal by ID
+/**
+ * Fetches a savings goal by ID for the authenticated user.
+ *
+ * @param id - The ID of the savings goal to retrieve.
+ * @returns An object with `success: true` and `data` containing the goal (including associated account info: `id`, `name`, `currency`) when found; otherwise `success: false` and `error` with a message.
+ */
 export async function getGoal(id: string) {
   try {
     const session = await auth();
@@ -103,7 +114,12 @@ export async function getGoal(id: string) {
   }
 }
 
-// Create a new goal
+/**
+ * Create a new savings goal for the authenticated user.
+ *
+ * @param data - Goal fields validated against `goalSchema`; optional `accountId` must belong to the current user
+ * @returns An object with `success: true` and the created goal under `data` on success; `success: false` and an `error` message on failure
+ */
 export async function createGoal(data: GoalInput) {
   try {
     const session = await auth();
@@ -164,7 +180,15 @@ export async function createGoal(data: GoalInput) {
   }
 }
 
-// Update an existing goal
+/**
+ * Update an existing savings goal for the authenticated user.
+ *
+ * Validates input, ensures any provided `accountId` belongs to the user, computes the goal's completion status from the current and target amounts, updates the goal record, and revalidates dashboard caches.
+ *
+ * @param id - The ID of the goal to update
+ * @param data - Partial goal fields to apply
+ * @returns An object with `success: true` and the updated goal under `data` on success, or `success: false` and an `error` message on failure
+ */
 export async function updateGoal(id: string, data: Partial<GoalInput>) {
   try {
     const session = await auth();
@@ -236,7 +260,12 @@ export async function updateGoal(id: string, data: Partial<GoalInput>) {
   }
 }
 
-// Delete a goal
+/**
+ * Delete a savings goal owned by the current user.
+ *
+ * @param id - The ID of the goal to delete
+ * @returns `{ success: true }` on successful deletion; `{ success: false, error: string }` when unauthorized, the goal is not found, or deletion fails
+ */
 export async function deleteGoal(id: string) {
   try {
     const session = await auth();
@@ -264,7 +293,17 @@ export async function deleteGoal(id: string) {
   }
 }
 
-// Add progress to a goal
+/**
+ * Atomically adds a positive amount to a goal's currentAmount and updates its completion status.
+ *
+ * Performs the increment inside a transaction, updates the goal's `isCompleted` flag if needed,
+ * and revalidates the dashboard cache paths.
+ *
+ * @param id - The ID of the goal to update
+ * @param amount - A positive number to add to the goal's current amount
+ * @returns An object with `success: true` and the updated goal (including `account` info) on success,
+ *          or `success: false` and an `error` message on failure (e.g., "Unauthorized", "Amount must be positive", "Goal not found", or "Failed to add progress")
+ */
 export async function addProgress(id: string, amount: number) {
   try {
     const session = await auth();
@@ -330,7 +369,15 @@ export async function addProgress(id: string, amount: number) {
   }
 }
 
-// Withdraw progress from a goal
+/**
+ * Withdraws a positive amount from the specified goal and updates its completion status.
+ *
+ * Revalidates dashboard caches and returns the updated goal including its `account` relation.
+ *
+ * @param id - The ID of the goal to withdraw from.
+ * @param amount - The positive amount to subtract from the goal's `currentAmount`.
+ * @returns The updated goal object (includes `account` with `id`, `name`, `currency`) on success; otherwise an error object with `success: false` and an `error` message such as `"Goal not found"` or `"Cannot withdraw more than current amount"`.
+ */
 export async function withdrawProgress(id: string, amount: number) {
   try {
     const session = await auth();
@@ -405,7 +452,13 @@ export async function withdrawProgress(id: string, amount: number) {
   }
 }
 
-// Get all goals with their progress
+/**
+ * Retrieve all savings goals for the authenticated user, each augmented with progress metrics.
+ *
+ * Computes per-goal progress fields including `percentage` (capped at 100), `remaining`, `daysRemaining` (if a target date is set, clamped to zero), and `monthlyTarget` (estimated remaining per 30-day month when applicable).
+ *
+ * @returns An object where `success` is `true` and `data` is an array of `GoalWithProgress` on success; otherwise `success` is `false`, `error` contains a message, and `data` is an empty array.
+ */
 export async function getGoalsSummary() {
   try {
     const session = await auth();
@@ -473,7 +526,18 @@ export async function getGoalsSummary() {
   }
 }
 
-// Get goals statistics
+/**
+ * Retrieve aggregate statistics for the current user's savings goals.
+ *
+ * @returns An object with `success: true` and a `data` object containing aggregate metrics when the operation succeeds; otherwise `success: false` and an `error` message.
+ *
+ * `data` fields:
+ * - `totalSaved` - Sum of all goals' `currentAmount`.
+ * - `totalTarget` - Sum of all goals' `targetAmount`.
+ * - `inProgressCount` - Number of goals that are not completed.
+ * - `completedCount` - Number of goals marked as completed.
+ * - `totalGoals` - Total number of goals for the user.
+ */
 export async function getGoalsStats() {
   try {
     const session = await auth();

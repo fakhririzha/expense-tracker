@@ -61,6 +61,11 @@ export function BudgetProgress({ budget, onBack }: BudgetProgressProps) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    /**
+     * Load transactions for the current budget and update component state.
+     *
+     * Sets the loading flag while fetching; if the fetch succeeds, replaces the transactions state with the fetched data. Ensures the loading flag is cleared when finished.
+     */
     async function loadTransactions() {
       setIsLoading(true);
       const result = await getBudgetTransactions(budget.id);

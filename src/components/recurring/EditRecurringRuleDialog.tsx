@@ -125,6 +125,12 @@ export function EditRecurringRuleDialog({
 
   // Load accounts when dialog opens
   useEffect(() => {
+    /**
+     * Load accounts from the backend and update component state with the retrieved accounts.
+     *
+     * When the API call succeeds and returns data, the results are mapped to objects with `id`
+     * and `name` and stored via `setAccounts`.
+     */
     async function loadAccounts() {
       const result = await getAccounts();
       if (result.success && result.data) {

@@ -27,6 +27,13 @@ import {
 } from "@/actions/report-actions";
 import { useCurrency } from "@/contexts/CurrencyContext";
 
+/**
+ * Renders the Reports & Analytics dashboard page with controls, KPI cards, and interactive charts.
+ *
+ * Presents a date range picker, grouping controls, and tabbed views (Overview, Spending, Categories, Income vs Expense, Net Worth). Loads report datasets for the selected range and grouping, computes overview statistics (total income, total expenses, net flow, current net worth), and displays corresponding charts and category breakdowns.
+ *
+ * @returns The Reports & Analytics page as a React element.
+ */
 export default function ReportsPage() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [groupBy, setGroupBy] = useState<"day" | "week" | "month">("week");

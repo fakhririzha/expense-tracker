@@ -115,7 +115,11 @@ const exportOptions: {
 ];
 
 /**
- * Dialog for exporting data to CSV or JSON format
+ * Modal dialog component that lets users select data types and optional filters to export application data as CSV or JSON.
+ *
+ * @param trigger - Optional React node used as the dialog trigger; if omitted a default "Export Data" button is rendered.
+ * @param defaultType - Optional initial export type selection; defaults to `"transactions"` when not provided.
+ * @returns The rendered export dialog element.
  */
 export function ExportDialog({ trigger, defaultType }: ExportDialogProps) {
   const [open, setOpen] = useState(false);
