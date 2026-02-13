@@ -321,14 +321,14 @@ export function ExportDialog({ trigger }: ExportDialogProps) {
               <div className="grid gap-2">
                 <label className="text-sm font-medium">Account</label>
                 <Select
-                  value={selectedAccountId}
-                  onValueChange={setSelectedAccountId}
+                  value={selectedAccountId || "all"}
+                  onValueChange={(value) => setSelectedAccountId(value === "all" ? "" : value)}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="All accounts" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Accounts</SelectItem>
+                    <SelectItem value="all">All Accounts</SelectItem>
                     {accounts.map((account) => (
                       <SelectItem key={account.id} value={account.id}>
                         {account.name}
@@ -341,12 +341,12 @@ export function ExportDialog({ trigger }: ExportDialogProps) {
               {/* Transaction Type Filter */}
               <div className="grid gap-2">
                 <label className="text-sm font-medium">Transaction Type</label>
-                <Select value={selectedType} onValueChange={setSelectedType}>
+                <Select value={selectedType || "all"} onValueChange={(value) => setSelectedType(value === "all" ? "" : value)}>
                   <SelectTrigger>
                     <SelectValue placeholder="All types" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Types</SelectItem>
+                    <SelectItem value="all">All Types</SelectItem>
                     <SelectItem value="INCOME">Income</SelectItem>
                     <SelectItem value="EXPENSE">Expense</SelectItem>
                     <SelectItem value="TRANSFER">Transfer</SelectItem>

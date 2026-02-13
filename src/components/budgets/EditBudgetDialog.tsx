@@ -269,8 +269,11 @@ export function EditBudgetDialog({
                 <FormItem>
                   <FormLabel>Category (Optional)</FormLabel>
                   <Select
-                    onValueChange={field.onChange}
-                    value={field.value || ""}
+                    onValueChange={(value) => {
+                      // Use "all" as a sentinel value that gets converted to undefined
+                      field.onChange(value === "all" ? undefined : value);
+                    }}
+                    value={field.value || "all"}
                   >
                     <FormControl>
                       <SelectTrigger>
@@ -278,7 +281,7 @@ export function EditBudgetDialog({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">All categories</SelectItem>
+                      <SelectItem value="all">All categories</SelectItem>
                       {categories.map((category) => (
                         <SelectItem key={category.id} value={category.id}>
                           {category.name}

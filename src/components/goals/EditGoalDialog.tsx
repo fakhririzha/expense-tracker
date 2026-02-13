@@ -426,8 +426,8 @@ export function EditGoalDialog({
                 <FormItem>
                   <FormLabel>Linked Account (Optional)</FormLabel>
                   <Select
-                    onValueChange={(value) => field.onChange(value || null)}
-                    value={field.value || ""}
+                    onValueChange={(value) => field.onChange(value === "none" ? null : value)}
+                    value={field.value || "none"}
                   >
                     <FormControl>
                       <SelectTrigger>
@@ -435,7 +435,7 @@ export function EditGoalDialog({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">None</SelectItem>
+                      <SelectItem value="none">None</SelectItem>
                       {accounts.map((account) => (
                         <SelectItem key={account.id} value={account.id}>
                           {account.name} ({account.currency})

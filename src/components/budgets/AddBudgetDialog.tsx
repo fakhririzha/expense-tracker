@@ -225,8 +225,11 @@ export function AddBudgetDialog({ onSuccess }: AddBudgetDialogProps) {
                 <FormItem>
                   <FormLabel>Category (Optional)</FormLabel>
                   <Select
-                    onValueChange={field.onChange}
-                    defaultValue={field.value}
+                    onValueChange={(value) => {
+                      // Use "all" as a sentinel value that gets converted to undefined
+                      field.onChange(value === "all" ? undefined : value);
+                    }}
+                    value={field.value || "all"}
                   >
                     <FormControl>
                       <SelectTrigger>
@@ -234,7 +237,7 @@ export function AddBudgetDialog({ onSuccess }: AddBudgetDialogProps) {
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">All categories</SelectItem>
+                      <SelectItem value="all">All categories</SelectItem>
                       {categories.map((category) => (
                         <SelectItem key={category.id} value={category.id}>
                           {category.name}
