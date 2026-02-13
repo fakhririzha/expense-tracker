@@ -7,20 +7,26 @@ import { format } from "date-fns";
 /**
  * Sanitizes a CSV cell to prevent spreadsheet formula injection.
  *
- * If the cell begins with "=", "+", "-", or "@", it is prefixed with a single quote.
- * Internal double quotes are escaped by doubling them, and the entire cell is wrapped in double quotes.
+ * Detects the first non-whitespace character and checks if it's a formula injection
+ * character ("=", "+", "-", or "@"). If so, inserts a single quote immediately after
+ * any leading whitespace to neutralize the formula. Internal double quotes are escaped
+ * by doubling them, and the entire cell is wrapped in double quotes.
  *
  * @param value - The input value to sanitize
  * @returns The sanitized CSV cell as a quoted string
  */
 function sanitizeCsvCell(value: string): string {
   const strValue = String(value);
-  // Check if the value starts with a formula injection character
-  const dangerousPrefix = /^[=+\-@]/.test(strValue);
+  // Capture leading whitespace and check the first non-whitespace character
+  const leadingWhitespaceMatch = strValue.match(/^(\s*)/);
+  const leadingWhitespace = leadingWhitespaceMatch ? leadingWhitespaceMatch[1] : "";
+  const restOfString = strValue.slice(leadingWhitespace.length);
+  // Check if the first non-whitespace character is a formula injection character
+  const hasDangerousPrefix = /^[=+\-@]/.test(restOfString);
   // Double any internal quotes
   const escaped = strValue.replace(/"/g, '""');
-  // Prefix with single quote if dangerous, then wrap in double quotes
-  return `"${dangerousPrefix ? "'" : ""}${escaped}"`;
+  // Insert single quote after leading whitespace if dangerous, then wrap in double quotes
+  return `"${leadingWhitespace}${hasDangerousPrefix ? "'" : ""}${escaped.slice(leadingWhitespace.length)}"`;
 }
 
 /**
