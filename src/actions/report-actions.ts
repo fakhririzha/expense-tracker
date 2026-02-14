@@ -534,23 +534,38 @@ export async function getNetWorthHistory(params: {
       }
     }
 
-    // Fill in missing months with interpolated values
+    // Build result with end-of-month balances
+    // The monthMap[M] stores the balance at the START of month M (after reversing all transactions in M)
+    // This equals the balance at the END of month M-1
+    // So for month M's end-of-month balance, we look at monthMap[M+1] (start of next month = end of current month)
+    // For the last month, we use current balances
     const result: NetWorthPoint[] = [];
-    let lastAssets = currentAssets;
-    let lastLiabilities = currentLiabilities;
 
-    for (const monthKey of monthKeys) {
-      const data = monthMap.get(monthKey);
-      if (data) {
-        lastAssets = data.assets;
-        lastLiabilities = data.liabilities;
+    for (let i = 0; i < monthKeys.length; i++) {
+      const monthKey = monthKeys[i];
+      
+      // For month M's end-of-month balance:
+      // - Look for the next month with data (monthMap[M+1], M+2, etc.)
+      // - If no future month has data, use current balances (end of last month)
+      
+      let assets: number = currentAssets;
+      let liabilities: number = currentLiabilities;
+      
+      // Look ahead for the next month with data
+      for (let j = i + 1; j < monthKeys.length; j++) {
+        const futureData = monthMap.get(monthKeys[j]);
+        if (futureData) {
+          assets = futureData.assets;
+          liabilities = futureData.liabilities;
+          break;
+        }
       }
       
       result.push({
         date: monthKey,
-        netWorth: lastAssets - lastLiabilities,
-        assets: lastAssets,
-        liabilities: lastLiabilities,
+        netWorth: assets - liabilities,
+        assets,
+        liabilities,
       });
     }
 
