@@ -426,6 +426,12 @@ export async function getNetWorthHistory(params: {
 
     const { months } = params;
 
+    // Validate months parameter to prevent DoS attacks
+    const MAX_MONTHS = 120; // 10 years maximum
+    if (!Number.isInteger(months) || months < 1 || months > MAX_MONTHS) {
+      return { success: false, error: `Months must be between 1 and ${MAX_MONTHS}` };
+    }
+
     // Get current account balances
     const accounts = await prisma.financialAccount.findMany({
       where: {
@@ -541,25 +547,29 @@ export async function getNetWorthHistory(params: {
     // For the last month, we use current balances
     const result: NetWorthPoint[] = [];
 
+    // Pre-calculate next available data points in O(N) using a backward pass
+    // nextAvailableData[i] stores the next month's data for monthKeys[i]
+    const nextAvailableData = new Array<{ assets: number; liabilities: number } | null>(monthKeys.length).fill(null);
+    let lastSeenData: { assets: number; liabilities: number } | null = null;
+
+    for (let i = monthKeys.length - 1; i >= 0; i--) {
+      const monthData = monthMap.get(monthKeys[i]);
+      if (monthData) {
+        lastSeenData = monthData;
+      }
+      nextAvailableData[i] = lastSeenData;
+    }
+
     for (let i = 0; i < monthKeys.length; i++) {
       const monthKey = monthKeys[i];
       
       // For month M's end-of-month balance:
-      // - Look for the next month with data (monthMap[M+1], M+2, etc.)
+      // - Use the next month with data (monthMap[M+1], M+2, etc.)
       // - If no future month has data, use current balances (end of last month)
       
-      let assets: number = currentAssets;
-      let liabilities: number = currentLiabilities;
-      
-      // Look ahead for the next month with data
-      for (let j = i + 1; j < monthKeys.length; j++) {
-        const futureData = monthMap.get(monthKeys[j]);
-        if (futureData) {
-          assets = futureData.assets;
-          liabilities = futureData.liabilities;
-          break;
-        }
-      }
+      const nextData = nextAvailableData[i];
+      const assets: number = nextData?.assets ?? currentAssets;
+      const liabilities: number = nextData?.liabilities ?? currentLiabilities;
       
       result.push({
         date: monthKey,
