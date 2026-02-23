@@ -28,7 +28,7 @@ import {
   ArrowUpCircle,
   ArrowDownCircle,
 } from "lucide-react";
-import { TransactionType } from "@prisma/client";
+import { TransactionType } from "@/generated/prisma/client/client";
 
 /**
  * Renders the Bills Calendar page with calendar view, filters, summary cards, and sidebar widgets.

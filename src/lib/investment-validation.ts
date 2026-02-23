@@ -8,7 +8,7 @@
  */
 
 import prisma from "@/lib/db";
-import { FinancialAccount } from "@prisma/client";
+import { FinancialAccount } from "@/generated/prisma/client/client";
 
 /**
  * Result type for validation operations

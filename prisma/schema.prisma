@@ -2,15 +2,12 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider        = "prisma-client-js"
-  // output   = "../node_modules/.prisma/client"
-  previewFeatures = ["relationJoins"]
-  binaryTargets   = ["native", "rhel-openssl-3.0.x"]
+  provider = "prisma-client"
+  output   = "../src/generated/prisma/client"
 }
 
 datasource db {
   provider = "mysql"
-  url      = env("DATABASE_URL")
 }
 
 // ==================== AUTH.JS MODELS ====================

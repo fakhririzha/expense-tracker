@@ -2,7 +2,7 @@
 
 import { auth } from "@/auth";
 import prisma from "@/lib/db";
-import { Prisma, PaymentStatus, TransactionType } from "@prisma/client";
+import { Prisma, PaymentStatus, TransactionType } from "@/generated/prisma/client/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import {

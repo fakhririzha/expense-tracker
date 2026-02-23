@@ -18,7 +18,7 @@ import {
     convertPrice,
     getUnitLabel,
 } from "@/lib/unit-conversion";
-import { Prisma, UnitType } from "@prisma/client";
+import { Prisma, UnitType } from "@/generated/prisma/client/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 

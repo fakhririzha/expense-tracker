@@ -14,7 +14,7 @@ import {
   AlertCircle,
   Clock,
 } from "lucide-react";
-import { TransactionType } from "@prisma/client";
+import { TransactionType } from "@/generated/prisma/client/client";
 
 interface UpcomingBillsWidgetProps {
   events: CalendarEvent[];

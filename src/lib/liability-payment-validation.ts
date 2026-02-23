@@ -9,7 +9,7 @@
  */
 
 import prisma from "@/lib/db";
-import { FinancialAccount } from "@prisma/client";
+import { FinancialAccount } from "@/generated/prisma/client/client";
 
 export interface ValidationResult<T = unknown> {
   valid: boolean;

@@ -2,7 +2,7 @@
 
 import { auth } from "@/auth";
 import prisma from "@/lib/db";
-import { TransactionType } from "@prisma/client";
+import { TransactionType } from "@/generated/prisma/client/client";
 import { startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear } from "date-fns";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";

@@ -19,7 +19,7 @@ import { DayEventsSheet } from "./DayEventsSheet";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { TransactionType } from "@prisma/client";
+import { TransactionType } from "@/generated/prisma/client/client";
 
 interface CalendarViewProps {
   events: CalendarEvent[];
