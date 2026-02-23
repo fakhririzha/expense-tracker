@@ -88,7 +88,7 @@ export function EventBadge({
         )}
         title={`${name}: ${formatAmount(amount, currency)}`}
       >
-        <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", config.color)} />
+        <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", config.color)} />
         <span className="truncate font-medium">{name}</span>
       </button>
     );
@@ -103,7 +103,7 @@ export function EventBadge({
         config.bgColor
       )}
     >
-      <Icon className={cn("h-4 w-4 flex-shrink-0", config.textColor)} />
+      <Icon className={cn("h-4 w-4 shrink-0", config.textColor)} />
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate">{name}</p>
         <p className={cn("text-xs", config.textColor)}>
@@ -125,7 +125,7 @@ export function EventDot({ type }: { type: TransactionType }) {
 
   return (
     <span
-      className={cn("w-2 h-2 rounded-full flex-shrink-0", config.color)}
+      className={cn("w-2 h-2 rounded-full shrink-0", config.color)}
       title={type.toLowerCase().replace("_", " ")}
     />
   );
