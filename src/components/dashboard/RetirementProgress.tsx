@@ -27,9 +27,9 @@ export function RetirementProgress({
 }: RetirementProgressProps) {
   if (!targetAmount || targetAmount <= 0) {
     return (
-      <div className="rounded-lg border p-6">
-        <div className="flex items-center gap-2 text-muted-foreground">
-          <Target className="h-5 w-5" />
+      <div className="p-6 neo-border neo-shadow bg-secondary">
+        <div className="flex items-center gap-2 font-bold opacity-80">
+          <Target className="h-6 w-6" />
           <span>Set a retirement target to track your progress</span>
         </div>
       </div>
@@ -41,27 +41,27 @@ export function RetirementProgress({
   const isComplete = progress >= 100;
 
   return (
-    <div className="rounded-lg border p-6 space-y-4">
+    <div className="p-6 space-y-4 neo-border neo-shadow bg-card">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Target className="h-5 w-5 text-primary" />
-          <h3 className="font-semibold">Retirement Progress</h3>
+          <Target className="h-6 w-6 text-primary" />
+          <h3 className="text-xl font-bold font-heading uppercase">Retirement Progress</h3>
         </div>
         {isComplete && (
-          <span className="text-sm font-medium text-green-600 flex items-center gap-1">
-            <TrendingUp className="h-4 w-4" />
+          <span className="text-sm font-bold text-green-600 flex items-center gap-1 uppercase tracking-wider">
+            <TrendingUp className="h-5 w-5" />
             Goal Reached!
           </span>
         )}
       </div>
 
       <div className="space-y-2">
-        <Progress value={progress} className="h-3" />
-        <div className="flex justify-between text-sm">
-          <span className="text-muted-foreground">
+        <Progress value={progress} className="h-4 neo-border shadow-sm border-2 border-black" />
+        <div className="flex justify-between text-sm font-bold">
+          <span className="opacity-80">
             {progress.toFixed(1)}% complete
           </span>
-          <span className="font-medium">
+          <span className="font-black">
             {formatCurrency(currentNetWorth, currency)} /{" "}
             {formatCurrency(targetAmount, currency)}
           </span>
@@ -69,9 +69,9 @@ export function RetirementProgress({
       </div>
 
       {!isComplete && (
-        <div className="pt-2 border-t">
-          <p className="text-sm text-muted-foreground">
-            <span className="font-medium text-foreground">
+        <div className="pt-2 border-t-2 border-black">
+          <p className="text-sm font-bold opacity-80">
+            <span className="font-black text-foreground">
               {formatCurrency(remaining, currency)}
             </span>{" "}
             remaining to reach your goal
@@ -112,7 +112,7 @@ export function RetirementMilestones({
 
   return (
     <div className="space-y-4">
-      <h4 className="text-sm font-medium text-muted-foreground">Milestones</h4>
+      <h4 className="text-sm font-bold uppercase tracking-wider opacity-80">Milestones</h4>
       <div className="space-y-3">
         {milestones.map((milestone) => {
           const isReached = progress >= milestone.percent;
@@ -125,13 +125,13 @@ export function RetirementMilestones({
             >
               <div className="flex items-center gap-2">
                 <div
-                  className={`h-3 w-3 rounded-full ${
-                    isReached ? "bg-green-500" : "bg-muted"
+                  className={`h-4 w-4 border-2 border-black ${
+                    isReached ? "bg-primary" : "bg-white"
                   }`}
                 />
                 <span
-                  className={`text-sm ${
-                    isReached ? "text-foreground" : "text-muted-foreground"
+                  className={`text-sm font-bold ${
+                    isReached ? "text-foreground" : "opacity-60"
                   }`}
                 >
                   {milestone.label}
@@ -139,7 +139,7 @@ export function RetirementMilestones({
               </div>
               <span
                 className={`text-sm ${
-                  isReached ? "text-foreground font-medium" : "text-muted-foreground"
+                  isReached ? "text-foreground font-black" : "opacity-60 font-bold"
                 }`}
               >
                 {formatCurrency(milestoneValue, currency)}

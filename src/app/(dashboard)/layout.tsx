@@ -25,7 +25,6 @@ import {
     PieChart,
     Receipt,
     RefreshCw,
-    Settings,
     TrendingUp,
     Wallet,
 } from "lucide-react";
@@ -78,19 +77,19 @@ export default async function DashboardLayout({
     <CurrencyProvider mainCurrency={mainCurrency}>
       <div className="min-h-screen bg-background">
         {/* Top Navigation */}
-        <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60">
-          <div className="container flex h-14 items-center mx-auto">
-            <div className="mr-4 flex">
-              <Link href="/dashboard" className="mr-6 flex items-center space-x-2">
-                <TrendingUp className="h-6 w-6" />
-                <span className="font-bold">FinHealth</span>
+        <header className="sticky top-0 z-50 w-full border-b-4 border-black bg-white">
+          <div className="container flex h-16 items-center mx-auto px-4">
+            <div className="mr-8 flex items-center">
+              <Link href="/dashboard" className="mr-8 flex items-center space-x-2 bg-primary text-primary-foreground px-3 py-1.5 neo-border shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-y-px hover:translate-x-px hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] transition-all">
+                <TrendingUp className="h-5 w-5" />
+                <span className="font-black text-lg tracking-tight uppercase font-heading">FinHealth</span>
               </Link>
-              <nav className="flex items-center space-x-6 text-sm font-medium">
+              <nav className="flex items-center space-x-6 text-sm font-bold uppercase tracking-wider overflow-x-auto pb-1">
                 {navItems.map((item) => (
                   <Link
                     key={item.href}
                     href={item.href}
-                    className="flex items-center gap-2 transition-colors hover:text-foreground/80 text-foreground/60"
+                    className="flex items-center gap-2 transition-transform hover:text-primary hover:-translate-y-0.5 text-foreground whitespace-nowrap"
                   >
                     <item.icon className="h-4 w-4" />
                     {item.label}
@@ -103,15 +102,16 @@ export default async function DashboardLayout({
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
-                    variant="ghost"
-                    className="relative h-8 w-8 rounded-full"
+                    variant="outline"
+                    className="relative h-10 w-10 p-0 neo-border neo-shadow-sm rounded-none bg-secondary hover:bg-secondary/80"
                   >
-                    <Avatar className="h-8 w-8">
+                    <Avatar className="h-10 w-10 rounded-none">
                       <AvatarImage
                         src={session.user.image || undefined}
                         alt={session.user.name || "User"}
+                        className="rounded-none object-cover"
                       />
-                      <AvatarFallback>
+                      <AvatarFallback className="rounded-none bg-transparent font-bold">
                         {getInitials(session.user.name || "U")}
                       </AvatarFallback>
                     </Avatar>

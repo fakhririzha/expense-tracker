@@ -58,40 +58,40 @@ export default async function DashboardPage() {
 
       {/* Key Metrics Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
+        <Card className="bg-primary text-primary-foreground">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Net Worth</CardTitle>
-            <Wallet className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-xl font-bold font-heading">Net Worth</CardTitle>
+            <Wallet className="h-6 w-6 opacity-80" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-3xl font-black tracking-tight">
               {formatCurrency(metrics.netWorth, currency)}
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm font-medium opacity-80 mt-1">
               Total assets minus liabilities
             </p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="bg-secondary text-secondary-foreground">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
+            <CardTitle className="text-xl font-bold font-heading">
               Total Investments
             </CardTitle>
-            <BarChart3 className="h-4 w-4 text-muted-foreground" />
+            <BarChart3 className="h-6 w-6 opacity-80" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-3xl font-black tracking-tight">
               {formatCurrency(metrics.totalInvestments, currency)}
             </div>
             {"data" in portfolioSummary &&
               portfolioSummary.data &&
               !Array.isArray(portfolioSummary.data) && (
                 <p
-                  className={`text-xs ${
+                  className={`text-sm font-medium mt-1 ${
                     portfolioSummary.data.totalUnrealizedPnL >= 0
-                      ? "text-green-600"
-                      : "text-red-600"
+                      ? "text-green-800"
+                      : "text-red-800"
                   }`}
                 >
                   {formatPercentage(portfolioSummary.data.totalUnrealizedPnLPercent)}{" "}
@@ -101,31 +101,31 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="bg-card">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Cash & Savings</CardTitle>
-            <PiggyBank className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-xl font-bold font-heading">Cash & Savings</CardTitle>
+            <PiggyBank className="h-6 w-6 text-foreground opacity-80" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-3xl font-black tracking-tight">
               {formatCurrency(metrics.totalCash + metrics.totalSavings, currency)}
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm font-medium text-muted-foreground mt-1">
               {metrics.monthsOfRunway.toFixed(1)} months runway
             </p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="bg-destructive text-destructive-foreground">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Debt</CardTitle>
-            <CreditCard className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-xl font-bold font-heading">Total Debt</CardTitle>
+            <CreditCard className="h-6 w-6 opacity-80" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">
+            <div className="text-3xl font-black tracking-tight">
               {formatCurrency(metrics.totalDebt, currency)}
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm font-medium opacity-80 mt-1">
               {metrics.debtToWealthRatio.toFixed(1)}% debt-to-wealth
             </p>
           </CardContent>
@@ -150,13 +150,13 @@ export default async function DashboardPage() {
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
+            <CardTitle className="text-xl font-bold font-heading">
               Monthly Income (Avg)
             </CardTitle>
-            <TrendingUp className="h-4 w-4 text-green-500" />
+            <TrendingUp className="h-6 w-6 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">
+            <div className="text-3xl font-black text-green-600 tracking-tight">
               {formatCurrency(metrics.avgMonthlyIncome, currency)}
             </div>
             {transactionSummary.success && transactionSummary.data && (
@@ -169,13 +169,13 @@ export default async function DashboardPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
+            <CardTitle className="text-xl font-bold font-heading">
               Monthly Expenses (Avg)
             </CardTitle>
-            <TrendingDown className="h-4 w-4 text-red-500" />
+            <TrendingDown className="h-6 w-6 text-red-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">
+            <div className="text-3xl font-black text-red-600 tracking-tight">
               {formatCurrency(metrics.avgMonthlyExpenses, currency)}
             </div>
             <p className="text-xs text-muted-foreground">
@@ -191,26 +191,26 @@ export default async function DashboardPage() {
         !Array.isArray(portfolioSummary.data) && (
         <Card>
           <CardHeader>
-            <CardTitle>Investment Performance</CardTitle>
+            <CardTitle className="text-xl font-bold font-heading">Investment Performance</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid gap-4 md:grid-cols-4">
               <div>
-                <p className="text-sm text-muted-foreground">Portfolio Value</p>
-                <p className="text-xl font-bold">
+                <p className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Portfolio Value</p>
+                <p className="text-2xl font-black">
                   {formatCurrency(portfolioSummary.data.totalValue, currency)}
                 </p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Total Cost</p>
-                <p className="text-xl font-bold">
+                <p className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Total Cost</p>
+                <p className="text-2xl font-black">
                   {formatCurrency(portfolioSummary.data.totalCost, currency)}
                 </p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Unrealized P&L</p>
+                <p className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Unrealized P&L</p>
                 <p
-                  className={`text-xl font-bold ${
+                  className={`text-2xl font-black ${
                     portfolioSummary.data.totalUnrealizedPnL >= 0
                       ? "text-green-600"
                       : "text-red-600"
@@ -224,9 +224,9 @@ export default async function DashboardPage() {
                 </p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Realized P&L</p>
+                <p className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Realized P&L</p>
                 <p
-                  className={`text-xl font-bold ${
+                  className={`text-2xl font-black ${
                     portfolioSummary.data.totalRealizedPnL >= 0
                       ? "text-green-600"
                       : "text-red-600"
