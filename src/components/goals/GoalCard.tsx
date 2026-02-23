@@ -1,6 +1,6 @@
 "use client";
 
-import { deleteGoal } from "@/actions/goal-actions";
+import { useDeleteGoal } from "@/hooks/useGoalQueries";
 import {
   Card,
   CardContent,
@@ -18,7 +18,7 @@ import {
 import { cn, formatCurrency } from "@/lib/utils";
 import { GoalWithProgress } from "@/actions/goal-actions";
 import { MoreHorizontal, Pencil, Trash2, Plus, Calendar, CheckCircle2, Target } from "lucide-react";
-import { useState } from "react";
+
 
 interface GoalCardProps {
   goal: GoalWithProgress;
@@ -40,7 +40,8 @@ interface GoalCardProps {
  * @returns The React element rendering the goal card
  */
 export function GoalCard({ goal, onEdit, onAddProgress, onDelete }: GoalCardProps) {
-  const [isDeleting, setIsDeleting] = useState(false);
+  const deleteMutation = useDeleteGoal();
+  const isDeleting = deleteMutation.isPending;
 
   const getProgressColor = (percentage: number) => {
     if (percentage >= 75) return "bg-green-500";
@@ -60,19 +61,11 @@ export function GoalCard({ goal, onEdit, onAddProgress, onDelete }: GoalCardProp
 
   const handleDelete = async () => {
     if (!confirm("Are you sure you want to delete this goal?")) return;
-
-    setIsDeleting(true);
     try {
-      const result = await deleteGoal(goal.id);
-      if (result.success) {
-        onDelete();
-      } else {
-        alert(result.error || "Failed to delete goal");
-      }
+      await deleteMutation.mutateAsync(goal.id);
+      onDelete();
     } catch (error) {
-      alert("An unexpected error occurred");
-    } finally {
-      setIsDeleting(false);
+      alert(error instanceof Error ? error.message : "Failed to delete goal");
     }
   };
 

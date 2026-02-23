@@ -1,6 +1,6 @@
 "use client";
 
-import { TransactionType } from "@prisma/client";
+import { TransactionType } from "@/generated/prisma/client/client";
 import { cn } from "@/lib/utils";
 import {
   ArrowDownCircle,

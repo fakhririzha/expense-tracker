@@ -1,6 +1,5 @@
 "use client";
 
-import { deleteRecurringRule, getRecurringRules } from "@/actions/recurring-actions";
 import { AddRecurringRuleDialog } from "@/components/recurring/AddRecurringRuleDialog";
 import { EditRecurringRuleDialog } from "@/components/recurring/EditRecurringRuleDialog";
 import { Button } from "@/components/ui/button";
@@ -16,7 +15,8 @@ import {
 import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
 import { Calendar, Pencil, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
+import { useRecurringRules, useDeleteRecurringRule } from "@/hooks/useRecurringQueries";
 
 interface RecurringRule {
   id: string;
@@ -54,39 +54,20 @@ const TYPE_LABELS: Record<string, string> = {
  * @returns The page UI as a React element.
  */
 export default function RecurringPage() {
-  const [rules, setRules] = useState<RecurringRule[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [editingRule, setEditingRule] = useState<RecurringRule | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
-  const loadData = async () => {
-    setIsLoading(true);
-    try {
-      const result = await getRecurringRules();
-      if (result.success && result.data) {
-        setRules(result.data as RecurringRule[]);
-      }
-    } catch (error) {
-      console.error("Failed to load recurring rules:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadData();
-  }, []);
+  const { data: rules = [], isLoading } = useRecurringRules();
+  const deleteMutation = useDeleteRecurringRule();
 
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`Are you sure you want to delete "${name}"?`)) {
       return;
     }
-
-    const result = await deleteRecurringRule(id);
-    if (result.success) {
-      loadData();
-    } else {
-      alert(result.error || "Failed to delete recurring rule");
+    try {
+      await deleteMutation.mutateAsync(id);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Failed to delete recurring rule");
     }
   };
 
@@ -95,8 +76,8 @@ export default function RecurringPage() {
     setIsEditDialogOpen(true);
   };
 
-  const activeRules = rules.filter((r) => r.isActive);
-  const inactiveRules = rules.filter((r) => !r.isActive);
+  const activeRules = useMemo(() => (rules as RecurringRule[]).filter((r) => r.isActive), [rules]);
+  const inactiveRules = useMemo(() => (rules as RecurringRule[]).filter((r) => !r.isActive), [rules]);
 
   return (
     <div className="space-y-6">
@@ -107,7 +88,7 @@ export default function RecurringPage() {
             Manage your recurring income and expenses
           </p>
         </div>
-        <AddRecurringRuleDialog onSuccess={loadData} />
+        <AddRecurringRuleDialog onSuccess={() => {}} />
       </div>
 
       {/* Summary Card */}
@@ -291,7 +272,7 @@ export default function RecurringPage() {
         rule={editingRule}
         open={isEditDialogOpen}
         onOpenChange={setIsEditDialogOpen}
-        onSuccess={loadData}
+        onSuccess={() => {}}
       />
     </div>
   );

@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { getLiabilityPaymentHistory } from "@/actions/liability-payment-actions";
+import { useLiabilityPaymentHistory } from "@/hooks/useLiabilityQueries";
 import {
   Table,
   TableBody,
@@ -14,31 +13,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RotateCcw, AlertCircle, CheckCircle2 } from "lucide-react";
 import { format } from "date-fns";
-
-interface Payment {
-  id: string;
-  amount: number;
-  currency: string;
-  description: string | null;
-  date: Date;
-  referenceNumber: string | null;
-  paymentStatus: string;
-  account: {
-    name: string;
-    type: string;
-  };
-  toAccount: {
-    name: string;
-    type: string;
-  } | null;
-  liabilityPaymentAudit: {
-    sourceBalanceBefore: number;
-    sourceBalanceAfter: number;
-    targetBalanceBefore: number;
-    targetBalanceAfter: number;
-    isRolledBack: boolean;
-  } | null;
-}
 
 interface LiabilityPaymentHistoryProps {
   accountId?: string;
@@ -56,30 +30,8 @@ export function LiabilityPaymentHistory({
   accountId,
   limit = 20,
 }: LiabilityPaymentHistoryProps) {
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const loadPayments = useCallback(async () => {
-    setLoading(true);
-    try {
-      const result = await getLiabilityPaymentHistory(accountId, { limit });
-      if (result.success && result.data) {
-        setPayments(result.data as Payment[]);
-      } else {
-        setError(result.error || "Failed to load payments");
-      }
-    } catch (err) {
-      console.error(err);
-      setError("An error occurred while loading payments");
-    } finally {
-      setLoading(false);
-    }
-  }, [accountId, limit]);
-
-  useEffect(() => {
-    loadPayments();
-  }, [loadPayments]);
+  const { data: payments = [], isLoading: loading, error: queryError, refetch: loadPayments } = useLiabilityPaymentHistory(accountId, limit);
+  const error = queryError ? (queryError instanceof Error ? queryError.message : "An error occurred while loading payments") : null;
 
   function getStatusBadge(status: string) {
     switch (status) {
@@ -130,7 +82,7 @@ export function LiabilityPaymentHistory({
     return (
       <div className="rounded-md border border-destructive/50 p-4">
         <p className="text-sm text-destructive">{error}</p>
-        <Button variant="outline" size="sm" onClick={loadPayments} className="mt-2">
+        <Button variant="outline" size="sm" onClick={() => loadPayments()} className="mt-2">
           Retry
         </Button>
       </div>

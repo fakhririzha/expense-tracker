@@ -1,7 +1,7 @@
 "use client";
 
-import { getAccounts } from "@/actions/account-actions";
-import { updateRecurringRule } from "@/actions/recurring-actions";
+import { useAccounts } from "@/hooks/useAccountQueries";
+import { useUpdateRecurringRule } from "@/hooks/useRecurringQueries";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -38,7 +38,7 @@ import { cn } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
 import { CalendarIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -57,10 +57,7 @@ const editRecurringRuleFormSchema = z.object({
 
 type EditRecurringRuleFormValues = z.infer<typeof editRecurringRuleFormSchema>;
 
-interface Account {
-  id: string;
-  name: string;
-}
+
 
 interface RecurringRule {
   id: string;
@@ -104,8 +101,13 @@ export function EditRecurringRuleDialog({
   onOpenChange,
   onSuccess,
 }: EditRecurringRuleDialogProps) {
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [accounts, setAccounts] = useState<Account[]>([]);
+  const { data: accountsData = [] } = useAccounts();
+  const updateMutation = useUpdateRecurringRule();
+
+  const accounts = accountsData.map((a: { id: string; name: string }) => ({
+    id: a.id,
+    name: a.name,
+  }));
 
   const form = useForm<EditRecurringRuleFormValues>({
     resolver: zodResolver(editRecurringRuleFormSchema),
@@ -123,29 +125,6 @@ export function EditRecurringRuleDialog({
     },
   });
 
-  // Load accounts when dialog opens
-  useEffect(() => {
-    /**
-     * Load accounts from the backend and update component state with the retrieved accounts.
-     *
-     * When the API call succeeds and returns data, the results are mapped to objects with `id`
-     * and `name` and stored via `setAccounts`.
-     */
-    async function loadAccounts() {
-      const result = await getAccounts();
-      if (result.success && result.data) {
-        setAccounts(
-          result.data.map((a: { id: string; name: string }) => ({
-            id: a.id,
-            name: a.name,
-          }))
-        );
-      }
-    }
-    if (open) {
-      loadAccounts();
-    }
-  }, [open]);
 
   // Reset form with rule data when rule changes
   useEffect(() => {
@@ -168,35 +147,28 @@ export function EditRecurringRuleDialog({
   const onSubmit = async (data: EditRecurringRuleFormValues) => {
     if (!rule) return;
 
-    setIsSubmitting(true);
     try {
-      const result = await updateRecurringRule(rule.id, {
-        name: data.name,
-        amount: data.amount,
-        currency: data.currency,
-        type: data.type,
-        interval: data.interval,
-        nextDueDate: data.nextDueDate,
-        endDate: data.endDate || undefined,
-        isActive: data.isActive,
-        description: data.description || undefined,
-        accountId: data.accountId || undefined,
+      await updateMutation.mutateAsync({
+        id: rule.id,
+        data: {
+          name: data.name,
+          amount: data.amount,
+          currency: data.currency,
+          type: data.type,
+          interval: data.interval,
+          nextDueDate: data.nextDueDate,
+          endDate: data.endDate || undefined,
+          isActive: data.isActive,
+          description: data.description || undefined,
+          accountId: data.accountId || undefined,
+        },
       });
-
-      if (result.success) {
-        onOpenChange(false);
-        onSuccess?.();
-      } else {
-        form.setError("root", {
-          message: result.error || "Failed to update recurring rule",
-        });
-      }
+      onOpenChange(false);
+      onSuccess?.();
     } catch (error) {
       form.setError("root", {
-        message: "An unexpected error occurred",
+        message: error instanceof Error ? error.message : "Failed to update recurring rule",
       });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -496,12 +468,12 @@ export function EditRecurringRuleDialog({
                 type="button"
                 variant="outline"
                 onClick={() => onOpenChange(false)}
-                disabled={isSubmitting}
+                disabled={updateMutation.isPending}
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Saving..." : "Save Changes"}
+              <Button type="submit" disabled={updateMutation.isPending}>
+                {updateMutation.isPending ? "Saving..." : "Save Changes"}
               </Button>
             </DialogFooter>
           </form>

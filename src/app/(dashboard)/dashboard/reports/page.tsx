@@ -11,26 +11,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
 import { Download, Loader2, TrendingUp, TrendingDown, Wallet, ArrowUpRight, ArrowDownRight } from "lucide-react";
-import { useEffect, useState, useCallback } from "react";
+import { useState, useMemo } from "react";
 import { DateRange } from "react-day-picker";
 import {
-  getSpendingTrends,
-  getCategoryBreakdown,
-  getIncomeVsExpense,
-  getNetWorthHistory,
-  getMonthlySummary,
-  type SpendingTrendPoint,
-  type CategoryBreakdownItem,
-  type IncomeVsExpensePoint,
-  type NetWorthPoint,
-  type MonthlySummary,
-} from "@/actions/report-actions";
+  useSpendingTrends,
+  useCategoryBreakdown,
+  useIncomeVsExpense,
+  useNetWorthHistory,
+  useReportMonthlySummary,
+} from "@/hooks/useReportQueries";
 import { useCurrency } from "@/contexts/CurrencyContext";
 
 /**
  * Renders the Reports & Analytics dashboard page with controls, KPI cards, and interactive charts.
- *
- * Presents a date range picker, grouping controls, and tabbed views (Overview, Spending, Categories, Income vs Expense, Net Worth). Loads report datasets for the selected range and grouping, computes overview statistics (total income, total expenses, net flow, current net worth), and displays corresponding charts and category breakdowns.
  *
  * @returns The Reports & Analytics page as a React element.
  */
@@ -38,82 +31,59 @@ export default function ReportsPage() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [groupBy, setGroupBy] = useState<"day" | "week" | "month">("week");
   const { mainCurrency } = useCurrency();
-  
-  // Data states
-  const [spendingTrends, setSpendingTrends] = useState<SpendingTrendPoint[]>([]);
-  const [expenseCategories, setExpenseCategories] = useState<CategoryBreakdownItem[]>([]);
-  const [incomeCategories, setIncomeCategories] = useState<CategoryBreakdownItem[]>([]);
-  const [incomeVsExpense, setIncomeVsExpense] = useState<IncomeVsExpensePoint[]>([]);
-  const [netWorthHistory, setNetWorthHistory] = useState<NetWorthPoint[]>([]);
-  const [monthlySummary, setMonthlySummary] = useState<MonthlySummary | null>(null);
-  
-  const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
 
-  // Load all report data
-  const loadReportData = useCallback(async () => {
-    if (!dateRange?.from || !dateRange?.to) return;
-    
-    setIsLoading(true);
-    try {
-      const startDate = dateRange.from;
-      const endDate = dateRange.to;
-      
-      // Calculate months difference for income vs expense and net worth
-      const monthsDiff = Math.ceil(
-        (endDate.getTime() - startDate.getTime()) / (30 * 24 * 60 * 60 * 1000)
-      ) || 1;
+  const hasDateRange = !!(dateRange?.from && dateRange?.to);
+  const startDate = useMemo(() => dateRange?.from ?? new Date(), [dateRange?.from]);
+  const endDate = useMemo(() => dateRange?.to ?? new Date(), [dateRange?.to]);
 
-      // Get current month/year for monthly summary
-      const currentMonth = new Date().getMonth() + 1;
-      const currentYear = new Date().getFullYear();
+  const monthsDiff = useMemo(() => {
+    if (!hasDateRange) return 1;
+    return Math.ceil((endDate.getTime() - startDate.getTime()) / (30 * 24 * 60 * 60 * 1000)) || 1;
+  }, [hasDateRange, startDate, endDate]);
 
-      const [
-        trendsResult,
-        expenseCategoriesResult,
-        incomeCategoriesResult,
-        incomeVsExpenseResult,
-        netWorthResult,
-        summaryResult,
-      ] = await Promise.all([
-        getSpendingTrends({ startDate, endDate, groupBy }),
-        getCategoryBreakdown({ startDate, endDate, type: "EXPENSE" }),
-        getCategoryBreakdown({ startDate, endDate, type: "INCOME" }),
-        getIncomeVsExpense({ months: Math.min(monthsDiff, 12) }),
-        getNetWorthHistory({ months: Math.min(monthsDiff, 12) }),
-        getMonthlySummary({ year: currentYear, month: currentMonth }),
-      ]);
+  const currentMonth = new Date().getMonth() + 1;
+  const currentYear = new Date().getFullYear();
 
-      if (trendsResult.success && trendsResult.data) {
-        setSpendingTrends(trendsResult.data);
-      }
-      if (expenseCategoriesResult.success && expenseCategoriesResult.data) {
-        setExpenseCategories(expenseCategoriesResult.data);
-      }
-      if (incomeCategoriesResult.success && incomeCategoriesResult.data) {
-        setIncomeCategories(incomeCategoriesResult.data);
-      }
-      if (incomeVsExpenseResult.success && incomeVsExpenseResult.data) {
-        setIncomeVsExpense(incomeVsExpenseResult.data);
-      }
-      if (netWorthResult.success && netWorthResult.data) {
-        setNetWorthHistory(netWorthResult.data);
-      }
-      if (summaryResult.success && summaryResult.data) {
-        setMonthlySummary(summaryResult.data);
-      }
-    } catch (error) {
-      console.error("Failed to load report data:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [dateRange, groupBy]);
+  // Queries — all enabled only when date range is selected
+  const { data: spendingTrends = [], isLoading: trendsLoading } = useSpendingTrends({
+    startDate,
+    endDate,
+    groupBy,
+    enabled: hasDateRange,
+  });
 
-  useEffect(() => {
-    if (dateRange?.from && dateRange?.to) {
-      loadReportData();
-    }
-  }, [dateRange, groupBy, loadReportData]);
+  const { data: expenseCategories = [], isLoading: expCatLoading } = useCategoryBreakdown({
+    startDate,
+    endDate,
+    type: "EXPENSE",
+    enabled: hasDateRange,
+  });
+
+  const { data: incomeCategories = [] } = useCategoryBreakdown({
+    startDate,
+    endDate,
+    type: "INCOME",
+    enabled: hasDateRange,
+  });
+
+  const { data: incomeVsExpense = [] } = useIncomeVsExpense(
+    Math.min(monthsDiff, 12),
+    hasDateRange
+  );
+
+  const { data: netWorthHistory = [] } = useNetWorthHistory(
+    Math.min(monthsDiff, 12),
+    hasDateRange
+  );
+
+  const { data: monthlySummary } = useReportMonthlySummary(
+    currentYear,
+    currentMonth,
+    hasDateRange
+  );
+
+  const isLoading = trendsLoading || expCatLoading;
 
   // Calculate overview stats
   const totalExpenses = expenseCategories.reduce((sum, c) => sum + c.amount, 0);

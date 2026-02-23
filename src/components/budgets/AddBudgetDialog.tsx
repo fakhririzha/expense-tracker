@@ -1,6 +1,6 @@
 "use client";
 
-import { createBudget } from "@/actions/budget-actions";
+import { useCreateBudget } from "@/hooks/useBudgetQueries";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -91,8 +91,8 @@ interface AddBudgetDialogProps {
  */
 export function AddBudgetDialog({ onSuccess }: AddBudgetDialogProps) {
   const [open, setOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
+  const createMutation = useCreateBudget();
 
   const form = useForm<BudgetFormValues>({
     resolver: zodResolver(budgetFormSchema),
@@ -133,25 +133,15 @@ export function AddBudgetDialog({ onSuccess }: AddBudgetDialogProps) {
   }, [open]);
 
   const onSubmit = async (data: BudgetFormValues) => {
-    setIsSubmitting(true);
     try {
-      const result = await createBudget(data);
-
-      if (result.success) {
-        setOpen(false);
-        form.reset();
-        onSuccess?.();
-      } else {
-        form.setError("root", {
-          message: result.error || "Failed to create budget",
-        });
-      }
+      await createMutation.mutateAsync(data);
+      setOpen(false);
+      form.reset();
+      onSuccess?.();
     } catch (error) {
       form.setError("root", {
-        message: "An unexpected error occurred",
+        message: error instanceof Error ? error.message : "Failed to create budget",
       });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -357,12 +347,12 @@ export function AddBudgetDialog({ onSuccess }: AddBudgetDialogProps) {
                 type="button"
                 variant="outline"
                 onClick={() => setOpen(false)}
-                disabled={isSubmitting}
+                disabled={createMutation.isPending}
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Creating..." : "Create Budget"}
+              <Button type="submit" disabled={createMutation.isPending}>
+                {createMutation.isPending ? "Creating..." : "Create Budget"}
               </Button>
             </DialogFooter>
           </form>

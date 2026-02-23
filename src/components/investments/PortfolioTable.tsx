@@ -28,7 +28,7 @@ import {
     TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { formatCurrency, formatPercentage } from "@/lib/utils";
-import { UnitType } from "@prisma/client";
+import { UnitType } from "@/generated/prisma/client/client";
 import { TradeHistoryDialog } from "./TradeHistoryDialog";
 
 export interface PortfolioAsset {

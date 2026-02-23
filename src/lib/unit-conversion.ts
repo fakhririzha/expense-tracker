@@ -3,7 +3,7 @@
  * Handles conversion between troy ounces and grams for precious metals
  */
 
-import { UnitType } from "@prisma/client";
+import { UnitType } from "@/generated/prisma/client/client";
 
 // Conversion factor: 1 troy ounce = 31.1035 grams
 export const TROY_OUNCE_TO_GRAM = 31.1035;

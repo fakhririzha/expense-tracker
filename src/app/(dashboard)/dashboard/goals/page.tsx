@@ -1,6 +1,6 @@
 "use client";
 
-import { getGoalsSummary, getGoalsStats, GoalWithProgress } from "@/actions/goal-actions";
+import { GoalWithProgress } from "@/actions/goal-actions";
 import { AddGoalDialog } from "@/components/goals/AddGoalDialog";
 import { EditGoalDialog } from "@/components/goals/EditGoalDialog";
 import { GoalCard } from "@/components/goals/GoalCard";
@@ -14,7 +14,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
+import { useGoalsSummary, useGoalsStats } from "@/hooks/useGoalQueries";
 
 type SortOption = "progress" | "targetDate" | "amount" | "name";
 type FilterOption = "all" | "inProgress" | "completed";
@@ -22,21 +23,9 @@ type FilterOption = "all" | "inProgress" | "completed";
 /**
  * Renders the "Savings Goals" dashboard page with goal list, summary, filters, sorting, and dialogs.
  *
- * Fetches goals summary and stats on mount, manages loading state, client-side filtering and sorting,
- * and exposes handlers for creating, editing, adding progress to, and deleting goals (which trigger a data reload).
- *
- * @returns The JSX element for the Savings Goals dashboard, including summary cards, filter/sort controls, goal cards, and modal dialogs.
+ * @returns The JSX element for the Savings Goals dashboard.
  */
 export default function GoalsPage() {
-  const [goals, setGoals] = useState<GoalWithProgress[]>([]);
-  const [stats, setStats] = useState({
-    totalSaved: 0,
-    totalTarget: 0,
-    inProgressCount: 0,
-    completedCount: 0,
-    totalGoals: 0,
-  });
-  const [isLoading, setIsLoading] = useState(true);
   const [editingGoal, setEditingGoal] = useState<GoalWithProgress | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [progressGoal, setProgressGoal] = useState<GoalWithProgress | null>(null);
@@ -44,31 +33,8 @@ export default function GoalsPage() {
   const [sortBy, setSortBy] = useState<SortOption>("progress");
   const [filterBy, setFilterBy] = useState<FilterOption>("all");
 
-  const loadData = async () => {
-    setIsLoading(true);
-    try {
-      const [summaryResult, statsResult] = await Promise.all([
-        getGoalsSummary(),
-        getGoalsStats(),
-      ]);
-
-      if (summaryResult.success && summaryResult.data) {
-        setGoals(summaryResult.data);
-      }
-
-      if (statsResult.success && statsResult.data) {
-        setStats(statsResult.data);
-      }
-    } catch (error) {
-      console.error("Failed to load goals:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadData();
-  }, []);
+  const { data: goals = [], isLoading } = useGoalsSummary();
+  const { data: stats = { totalSaved: 0, totalTarget: 0, inProgressCount: 0, completedCount: 0, totalGoals: 0 } } = useGoalsStats();
 
   const handleEdit = (goal: GoalWithProgress) => {
     setEditingGoal(goal);
@@ -80,37 +46,30 @@ export default function GoalsPage() {
     setIsProgressDialogOpen(true);
   };
 
-  // Filter goals
-  const filteredGoals = goals.filter((goal) => {
-    switch (filterBy) {
-      case "inProgress":
-        return !goal.isCompleted;
-      case "completed":
-        return goal.isCompleted;
-      default:
-        return true;
-    }
-  });
+  // Filter and sort goals
+  const sortedGoals = useMemo(() => {
+    const filtered = (goals as GoalWithProgress[]).filter((goal) => {
+      switch (filterBy) {
+        case "inProgress": return !goal.isCompleted;
+        case "completed": return goal.isCompleted;
+        default: return true;
+      }
+    });
 
-  // Sort goals
-  const sortedGoals = [...filteredGoals].sort((a, b) => {
-    switch (sortBy) {
-      case "progress":
-        return b.percentage - a.percentage;
-      case "targetDate":
-        // Goals without target date go to the end
-        if (!a.targetDate && !b.targetDate) return 0;
-        if (!a.targetDate) return 1;
-        if (!b.targetDate) return -1;
-        return new Date(a.targetDate).getTime() - new Date(b.targetDate).getTime();
-      case "amount":
-        return b.targetAmount - a.targetAmount;
-      case "name":
-        return a.name.localeCompare(b.name);
-      default:
-        return 0;
-    }
-  });
+    return [...filtered].sort((a, b) => {
+      switch (sortBy) {
+        case "progress": return b.percentage - a.percentage;
+        case "targetDate":
+          if (!a.targetDate && !b.targetDate) return 0;
+          if (!a.targetDate) return 1;
+          if (!b.targetDate) return -1;
+          return new Date(a.targetDate).getTime() - new Date(b.targetDate).getTime();
+        case "amount": return b.targetAmount - a.targetAmount;
+        case "name": return a.name.localeCompare(b.name);
+        default: return 0;
+      }
+    });
+  }, [goals, filterBy, sortBy]);
 
   if (isLoading) {
     return (
@@ -129,7 +88,7 @@ export default function GoalsPage() {
             Track your progress towards financial goals
           </p>
         </div>
-        <AddGoalDialog onSuccess={loadData} />
+        <AddGoalDialog onSuccess={() => {}} />
       </div>
 
       {/* Summary Cards */}
@@ -189,7 +148,7 @@ export default function GoalsPage() {
           </p>
           {filterBy === "all" && (
             <div className="mt-4">
-              <AddGoalDialog onSuccess={loadData} />
+              <AddGoalDialog onSuccess={() => {}} />
             </div>
           )}
         </div>
@@ -201,7 +160,7 @@ export default function GoalsPage() {
               goal={goal}
               onEdit={handleEdit}
               onAddProgress={handleAddProgress}
-              onDelete={loadData}
+              onDelete={() => {}}
             />
           ))}
         </div>
@@ -212,7 +171,7 @@ export default function GoalsPage() {
         goal={editingGoal}
         open={isEditDialogOpen}
         onOpenChange={setIsEditDialogOpen}
-        onSuccess={loadData}
+        onSuccess={() => {}}
       />
 
       {/* Progress Dialog */}
@@ -220,7 +179,7 @@ export default function GoalsPage() {
         goal={progressGoal}
         open={isProgressDialogOpen}
         onOpenChange={setIsProgressDialogOpen}
-        onSuccess={loadData}
+        onSuccess={() => {}}
       />
     </div>
   );

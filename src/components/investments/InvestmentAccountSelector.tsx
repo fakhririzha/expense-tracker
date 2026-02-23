@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { getInvestmentAccountsAction } from "@/actions/investment-actions";
+import { useEffect } from "react";
+import { useInvestmentAccounts } from "@/hooks/useInvestmentQueries";
 import {
   Select,
   SelectContent,
@@ -11,13 +11,6 @@ import {
 } from "@/components/ui/select";
 import { formatCurrency } from "@/lib/utils";
 import { Loader2, Wallet } from "lucide-react";
-
-interface InvestmentAccount {
-  id: string;
-  name: string;
-  balance: number;
-  currency: string;
-}
 
 interface InvestmentAccountSelectorProps {
   value: string;
@@ -32,18 +25,11 @@ interface InvestmentAccountSelectorProps {
  * A dropdown selector component for choosing an INVESTMENT-type financial account.
  * 
  * Features:
- * - Automatically fetches active INVESTMENT accounts for the current user
+ * - Automatically fetches active INVESTMENT accounts via useInvestmentAccounts hook
  * - Displays account balance next to each option
  * - Shows loading state while fetching accounts
  * - Handles error states gracefully
  * - Optional balance display
- * 
- * @param value - The currently selected account ID
- * @param onChange - Callback when selection changes
- * @param disabled - Whether the selector is disabled
- * @param showBalance - Whether to display account balances (default: true)
- * @param label - Custom label text (default: "Investment Account")
- * @param placeholder - Custom placeholder text
  */
 export function InvestmentAccountSelector({
   value,
@@ -53,38 +39,7 @@ export function InvestmentAccountSelector({
   label = "Investment Account",
   placeholder = "Select an investment account",
 }: InvestmentAccountSelectorProps) {
-  const [accounts, setAccounts] = useState<InvestmentAccount[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    /**
-     * Fetches active investment accounts and updates component state accordingly.
-     *
-     * Updates `accounts`, `isLoading`, and `error`: sets `isLoading` while fetching, populates `accounts` on success, and sets an error message and clears `accounts` on failure or exception. Ensures `isLoading` is cleared when finished.
-     */
-    async function loadAccounts() {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const result = await getInvestmentAccountsAction();
-        if (result.success && result.data) {
-          setAccounts(result.data);
-        } else {
-          setError(result.error || "Failed to load accounts");
-          setAccounts([]);
-        }
-      } catch (err) {
-        console.error("Error loading investment accounts:", err);
-        setError("An unexpected error occurred");
-        setAccounts([]);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-
-    loadAccounts();
-  }, []);
+  const { data: accounts = [], isLoading, error } = useInvestmentAccounts();
 
   // Auto-select first account if none selected and accounts available
   useEffect(() => {
@@ -105,7 +60,7 @@ export function InvestmentAccountSelector({
   if (error) {
     return (
       <div className="text-sm text-destructive">
-        {error}
+        {error instanceof Error ? error.message : "Failed to load accounts"}
       </div>
     );
   }
@@ -118,7 +73,7 @@ export function InvestmentAccountSelector({
     );
   }
 
-  const selectedAccount = accounts.find((acc) => acc.id === value);
+  const selectedAccount = accounts.find((acc: { id: string }) => acc.id === value);
 
   return (
     <div className="space-y-2">
@@ -140,7 +95,7 @@ export function InvestmentAccountSelector({
           </SelectValue>
         </SelectTrigger>
         <SelectContent>
-          {accounts.map((account) => (
+          {accounts.map((account: { id: string; name: string; balance: number; currency: string }) => (
             <SelectItem key={account.id} value={account.id}>
               <div className="flex items-center justify-between gap-4 w-full">
                 <span>{account.name}</span>

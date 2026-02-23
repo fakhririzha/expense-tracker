@@ -1,16 +1,17 @@
 "use client";
 
-import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { CalendarIcon, Loader2, MinusCircle } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
-import { getSellableInvestments, recordTrade } from "@/actions/investment-actions";
+import {
+  useSellableInvestments,
+  useRecordTrade,
+} from "@/hooks/useInvestmentQueries";
 import { InvestmentAccountSelector } from "./InvestmentAccountSelector";
-import { tradeHistoryKeys } from "@/hooks/useTradeHistory";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -45,14 +46,6 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
-interface SellableInvestment {
-  id: string;
-  symbol: string;
-  name: string | null;
-  quantity: number;
-  avgBuyPrice: number;
-  currency: string;
-}
 
 const sellTradeFormSchema = z.object({
   assetId: z.string().min(1, "Asset is required"),
@@ -81,11 +74,9 @@ interface RecordSellTradeDialogProps {
  * @returns The dialog React element that contains the Record Sell Trade form
  */
 export function RecordSellTradeDialog({ onSuccess }: RecordSellTradeDialogProps) {
-  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [investments, setInvestments] = useState<SellableInvestment[]>([]);
-  const [isLoadingInvestments, setIsLoadingInvestments] = useState(false);
+  const { data: investments = [], isLoading: isLoadingInvestments } = useSellableInvestments();
+  const recordTradeMutation = useRecordTrade();
 
   const form = useForm<SellTradeFormValues>({
     resolver: zodResolver(sellTradeFormSchema),
@@ -118,34 +109,6 @@ export function RecordSellTradeDialog({ onSuccess }: RecordSellTradeDialogProps)
     return true;
   };
 
-  useEffect(() => {
-    /**
-     * Fetches the list of sellable investments and updates component state accordingly.
-     *
-     * Updates `investments` with the fetched data on success, clears `investments` on failure,
-     * and toggles the `isLoadingInvestments` loading flag for the duration of the request.
-     */
-    async function loadInvestments() {
-      setIsLoadingInvestments(true);
-      try {
-        const result = await getSellableInvestments();
-        if (result.success && result.data) {
-          setInvestments(result.data as SellableInvestment[]);
-        } else {
-          setInvestments([]);
-        }
-      } catch (error) {
-        console.error("Failed to load sellable investments:", error);
-        setInvestments([]);
-      } finally {
-        setIsLoadingInvestments(false);
-      }
-    }
-
-    if (open) {
-      loadInvestments();
-    }
-  }, [open]);
 
   const onSubmit = async (data: SellTradeFormValues) => {
     // Additional validation before submission
@@ -155,31 +118,18 @@ export function RecordSellTradeDialog({ onSuccess }: RecordSellTradeDialogProps)
       return;
     }
 
-    setIsSubmitting(true);
     try {
-      const result = await recordTrade({
+      await recordTradeMutation.mutateAsync({
         ...data,
         type: "SELL",
       });
-
-      if (result.success) {
-        // Invalidate trade history cache for real-time updates
-        queryClient.invalidateQueries({ queryKey: tradeHistoryKeys.all });
-
-        setOpen(false);
-        form.reset();
-        onSuccess?.();
-      } else {
-        form.setError("root", {
-          message: result.error || "Failed to record sell trade",
-        });
-      }
-    } catch {
+      setOpen(false);
+      form.reset();
+      onSuccess?.();
+    } catch (error) {
       form.setError("root", {
-        message: "An unexpected error occurred",
+        message: error instanceof Error ? error.message : "Failed to record sell trade",
       });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -416,7 +366,7 @@ export function RecordSellTradeDialog({ onSuccess }: RecordSellTradeDialogProps)
                     <InvestmentAccountSelector
                       value={field.value}
                       onChange={field.onChange}
-                      disabled={isSubmitting}
+                      disabled={recordTradeMutation.isPending}
                       showBalance={true}
                       label="Investment Account"
                       placeholder="Select account to credit proceeds"
@@ -471,20 +421,20 @@ export function RecordSellTradeDialog({ onSuccess }: RecordSellTradeDialogProps)
                 type="button"
                 variant="outline"
                 onClick={() => setOpen(false)}
-                disabled={isSubmitting}
+                disabled={recordTradeMutation.isPending}
               >
                 Cancel
               </Button>
               <Button
                 type="submit"
                 disabled={
-                  isSubmitting ||
+                  recordTradeMutation.isPending ||
                   !selectedAssetId ||
                   selectedQuantity <= 0 ||
                   selectedQuantity > maxAvailableQuantity
                 }
               >
-                {isSubmitting ? (
+                {recordTradeMutation.isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Recording...

@@ -10,7 +10,7 @@ import {
   addDays,
   isSameDay,
 } from "date-fns";
-import { TransactionType } from "@prisma/client";
+import { TransactionType } from "@/generated/prisma/client/client";
 
 // Types for calendar events
 export interface CalendarEvent {

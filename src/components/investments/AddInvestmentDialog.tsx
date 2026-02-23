@@ -1,10 +1,11 @@
 "use client";
 
-import { useQueryClient } from "@tanstack/react-query";
-
-import { createInvestmentAsset, searchSymbolsAction } from "@/actions/investment-actions";
+import { isPreciousMetal } from "@/lib/unit-conversion";
+import {
+  useCreateInvestmentAsset,
+  useSearchSymbols,
+} from "@/hooks/useInvestmentQueries";
 import { InvestmentAccountSelector } from "./InvestmentAccountSelector";
-import { tradeHistoryKeys } from "@/hooks/useTradeHistory";
 import { Button } from "@/components/ui/button";
 import {
     Command,
@@ -46,10 +47,9 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { isPreciousMetal } from "@/lib/unit-conversion";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Check, ChevronsUpDown, Loader2, Plus, Search } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -90,14 +90,12 @@ interface AddInvestmentDialogProps {
  * @returns The dialog React element that contains the Add/Update Investment form
  */
 export function AddInvestmentDialog({ onSuccess }: AddInvestmentDialogProps) {
-  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
   const [selectedSymbol, setSelectedSymbol] = useState<SearchResult | null>(null);
+  const createMutation = useCreateInvestmentAsset();
+  const { data: searchResults = [], isLoading: isSearching } = useSearchSymbols(searchQuery);
 
   const form = useForm<InvestmentFormValues>({
     resolver: zodResolver(investmentFormSchema),
@@ -116,39 +114,6 @@ export function AddInvestmentDialog({ onSuccess }: AddInvestmentDialogProps) {
   const watchedSymbol = form.watch("symbol");
   const isSymbolPreciousMetal = isPreciousMetal(watchedSymbol);
 
-  // Debounced search function
-  const debouncedSearch = useCallback(
-    async (query: string) => {
-      if (query.length < 2) {
-        setSearchResults([]);
-        return;
-      }
-
-      setIsSearching(true);
-      try {
-        const result = await searchSymbolsAction(query);
-        if (result.success && result.data) {
-          setSearchResults(result.data as SearchResult[]);
-        } else {
-          setSearchResults([]);
-        }
-      } catch {
-        setSearchResults([]);
-      } finally {
-        setIsSearching(false);
-      }
-    },
-    []
-  );
-
-  // Debounce effect
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      debouncedSearch(searchQuery);
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [searchQuery, debouncedSearch]);
 
   const handleSelectSymbol = (result: SearchResult) => {
     setSelectedSymbol(result);
@@ -164,30 +129,17 @@ export function AddInvestmentDialog({ onSuccess }: AddInvestmentDialogProps) {
   };
 
   const onSubmit = async (data: InvestmentFormValues) => {
-    setIsSubmitting(true);
     try {
-      const result = await createInvestmentAsset(data);
-
-      if (result.success) {
-        // Invalidate trade history cache for real-time updates
-        queryClient.invalidateQueries({ queryKey: tradeHistoryKeys.all });
-        
-        setOpen(false);
-        form.reset();
-        setSelectedSymbol(null);
-        setSearchQuery("");
-        onSuccess?.();
-      } else {
-        form.setError("root", {
-          message: result.error || "Failed to create investment",
-        });
-      }
-    } catch {
+      await createMutation.mutateAsync(data);
+      setOpen(false);
+      form.reset();
+      setSelectedSymbol(null);
+      setSearchQuery("");
+      onSuccess?.();
+    } catch (error) {
       form.setError("root", {
-        message: "An unexpected error occurred",
+        message: error instanceof Error ? error.message : "Failed to create investment",
       });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -401,7 +353,7 @@ export function AddInvestmentDialog({ onSuccess }: AddInvestmentDialogProps) {
                     <InvestmentAccountSelector
                       value={field.value}
                       onChange={field.onChange}
-                      disabled={isSubmitting}
+                      disabled={createMutation.isPending}
                       showBalance={true}
                     />
                   </FormControl>
@@ -421,12 +373,12 @@ export function AddInvestmentDialog({ onSuccess }: AddInvestmentDialogProps) {
                 type="button"
                 variant="outline"
                 onClick={() => setOpen(false)}
-                disabled={isSubmitting}
+                disabled={createMutation.isPending}
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? (
+              <Button type="submit" disabled={createMutation.isPending}>
+                {createMutation.isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Saving...

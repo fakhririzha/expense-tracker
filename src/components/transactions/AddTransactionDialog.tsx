@@ -1,7 +1,7 @@
 "use client";
 
-import { getAccounts } from "@/actions/account-actions";
-import { createTransaction } from "@/actions/transaction-actions";
+import { useAccounts } from "@/hooks/useAccountQueries";
+import { useCreateTransaction } from "@/hooks/useTransactionQueries";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -83,9 +83,16 @@ interface AddTransactionDialogProps {
  */
 export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
   const [open, setOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+
+  const { data: accountsData = [] } = useAccounts();
+  const createMutation = useCreateTransaction();
+
+  const accounts = accountsData.map((a: { id: string; name: string; type: string }) => ({
+    id: a.id,
+    name: a.name,
+    type: a.type,
+  }));
 
   const form = useForm<TransactionFormValues>({
     resolver: zodResolver(transactionFormSchema),
@@ -106,32 +113,8 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
 
   useEffect(() => {
     /**
-     * Loads account data and updates the component's accounts state with mapped account objects.
-     *
-     * Fetches accounts and, if the request succeeds and returns data, maps each account to an object
-     * containing `id`, `name`, and `type`, then calls `setAccounts` with the resulting array. If the
-     * fetch fails or returns no data, the accounts state is left unchanged.
+     * Loads category data based on the selected transaction type.
      */
-    async function loadData() {
-      const [accountsResult] = await Promise.all([getAccounts()]);
-
-      if (accountsResult.success && accountsResult.data) {
-        setAccounts(
-          accountsResult.data.map((a: { id: string; name: string; type: string }) => ({
-            id: a.id,
-            name: a.name,
-            type: a.type,
-          }))
-        );
-      }
-    }
-    if (open) {
-      loadData();
-    }
-  }, [open]);
-
-  // Fetch categories from database based on transaction type
-  useEffect(() => {
     async function loadCategories() {
       try {
         // Import prisma client
@@ -150,29 +133,18 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
   }, [open, selectedType]);
 
   const onSubmit = async (data: TransactionFormValues) => {
-    setIsSubmitting(true);
     try {
-      const result = await createTransaction({
+      await createMutation.mutateAsync({
         ...data,
         isRecurring: false,
       });
-
-      if (result.success) {
-        setOpen(false);
-        form.reset();
-        onSuccess?.();
-      } else {
-        form.setError("root", {
-          message: result.error || "Failed to create transaction",
-        });
-      }
+      setOpen(false);
+      form.reset();
+      onSuccess?.();
     } catch (error) {
       form.setError("root", {
-        message: "An unexpected error occurred: " + error,
+        message: error instanceof Error ? error.message : "Failed to create transaction",
       });
-      console.error("Create transaction error: ", error);
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -438,12 +410,12 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
                 type="button"
                 variant="outline"
                 onClick={() => setOpen(false)}
-                disabled={isSubmitting}
+                disabled={createMutation.isPending}
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Creating..." : "Create Transaction"}
+              <Button type="submit" disabled={createMutation.isPending}>
+                {createMutation.isPending ? "Creating..." : "Create Transaction"}
               </Button>
             </DialogFooter>
           </form>

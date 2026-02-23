@@ -1,6 +1,6 @@
 "use client";
 
-import { createAccount } from "@/actions/account-actions";
+import { useCreateAccount } from "@/hooks/useAccountQueries";
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -59,7 +59,7 @@ interface AddAccountDialogProps {
  */
 export function AddAccountDialog({ onSuccess }: AddAccountDialogProps) {
   const [open, setOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const createMutation = useCreateAccount();
 
   const form = useForm<AccountFormValues>({
     resolver: zodResolver(accountFormSchema),
@@ -74,7 +74,6 @@ export function AddAccountDialog({ onSuccess }: AddAccountDialogProps) {
   });
 
   const onSubmit = async (data: AccountFormValues) => {
-    setIsSubmitting(true);
     try {
       let tempData = data;
       if (data.type === "LOAN" || data.type === "CREDIT_CARD") {
@@ -82,23 +81,14 @@ export function AddAccountDialog({ onSuccess }: AddAccountDialogProps) {
       } else {
         tempData = data;
       }
-      const result = await createAccount(tempData);
-
-      if (result.success) {
-        setOpen(false);
-        form.reset();
-        onSuccess?.();
-      } else {
-        form.setError("root", {
-          message: result.error || "Failed to create account",
-        });
-      }
+      await createMutation.mutateAsync(tempData);
+      setOpen(false);
+      form.reset();
+      onSuccess?.();
     } catch (error) {
       form.setError("root", {
-        message: "An unexpected error occurred",
+        message: error instanceof Error ? error.message : "Failed to create account",
       });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -224,12 +214,12 @@ export function AddAccountDialog({ onSuccess }: AddAccountDialogProps) {
                 type="button"
                 variant="outline"
                 onClick={() => setOpen(false)}
-                disabled={isSubmitting}
+                disabled={createMutation.isPending}
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Creating..." : "Create Account"}
+              <Button type="submit" disabled={createMutation.isPending}>
+                {createMutation.isPending ? "Creating..." : "Create Account"}
               </Button>
             </DialogFooter>
           </form>

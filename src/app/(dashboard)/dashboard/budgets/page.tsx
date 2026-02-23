@@ -1,6 +1,6 @@
 "use client";
 
-import { getBudgetsSummary, getBudgetVsActual, BudgetWithProgress } from "@/actions/budget-actions";
+import { BudgetWithProgress } from "@/actions/budget-actions";
 import { AddBudgetDialog } from "@/components/budgets/AddBudgetDialog";
 import { BudgetCard } from "@/components/budgets/BudgetCard";
 import { BudgetProgress } from "@/components/budgets/BudgetProgress";
@@ -17,7 +17,8 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatCurrency } from "@/lib/utils";
 import { Wallet, TrendingUp, TrendingDown, AlertTriangle, Loader2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
+import { useBudgetsSummary, useBudgetVsActual } from "@/hooks/useBudgetQueries";
 
 interface BudgetVsActual {
   budgetId: string | null;
@@ -38,44 +39,16 @@ interface BudgetVsActual {
 /**
  * Render the Budgets dashboard page with summaries, filters, and budget management UI.
  *
- * Loads budget summary and budget-vs-actual data on mount and provides interfaces to create, edit, view progress, filter by period, and compare budgets against actuals.
- *
  * @returns The Budgets page React element
  */
 export default function BudgetsPage() {
-  const [budgets, setBudgets] = useState<BudgetWithProgress[]>([]);
-  const [comparisonData, setComparisonData] = useState<BudgetVsActual[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [editingBudget, setEditingBudget] = useState<BudgetWithProgress | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedBudget, setSelectedBudget] = useState<BudgetWithProgress | null>(null);
   const [periodFilter, setPeriodFilter] = useState<string>("all");
 
-  const loadData = async () => {
-    setIsLoading(true);
-    try {
-      const [summaryResult, comparisonResult] = await Promise.all([
-        getBudgetsSummary(),
-        getBudgetVsActual(),
-      ]);
-
-      if (summaryResult.success && summaryResult.data) {
-        setBudgets(summaryResult.data);
-      }
-
-      if (comparisonResult.success && comparisonResult.data) {
-        setComparisonData(comparisonResult.data);
-      }
-    } catch (error) {
-      console.error("Failed to load budgets:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadData();
-  }, []);
+  const { data: budgets = [], isLoading } = useBudgetsSummary();
+  const { data: comparisonData = [] } = useBudgetVsActual();
 
   const handleEdit = (budget: BudgetWithProgress) => {
     setEditingBudget(budget);
@@ -83,15 +56,18 @@ export default function BudgetsPage() {
   };
 
   // Calculate summary statistics
-  const totalBudgeted = budgets.reduce((sum, b) => sum + b.amount, 0);
-  const totalSpent = budgets.reduce((sum, b) => sum + b.spent, 0);
-  const totalRemaining = budgets.reduce((sum, b) => sum + b.remaining, 0);
-  const overBudgetCount = budgets.filter((b) => b.percentage >= 100).length;
+  const totalBudgeted = (budgets as BudgetWithProgress[]).reduce((sum, b) => sum + b.amount, 0);
+  const totalSpent = (budgets as BudgetWithProgress[]).reduce((sum, b) => sum + b.spent, 0);
+  const totalRemaining = (budgets as BudgetWithProgress[]).reduce((sum, b) => sum + b.remaining, 0);
+  const overBudgetCount = (budgets as BudgetWithProgress[]).filter((b) => b.percentage >= 100).length;
 
   // Filter budgets by period
-  const filteredBudgets = periodFilter === "all"
-    ? budgets
-    : budgets.filter((b) => b.period === periodFilter);
+  const filteredBudgets = useMemo(() =>
+    periodFilter === "all"
+      ? (budgets as BudgetWithProgress[])
+      : (budgets as BudgetWithProgress[]).filter((b) => b.period === periodFilter),
+    [budgets, periodFilter]
+  );
 
   if (selectedBudget) {
     return (
@@ -113,7 +89,7 @@ export default function BudgetsPage() {
             Track and manage your spending budgets
           </p>
         </div>
-        <AddBudgetDialog onSuccess={loadData} />
+        <AddBudgetDialog onSuccess={() => {}} />
       </div>
 
       {/* Summary Cards */}
@@ -126,7 +102,7 @@ export default function BudgetsPage() {
           <CardContent>
             <div className="text-2xl font-bold">{formatCurrency(totalBudgeted)}</div>
             <p className="text-xs text-muted-foreground">
-              {budgets.length} active budgets
+              {(budgets as BudgetWithProgress[]).length} active budgets
             </p>
           </CardContent>
         </Card>
@@ -221,7 +197,7 @@ export default function BudgetsPage() {
                     ? `No ${periodFilter.toLowerCase()} budgets. Try a different filter or create a new budget.`
                     : "Get started by creating your first budget."}
                 </p>
-                <AddBudgetDialog onSuccess={loadData} />
+                <AddBudgetDialog onSuccess={() => {}} />
               </CardContent>
             </Card>
           ) : (
@@ -231,7 +207,7 @@ export default function BudgetsPage() {
                   key={budget.id}
                   budget={budget}
                   onEdit={handleEdit}
-                  onDelete={loadData}
+                  onDelete={() => {}}
                 />
               ))}
             </div>
@@ -244,7 +220,7 @@ export default function BudgetsPage() {
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           ) : (
-            <BudgetVsActualChart data={comparisonData} />
+            <BudgetVsActualChart data={comparisonData as BudgetVsActual[]} />
           )}
         </TabsContent>
       </Tabs>
@@ -254,7 +230,7 @@ export default function BudgetsPage() {
         budget={editingBudget}
         open={isEditDialogOpen}
         onOpenChange={setIsEditDialogOpen}
-        onSuccess={loadData}
+        onSuccess={() => {}}
       />
     </div>
   );
