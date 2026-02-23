@@ -1,6 +1,5 @@
 "use client";
 
-import { deleteAccount, getAccounts, getAccountsSummary } from "@/actions/account-actions";
 import { AddAccountDialog } from "@/components/accounts/AddAccountDialog";
 import { EditAccountDialog } from "@/components/accounts/EditAccountDialog";
 import { Button } from "@/components/ui/button";
@@ -15,7 +14,8 @@ import {
 } from "@/components/ui/table";
 import { formatCurrency } from "@/lib/utils";
 import { Pencil, Trash2, Wallet } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useAccounts, useAccountsSummary, useDeleteAccount } from "@/hooks/useAccountQueries";
 
 interface Account {
   id: string;
@@ -25,14 +25,6 @@ interface Account {
   balance: number;
   description: string | null;
   isActive: boolean;
-}
-
-interface AccountsSummaryData {
-  totalAssets: number;
-  totalLiabilities: number;
-  netWorth: number;
-  byType: Record<string, number>;
-  accounts: Account[];
 }
 
 const ACCOUNT_TYPE_LABELS: Record<string, string> = {
@@ -46,53 +38,25 @@ const ACCOUNT_TYPE_LABELS: Record<string, string> = {
 /**
  * Renders the Accounts page with summary cards, an accounts table, and dialogs for adding, editing, and deleting accounts.
  *
- * Loads accounts and summary data on mount and refreshes the displayed data after successful add/edit/delete actions.
- *
  * @returns The React element for the Accounts management page.
  */
 export default function AccountsPage() {
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [summary, setSummary] = useState<AccountsSummaryData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
-  const loadData = async () => {
-    setIsLoading(true);
-    try {
-      const [accountsResult, summaryResult] = await Promise.all([
-        getAccounts(),
-        getAccountsSummary(),
-      ]);
-
-      if (accountsResult.success && accountsResult.data) {
-        setAccounts(accountsResult.data as Account[]);
-      }
-
-      if (summaryResult.success && summaryResult.data) {
-        setSummary(summaryResult.data as AccountsSummaryData);
-      }
-    } catch (error) {
-      console.error("Failed to load accounts:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadData();
-  }, []);
+  const { data: accounts = [], isLoading } = useAccounts();
+  const { data: summary } = useAccountsSummary();
+  const deleteMutation = useDeleteAccount();
 
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`Are you sure you want to delete "${name}"?`)) {
       return;
     }
 
-    const result = await deleteAccount(id);
-    if (result.success) {
-      loadData();
-    } else {
-      alert(result.error || "Failed to delete account");
+    try {
+      await deleteMutation.mutateAsync(id);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Failed to delete account");
     }
   };
 
@@ -110,7 +74,7 @@ export default function AccountsPage() {
             Manage your financial accounts
           </p>
         </div>
-        <AddAccountDialog onSuccess={loadData} />
+        <AddAccountDialog onSuccess={() => {}} />
       </div>
 
       {/* Summary Cards */}
@@ -190,14 +154,14 @@ export default function AccountsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {accounts.length === 0 ? (
+                {(accounts as Account[]).length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center text-muted-foreground">
                       No accounts found. Create your first account to get started.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  accounts.map((account) => (
+                  (accounts as Account[]).map((account) => (
                     <TableRow key={account.id}>
                       <TableCell className="font-medium">
                         {account.name}
@@ -265,7 +229,7 @@ export default function AccountsPage() {
         account={editingAccount}
         open={isEditDialogOpen}
         onOpenChange={setIsEditDialogOpen}
-        onSuccess={loadData}
+        onSuccess={() => {}}
       />
     </div>
   );

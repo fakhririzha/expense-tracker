@@ -1,6 +1,6 @@
 "use client";
 
-import { updateGoal } from "@/actions/goal-actions";
+import { useUpdateGoal } from "@/hooks/useGoalQueries";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -132,8 +132,8 @@ export function EditGoalDialog({
   onOpenChange,
   onSuccess,
 }: EditGoalDialogProps) {
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const updateMutation = useUpdateGoal();
 
   const form = useForm<EditGoalFormValues>({
     resolver: zodResolver(editGoalFormSchema),
@@ -196,24 +196,14 @@ export function EditGoalDialog({
   const onSubmit = async (data: EditGoalFormValues) => {
     if (!goal) return;
 
-    setIsSubmitting(true);
     try {
-      const result = await updateGoal(goal.id, data);
-
-      if (result.success) {
-        onOpenChange(false);
-        onSuccess?.();
-      } else {
-        form.setError("root", {
-          message: result.error || "Failed to update goal",
-        });
-      }
+      await updateMutation.mutateAsync({ id: goal.id, data });
+      onOpenChange(false);
+      onSuccess?.();
     } catch (error) {
       form.setError("root", {
-        message: "An unexpected error occurred",
+        message: error instanceof Error ? error.message : "Failed to update goal",
       });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -468,8 +458,8 @@ export function EditGoalDialog({
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Saving..." : "Save Changes"}
+              <Button type="submit" disabled={updateMutation.isPending}>
+                {updateMutation.isPending ? "Saving..." : "Save Changes"}
               </Button>
             </DialogFooter>
           </form>

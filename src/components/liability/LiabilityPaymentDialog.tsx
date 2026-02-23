@@ -2,9 +2,9 @@
 
 // import { getBankAccounts, getLiabilityAccounts } from "@/lib/liability-payment-validation";
 import {
-  createLiabilityPayment,
-  generatePaymentReference,
-} from "@/actions/liability-payment-actions";
+  useCreateLiabilityPayment,
+  useGeneratePaymentReference,
+} from "@/hooks/useLiabilityQueries";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -85,11 +85,12 @@ export function LiabilityPaymentDialog({
   preselectedLiabilityId,
 }: LiabilityPaymentDialogProps) {
   const [open, setOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [bankAccounts, setBankAccounts] = useState<Account[]>([]);
   const [liabilityAccounts, setLiabilityAccounts] = useState<Account[]>([]);
   const [selectedSourceAccount, setSelectedSourceAccount] = useState<Account | null>(null);
   const [selectedTargetAccount, setSelectedTargetAccount] = useState<Account | null>(null);
+  const createPaymentMutation = useCreateLiabilityPayment();
+  const generateRefMutation = useGeneratePaymentReference();
 
   const form = useForm<PaymentFormValues>({
     resolver: zodResolver(paymentFormSchema),
@@ -110,11 +111,13 @@ export function LiabilityPaymentDialog({
 
   // Generate reference number
   const generateReference = useCallback(async () => {
-    const result = await generatePaymentReference();
-    if (result.success && result.reference) {
-      form.setValue("referenceNumber", result.reference);
+    try {
+      const reference = await generateRefMutation.mutateAsync();
+      form.setValue("referenceNumber", reference);
+    } catch {
+      // silently ignore
     }
-  }, [form]);
+  }, [form, generateRefMutation]);
 
   // Load accounts when dialog opens
   useEffect(() => {
@@ -149,29 +152,18 @@ export function LiabilityPaymentDialog({
   }, [watchedSourceId, watchedTargetId, bankAccounts, liabilityAccounts]);
 
   const onSubmit = async (data: PaymentFormValues) => {
-    setIsSubmitting(true);
     try {
-      const result = await createLiabilityPayment({
+      await createPaymentMutation.mutateAsync({
         ...data,
         currency: selectedSourceAccount?.currency || "IDR",
         exchangeRate: 1,
       });
-
-      if (result.success) {
-        setOpen(false);
-        form.reset();
-      } else {
-        form.setError("root", {
-          message: result.error || "Failed to process payment",
-        });
-      }
+      setOpen(false);
+      form.reset();
     } catch (error) {
       form.setError("root", {
-        message: "An unexpected error occurred. Please try again.",
+        message: error instanceof Error ? error.message : "Failed to process payment",
       });
-      console.error("Liability payment error:", error);
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -441,20 +433,20 @@ export function LiabilityPaymentDialog({
                 type="button"
                 variant="outline"
                 onClick={() => setOpen(false)}
-                disabled={isSubmitting}
+                disabled={createPaymentMutation.isPending}
               >
                 Cancel
               </Button>
               <Button
                 type="submit"
                 disabled={
-                  isSubmitting ||
+                  createPaymentMutation.isPending ||
                   hasInsufficientFunds ||
                   exceedsBalance ||
                   !hasOutstandingBalance
                 }
               >
-                {isSubmitting ? "Processing..." : "Make Payment"}
+                {createPaymentMutation.isPending ? "Processing..." : "Make Payment"}
               </Button>
             </DialogFooter>
           </form>

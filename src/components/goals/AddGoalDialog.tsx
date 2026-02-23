@@ -1,6 +1,6 @@
 "use client";
 
-import { createGoal } from "@/actions/goal-actions";
+import { useCreateGoal } from "@/hooks/useGoalQueries";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -104,8 +104,8 @@ interface AddGoalDialogProps {
  */
 export function AddGoalDialog({ onSuccess }: AddGoalDialogProps) {
   const [open, setOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const createMutation = useCreateGoal();
 
   const form = useForm<GoalFormValues>({
     resolver: zodResolver(goalFormSchema),
@@ -151,25 +151,15 @@ export function AddGoalDialog({ onSuccess }: AddGoalDialogProps) {
   }, [open]);
 
   const onSubmit = async (data: GoalFormValues) => {
-    setIsSubmitting(true);
     try {
-      const result = await createGoal(data);
-
-      if (result.success) {
-        setOpen(false);
-        form.reset();
-        onSuccess?.();
-      } else {
-        form.setError("root", {
-          message: result.error || "Failed to create goal",
-        });
-      }
+      await createMutation.mutateAsync(data);
+      setOpen(false);
+      form.reset();
+      onSuccess?.();
     } catch (error) {
       form.setError("root", {
-        message: "An unexpected error occurred",
+        message: error instanceof Error ? error.message : "Failed to create goal",
       });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -431,8 +421,8 @@ export function AddGoalDialog({ onSuccess }: AddGoalDialogProps) {
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Creating..." : "Create Goal"}
+              <Button type="submit" disabled={createMutation.isPending}>
+                {createMutation.isPending ? "Creating..." : "Create Goal"}
               </Button>
             </DialogFooter>
           </form>

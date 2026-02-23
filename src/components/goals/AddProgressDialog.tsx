@@ -1,6 +1,6 @@
 "use client";
 
-import { addProgress, withdrawProgress } from "@/actions/goal-actions";
+import { useAddProgress, useWithdrawProgress } from "@/hooks/useGoalQueries";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -23,7 +23,6 @@ import { Progress } from "@/components/ui/progress";
 import { formatCurrency } from "@/lib/utils";
 import { GoalWithProgress } from "@/actions/goal-actions";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -58,7 +57,8 @@ export function AddProgressDialog({
   onOpenChange,
   onSuccess,
 }: AddProgressDialogProps) {
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const addProgressMutation = useAddProgress();
+  const withdrawProgressMutation = useWithdrawProgress();
 
   const form = useForm<ProgressFormValues>({
     resolver: zodResolver(progressFormSchema),
@@ -76,31 +76,24 @@ export function AddProgressDialog({
     });
   };
 
+  const isSubmitting = addProgressMutation.isPending || withdrawProgressMutation.isPending;
+
   const onSubmit = async (data: ProgressFormValues) => {
     if (!goal) return;
 
-    setIsSubmitting(true);
     try {
-      const result =
-        data.action === "add"
-          ? await addProgress(goal.id, data.amount)
-          : await withdrawProgress(goal.id, data.amount);
-
-      if (result.success) {
-        onOpenChange(false);
-        resetForm();
-        onSuccess?.();
+      if (data.action === "add") {
+        await addProgressMutation.mutateAsync({ id: goal.id, amount: data.amount });
       } else {
-        form.setError("root", {
-          message: result.error || "Failed to update progress",
-        });
+        await withdrawProgressMutation.mutateAsync({ id: goal.id, amount: data.amount });
       }
-    } catch {
+      onOpenChange(false);
+      resetForm();
+      onSuccess?.();
+    } catch (error) {
       form.setError("root", {
-        message: "An unexpected error occurred",
+        message: error instanceof Error ? error.message : "Failed to update progress",
       });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { updateBudget } from "@/actions/budget-actions";
+import { useUpdateBudget } from "@/hooks/useBudgetQueries";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -115,8 +115,8 @@ export function EditBudgetDialog({
   onOpenChange,
   onSuccess,
 }: EditBudgetDialogProps) {
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
+  const updateMutation = useUpdateBudget();
 
   const form = useForm<EditBudgetFormValues>({
     resolver: zodResolver(editBudgetFormSchema),
@@ -177,32 +177,25 @@ export function EditBudgetDialog({
   const onSubmit = async (data: EditBudgetFormValues) => {
     if (!budget) return;
 
-    setIsSubmitting(true);
     try {
-      const result = await updateBudget(budget.id, {
-        name: data.name,
-        amount: data.amount,
-        period: data.period,
-        startDate: data.startDate,
-        endDate: data.endDate || undefined,
-        categoryId: data.categoryId || undefined,
-        isActive: data.isActive,
+      await updateMutation.mutateAsync({
+        id: budget.id,
+        data: {
+          name: data.name,
+          amount: data.amount,
+          period: data.period,
+          startDate: data.startDate,
+          endDate: data.endDate || undefined,
+          categoryId: data.categoryId || undefined,
+          isActive: data.isActive,
+        },
       });
-
-      if (result.success) {
-        onOpenChange(false);
-        onSuccess?.();
-      } else {
-        form.setError("root", {
-          message: result.error || "Failed to update budget",
-        });
-      }
+      onOpenChange(false);
+      onSuccess?.();
     } catch (error) {
       form.setError("root", {
-        message: "An unexpected error occurred",
+        message: error instanceof Error ? error.message : "Failed to update budget",
       });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -420,12 +413,12 @@ export function EditBudgetDialog({
                 type="button"
                 variant="outline"
                 onClick={() => onOpenChange(false)}
-                disabled={isSubmitting}
+                disabled={updateMutation.isPending}
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Saving..." : "Save Changes"}
+              <Button type="submit" disabled={updateMutation.isPending}>
+                {updateMutation.isPending ? "Saving..." : "Save Changes"}
               </Button>
             </DialogFooter>
           </form>

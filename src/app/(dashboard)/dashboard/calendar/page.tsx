@@ -1,13 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import {
-  getCalendarEvents,
-  getMonthSummary,
-  getUpcomingBills,
-  CalendarEvent,
-  MonthSummary,
-} from "@/actions/calendar-actions";
+import { useState } from "react";
+import { CalendarEvent, MonthSummary } from "@/actions/calendar-actions";
 import { CalendarView, CalendarLegend } from "@/components/calendar/CalendarView";
 import { UpcomingBillsWidget } from "@/components/calendar/UpcomingBillsWidget";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,56 +23,35 @@ import {
   ArrowDownCircle,
 } from "lucide-react";
 import { TransactionType } from "@/generated/prisma/client/client";
+import { useCalendarEvents, useUpcomingBills, useMonthSummary } from "@/hooks/useCalendarQueries";
+import { useQueryClient } from "@tanstack/react-query";
+import { calendarKeys } from "@/hooks/useCalendarQueries";
 
 /**
  * Renders the Bills Calendar page with calendar view, filters, summary cards, and sidebar widgets.
  *
- * Displays calendar events for the selected month, an upcoming-bills list for the next 7 days, and a monthly summary (total income, total expenses, net). Provides month navigation, transaction-type filtering, and a manual refresh; shows loading skeletons while data is fetched.
- *
  * @returns The page's JSX element containing the calendar UI.
  */
 export default function CalendarPage() {
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
-  const [upcomingBills, setUpcomingBills] = useState<CalendarEvent[]>([]);
-  const [summary, setSummary] = useState<MonthSummary | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [filterType, setFilterType] = useState<TransactionType | "ALL">("ALL");
+  const qc = useQueryClient();
 
-  const loadData = async () => {
-    setIsLoading(true);
-    try {
-      const year = currentMonth.getFullYear();
-      const month = currentMonth.getMonth() + 1;
+  const year = currentMonth.getFullYear();
+  const month = currentMonth.getMonth() + 1;
 
-      const [eventsResult, upcomingResult, summaryResult] = await Promise.all([
-        getCalendarEvents({ year, month }),
-        getUpcomingBills({ days: 7 }),
-        getMonthSummary({ year, month }),
-      ]);
+  const { data: events = [], isLoading: eventsLoading } = useCalendarEvents(year, month);
+  const { data: upcomingBills = [], isLoading: upcomingLoading } = useUpcomingBills(7);
+  const { data: summary } = useMonthSummary(year, month);
 
-      if (eventsResult.success) {
-        setEvents(eventsResult.data);
-      }
-      if (upcomingResult.success) {
-        setUpcomingBills(upcomingResult.data);
-      }
-      if (summaryResult.success && summaryResult.data) {
-        setSummary(summaryResult.data);
-      }
-    } catch (error) {
-      console.error("Failed to load calendar data:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadData();
-  }, [currentMonth]);
+  const isLoading = eventsLoading || upcomingLoading;
 
   const handleMonthChange = (date: Date) => {
     setCurrentMonth(date);
+  };
+
+  const handleRefresh = () => {
+    qc.invalidateQueries({ queryKey: calendarKeys.all });
   };
 
   return (
@@ -91,7 +64,7 @@ export default function CalendarPage() {
             View and manage your upcoming bills and recurring transactions
           </p>
         </div>
-        <Button variant="outline" onClick={loadData} disabled={isLoading}>
+        <Button variant="outline" onClick={handleRefresh} disabled={isLoading}>
           <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
           Refresh
         </Button>
@@ -116,7 +89,7 @@ export default function CalendarPage() {
               <CardContent>
                 <div className="text-2xl font-bold text-green-600">
                   {summary
-                    ? formatCurrency(summary.totalIncome, summary.currency)
+                    ? formatCurrency((summary as MonthSummary).totalIncome, (summary as MonthSummary).currency)
                     : formatCurrency(0)}
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -134,7 +107,7 @@ export default function CalendarPage() {
               <CardContent>
                 <div className="text-2xl font-bold text-red-600">
                   {summary
-                    ? formatCurrency(summary.totalExpenses, summary.currency)
+                    ? formatCurrency((summary as MonthSummary).totalExpenses, (summary as MonthSummary).currency)
                     : formatCurrency(0)}
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -152,10 +125,10 @@ export default function CalendarPage() {
               <CardContent>
                 <div
                   className={`text-2xl font-bold ${
-                    summary && summary.net >= 0 ? "text-green-600" : "text-red-600"
+                    summary && (summary as MonthSummary).net >= 0 ? "text-green-600" : "text-red-600"
                   }`}
                 >
-                  {summary ? formatCurrency(summary.net, summary.currency) : formatCurrency(0)}
+                  {summary ? formatCurrency((summary as MonthSummary).net, (summary as MonthSummary).currency) : formatCurrency(0)}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   {format(currentMonth, "MMMM yyyy")}
@@ -203,7 +176,7 @@ export default function CalendarPage() {
                 </div>
               ) : (
                 <CalendarView
-                  events={events}
+                  events={events as CalendarEvent[]}
                   initialMonth={currentMonth}
                   onMonthChange={handleMonthChange}
                   filterType={filterType}
@@ -220,7 +193,7 @@ export default function CalendarPage() {
             <Skeleton className="h-[400px]" />
           ) : (
             <UpcomingBillsWidget
-              events={upcomingBills}
+              events={upcomingBills as CalendarEvent[]}
               title="Next 7 Days"
               showTotal
             />
@@ -272,14 +245,14 @@ export default function CalendarPage() {
                 <span className="text-sm text-muted-foreground">
                   Total Events
                 </span>
-                <span className="text-sm font-medium">{events.length}</span>
+                <span className="text-sm font-medium">{(events as CalendarEvent[]).length}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">
                   Upcoming (7 days)
                 </span>
                 <span className="text-sm font-medium">
-                  {upcomingBills.length}
+                  {(upcomingBills as CalendarEvent[]).length}
                 </span>
               </div>
               <div className="flex items-center justify-between">
@@ -287,7 +260,7 @@ export default function CalendarPage() {
                   Recurring Rules
                 </span>
                 <span className="text-sm font-medium">
-                  {events.filter((e) => e.source === "recurring").length}
+                  {(events as CalendarEvent[]).filter((e) => e.source === "recurring").length}
                 </span>
               </div>
             </CardContent>

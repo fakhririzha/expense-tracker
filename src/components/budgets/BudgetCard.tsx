@@ -1,6 +1,6 @@
 "use client";
 
-import { deleteBudget } from "@/actions/budget-actions";
+import { useDeleteBudget } from "@/hooks/useBudgetQueries";
 import {
   Card,
   CardContent,
@@ -15,11 +15,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Progress } from "@/components/ui/progress";
 import { cn, formatCurrency } from "@/lib/utils";
 import { BudgetWithProgress } from "@/actions/budget-actions";
 import { MoreHorizontal, Pencil, Trash2, TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
-import { useState } from "react";
+
 
 interface BudgetCardProps {
   budget: BudgetWithProgress;
@@ -40,7 +39,8 @@ interface BudgetCardProps {
  * @returns The Budget Card React element
  */
 export function BudgetCard({ budget, onEdit, onDelete }: BudgetCardProps) {
-  const [isDeleting, setIsDeleting] = useState(false);
+  const deleteMutation = useDeleteBudget();
+  const isDeleting = deleteMutation.isPending;
 
   const getProgressColor = (percentage: number) => {
     if (percentage >= 100) return "bg-destructive";
@@ -66,19 +66,11 @@ export function BudgetCard({ budget, onEdit, onDelete }: BudgetCardProps) {
 
   const handleDelete = async () => {
     if (!confirm("Are you sure you want to delete this budget?")) return;
-
-    setIsDeleting(true);
     try {
-      const result = await deleteBudget(budget.id);
-      if (result.success) {
-        onDelete();
-      } else {
-        alert(result.error || "Failed to delete budget");
-      }
+      await deleteMutation.mutateAsync(budget.id);
+      onDelete();
     } catch (error) {
-      alert("An unexpected error occurred");
-    } finally {
-      setIsDeleting(false);
+      alert(error instanceof Error ? error.message : "Failed to delete budget");
     }
   };
 

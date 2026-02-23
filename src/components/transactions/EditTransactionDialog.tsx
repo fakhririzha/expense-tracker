@@ -1,7 +1,7 @@
 "use client";
 
-import { getAccounts } from "@/actions/account-actions";
-import { updateTransaction } from "@/actions/transaction-actions";
+import { useAccounts } from "@/hooks/useAccountQueries";
+import { useUpdateTransaction } from "@/hooks/useTransactionQueries";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -139,9 +139,16 @@ export function EditTransactionDialog({
   onOpenChange,
   onSuccess,
 }: EditTransactionDialogProps) {
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+
+  const { data: accountsData = [] } = useAccounts();
+  const updateMutation = useUpdateTransaction();
+
+  const accounts = accountsData.map((a: { id: string; name: string; type: string }) => ({
+    id: a.id,
+    name: a.name,
+    type: a.type,
+  }));
 
   const form = useForm<EditTransactionFormValues>({
     resolver: zodResolver(editTransactionFormSchema),
@@ -173,28 +180,6 @@ export function EditTransactionDialog({
     }
   }, [transaction, open, form]);
 
-  useEffect(() => {
-    /**
-     * Loads account data when the dialog opens.
-     */
-    async function loadData() {
-      const [accountsResult] = await Promise.all([getAccounts()]);
-
-      if (accountsResult.success && accountsResult.data) {
-        setAccounts(
-          accountsResult.data.map((a: { id: string; name: string; type: string }) => ({
-            id: a.id,
-            name: a.name,
-            type: a.type,
-          }))
-        );
-      }
-    }
-    if (open) {
-      loadData();
-    }
-  }, [open]);
-
   // Fetch categories from database based on transaction type
   useEffect(() => {
     /**
@@ -221,34 +206,26 @@ export function EditTransactionDialog({
   const onSubmit = async (data: EditTransactionFormValues) => {
     if (!transaction) return;
 
-    setIsSubmitting(true);
     try {
-      const result = await updateTransaction(transaction.id, {
-        amount: data.amount,
-        type: data.type,
-        description: data.description,
-        date: data.date,
-        accountId: data.accountId,
-        toAccountId: data.toAccountId,
-        categoryId: data.categoryId,
+      await updateMutation.mutateAsync({
+        id: transaction.id,
+        data: {
+          amount: data.amount,
+          type: data.type,
+          description: data.description,
+          date: data.date,
+          accountId: data.accountId,
+          toAccountId: data.toAccountId,
+          categoryId: data.categoryId,
+        },
       });
-
-      if (result.success) {
-        onOpenChange(false);
-        form.reset();
-        onSuccess?.();
-      } else {
-        form.setError("root", {
-          message: result.error || "Failed to update transaction",
-        });
-      }
+      onOpenChange(false);
+      form.reset();
+      onSuccess?.();
     } catch (error) {
       form.setError("root", {
-        message: "An unexpected error occurred: " + error,
+        message: error instanceof Error ? error.message : "Failed to update transaction",
       });
-      console.error("Update transaction error: ", error);
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -526,12 +503,12 @@ export function EditTransactionDialog({
                 type="button"
                 variant="outline"
                 onClick={() => onOpenChange(false)}
-                disabled={isSubmitting}
+                disabled={updateMutation.isPending}
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Updating..." : "Update Transaction"}
+              <Button type="submit" disabled={updateMutation.isPending}>
+                {updateMutation.isPending ? "Updating..." : "Update Transaction"}
               </Button>
             </DialogFooter>
           </form>

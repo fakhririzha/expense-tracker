@@ -1,6 +1,6 @@
 "use client";
 
-import { updateAccount } from "@/actions/account-actions";
+import { useUpdateAccount } from "@/hooks/useAccountQueries";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -27,7 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -78,7 +78,7 @@ export function EditAccountDialog({
   onOpenChange,
   onSuccess,
 }: EditAccountDialogProps) {
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const updateMutation = useUpdateAccount();
 
   const form = useForm<EditAccountFormValues>({
     resolver: zodResolver(editAccountFormSchema),
@@ -115,7 +115,6 @@ export function EditAccountDialog({
   const onSubmit = async (data: EditAccountFormValues) => {
     if (!account) return;
 
-    setIsSubmitting(true);
     try {
       let submitData = data;
 
@@ -124,22 +123,13 @@ export function EditAccountDialog({
         submitData = { ...data, balance: Math.abs(data.balance) * -1 };
       }
 
-      const result = await updateAccount(account.id, submitData);
-
-      if (result.success) {
-        onOpenChange(false);
-        onSuccess?.();
-      } else {
-        form.setError("root", {
-          message: result.error || "Failed to update account",
-        });
-      }
+      await updateMutation.mutateAsync({ id: account.id, data: submitData });
+      onOpenChange(false);
+      onSuccess?.();
     } catch (error) {
       form.setError("root", {
-        message: "An unexpected error occurred",
+        message: error instanceof Error ? error.message : "Failed to update account",
       });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -287,12 +277,12 @@ export function EditAccountDialog({
                 type="button"
                 variant="outline"
                 onClick={() => onOpenChange(false)}
-                disabled={isSubmitting}
+                disabled={updateMutation.isPending}
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Saving..." : "Save Changes"}
+              <Button type="submit" disabled={updateMutation.isPending}>
+                {updateMutation.isPending ? "Saving..." : "Save Changes"}
               </Button>
             </DialogFooter>
           </form>

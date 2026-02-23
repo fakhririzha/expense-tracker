@@ -1,7 +1,7 @@
 "use client";
 
-import { getAccounts } from "@/actions/account-actions";
-import { createRecurringRule } from "@/actions/recurring-actions";
+import { useAccounts } from "@/hooks/useAccountQueries";
+import { useCreateRecurringRule } from "@/hooks/useRecurringQueries";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -38,7 +38,7 @@ import { cn } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
 import { CalendarIcon, Plus } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -56,10 +56,7 @@ const recurringRuleFormSchema = z.object({
 
 type RecurringRuleFormValues = z.infer<typeof recurringRuleFormSchema>;
 
-interface Account {
-  id: string;
-  name: string;
-}
+
 
 interface AddRecurringRuleDialogProps {
   onSuccess?: () => void;
@@ -78,8 +75,13 @@ interface AddRecurringRuleDialogProps {
  */
 export function AddRecurringRuleDialog({ onSuccess }: AddRecurringRuleDialogProps) {
   const [open, setOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [accounts, setAccounts] = useState<Account[]>([]);
+  const { data: accountsData = [] } = useAccounts();
+  const createMutation = useCreateRecurringRule();
+
+  const accounts = accountsData.map((a: { id: string; name: string }) => ({
+    id: a.id,
+    name: a.name,
+  }));
 
   const form = useForm<RecurringRuleFormValues>({
     resolver: zodResolver(recurringRuleFormSchema),
@@ -95,43 +97,17 @@ export function AddRecurringRuleDialog({ onSuccess }: AddRecurringRuleDialogProp
     },
   });
 
-  useEffect(() => {
-    async function loadAccounts() {
-      const result = await getAccounts();
-      if (result.success && result.data) {
-        setAccounts(
-          result.data.map((a: { id: string; name: string }) => ({
-            id: a.id,
-            name: a.name,
-          }))
-        );
-      }
-    }
-    if (open) {
-      loadAccounts();
-    }
-  }, [open]);
 
   const onSubmit = async (data: RecurringRuleFormValues) => {
-    setIsSubmitting(true);
     try {
-      const result = await createRecurringRule(data);
-
-      if (result.success) {
-        setOpen(false);
-        form.reset();
-        onSuccess?.();
-      } else {
-        form.setError("root", {
-          message: result.error || "Failed to create recurring rule",
-        });
-      }
+      await createMutation.mutateAsync(data);
+      setOpen(false);
+      form.reset();
+      onSuccess?.();
     } catch (error) {
       form.setError("root", {
-        message: "An unexpected error occurred",
+        message: error instanceof Error ? error.message : "Failed to create recurring rule",
       });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -376,12 +352,12 @@ export function AddRecurringRuleDialog({ onSuccess }: AddRecurringRuleDialogProp
                 type="button"
                 variant="outline"
                 onClick={() => setOpen(false)}
-                disabled={isSubmitting}
+                disabled={createMutation.isPending}
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Creating..." : "Create Rule"}
+              <Button type="submit" disabled={createMutation.isPending}>
+                {createMutation.isPending ? "Creating..." : "Create Rule"}
               </Button>
             </DialogFooter>
           </form>

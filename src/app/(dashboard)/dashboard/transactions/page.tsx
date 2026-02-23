@@ -1,7 +1,5 @@
 "use client";
 
-import { getAccounts } from "@/actions/account-actions";
-import { deleteTransaction, getTransactions } from "@/actions/transaction-actions";
 import { AddTransactionDialog } from "@/components/transactions/AddTransactionDialog";
 import { EditTransactionDialog } from "@/components/transactions/EditTransactionDialog";
 import {
@@ -21,7 +19,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useEffect, useState } from "react";
+import { useState, useMemo } from "react";
+import { useTransactions, useDeleteTransaction } from "@/hooks/useTransactionQueries";
+import { useAccounts } from "@/hooks/useAccountQueries";
 
 interface Category {
   id: string;
@@ -29,74 +29,36 @@ interface Category {
   icon: string | null;
 }
 
-interface Account {
-  id: string;
-  name: string;
-}
-
 /**
  * Render the Transactions page, including filters, a transactions table, and dialogs for adding, editing, and deleting transactions.
- *
- * Loads transactions and accounts based on current filter options, derives unique categories from loaded transactions, and exposes handlers to open edit and delete flows. After create/edit/delete actions the data is refreshed by re-applying the current filters.
  *
  * @returns The rendered Transactions page element.
  */
 export default function TransactionsPage() {
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [accounts, setAccounts] = useState<Account[]>([]);
   const [filters, setFilters] = useState<FilterOptions>({});
-  const [isLoading, setIsLoading] = useState(true);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [deletingTransactionId, setDeletingTransactionId] = useState<string | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
 
-  useEffect(() => {
-    async function loadData() {
-      setIsLoading(true);
-      try {
-        const [txResult, accountsResult] = await Promise.all([
-          getTransactions({
-            type: filters.type,
-            categoryId: filters.categoryId,
-            accountId: filters.accountId,
-            startDate: filters.startDate,
-            endDate: filters.endDate,
-          }),
-          getAccounts(),
-        ]);
+  const { data: transactions = [], isLoading } = useTransactions(filters);
+  const { data: accountsData = [] } = useAccounts();
+  const deleteMutation = useDeleteTransaction();
 
-        if (txResult.success && txResult.data) {
-          setTransactions(txResult.data as Transaction[]);
-          // Extract unique categories from transactions
-          const uniqueCategories = new Map<string, Category>();
-          txResult.data.forEach((tx: Transaction) => {
-            if (tx.category) {
-              uniqueCategories.set(tx.category.id, tx.category);
-            }
-          });
-          setCategories(Array.from(uniqueCategories.values()));
-        }
+  const accounts = useMemo(
+    () => accountsData.map((a: { id: string; name: string }) => ({ id: a.id, name: a.name })),
+    [accountsData]
+  );
 
-        if (accountsResult.success && accountsResult.data) {
-          setAccounts(
-            accountsResult.data.map((a: { id: string; name: string }) => ({
-              id: a.id,
-              name: a.name,
-            }))
-          );
-        }
-      } catch (error) {
-        console.error("Failed to load transactions:", error);
-      } finally {
-        setIsLoading(false);
+  const categories = useMemo(() => {
+    const uniqueCategories = new Map<string, Category>();
+    (transactions as Transaction[]).forEach((tx) => {
+      if (tx.category) {
+        uniqueCategories.set(tx.category.id, tx.category);
       }
-    }
-
-    loadData();
-  }, [filters]);
+    });
+    return Array.from(uniqueCategories.values());
+  }, [transactions]);
 
   const handleEdit = (transaction: Transaction) => {
     setEditingTransaction(transaction);
@@ -110,21 +72,12 @@ export default function TransactionsPage() {
 
   const confirmDelete = async () => {
     if (!deletingTransactionId) return;
-
-    setIsDeleting(true);
     try {
-      const result = await deleteTransaction(deletingTransactionId);
-      if (result.success) {
-        setFilters({ ...filters });
-        setIsDeleteDialogOpen(false);
-        setDeletingTransactionId(null);
-      } else {
-        console.error("Failed to delete transaction:", result.error);
-      }
+      await deleteMutation.mutateAsync(deletingTransactionId);
+      setIsDeleteDialogOpen(false);
+      setDeletingTransactionId(null);
     } catch (error) {
       console.error("Failed to delete transaction:", error);
-    } finally {
-      setIsDeleting(false);
     }
   };
 
@@ -144,12 +97,7 @@ export default function TransactionsPage() {
             filters={filters}
             onFiltersChange={setFilters}
           />
-          <AddTransactionDialog
-            onSuccess={() => {
-              // Reload data after successful creation
-              setFilters({ ...filters });
-            }}
-          />
+          <AddTransactionDialog onSuccess={() => {}} />
         </div>
       </div>
 
@@ -159,7 +107,7 @@ export default function TransactionsPage() {
         </div>
       ) : (
         <TransactionTable
-          transactions={transactions}
+          transactions={transactions as Transaction[]}
           onEdit={handleEdit}
           onDelete={handleDelete}
         />
@@ -169,9 +117,7 @@ export default function TransactionsPage() {
         transaction={editingTransaction}
         open={isEditDialogOpen}
         onOpenChange={setIsEditDialogOpen}
-        onSuccess={() => {
-          setFilters({ ...filters });
-        }}
+        onSuccess={() => {}}
       />
 
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
@@ -188,16 +134,16 @@ export default function TransactionsPage() {
             <Button
               variant="outline"
               onClick={() => setIsDeleteDialogOpen(false)}
-              disabled={isDeleting}
+              disabled={deleteMutation.isPending}
             >
               Cancel
             </Button>
             <Button
               variant="destructive"
               onClick={confirmDelete}
-              disabled={isDeleting}
+              disabled={deleteMutation.isPending}
             >
-              {isDeleting ? "Deleting..." : "Delete"}
+              {deleteMutation.isPending ? "Deleting..." : "Delete"}
             </Button>
           </DialogFooter>
         </DialogContent>

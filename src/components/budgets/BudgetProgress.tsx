@@ -1,6 +1,6 @@
 "use client";
 
-import { getBudgetTransactions } from "@/actions/budget-actions";
+import { useBudgetTransactions } from "@/hooks/useBudgetQueries";
 import { BudgetWithProgress } from "@/actions/budget-actions";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,7 +10,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import {
   Table,
   TableBody,
@@ -21,25 +20,6 @@ import {
 } from "@/components/ui/table";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import { ArrowLeft, TrendingUp, AlertTriangle, Loader2 } from "lucide-react";
-import { useEffect, useState } from "react";
-
-interface Transaction {
-  id: string;
-  amount: number;
-  description: string | null;
-  date: Date;
-  category: {
-    id: string;
-    name: string;
-    icon: string | null;
-    color: string | null;
-  } | null;
-  account: {
-    id: string;
-    name: string;
-    currency: string;
-  };
-}
 
 interface BudgetProgressProps {
   budget: BudgetWithProgress;
@@ -57,25 +37,7 @@ interface BudgetProgressProps {
  * @returns The Budget Progress React element
  */
 export function BudgetProgress({ budget, onBack }: BudgetProgressProps) {
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    /**
-     * Load transactions for the current budget and update component state.
-     *
-     * Sets the loading flag while fetching; if the fetch succeeds, replaces the transactions state with the fetched data. Ensures the loading flag is cleared when finished.
-     */
-    async function loadTransactions() {
-      setIsLoading(true);
-      const result = await getBudgetTransactions(budget.id);
-      if (result.success && result.data) {
-        setTransactions(result.data);
-      }
-      setIsLoading(false);
-    }
-    loadTransactions();
-  }, [budget.id]);
+  const { data: transactions = [], isLoading } = useBudgetTransactions(budget.id);
 
   const getProgressColor = (percentage: number) => {
     if (percentage >= 100) return "bg-destructive";

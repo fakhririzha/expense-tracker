@@ -1,6 +1,5 @@
 "use client";
 
-import { getPortfolio, getPortfolioSummary, refreshPortfolioPrices } from "@/actions/investment-actions";
 import { AddInvestmentDialog } from "@/components/investments/AddInvestmentDialog";
 import { RecordSellTradeDialog } from "@/components/investments/RecordSellTradeDialog";
 import {
@@ -10,7 +9,8 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency, formatPercentage } from "@/lib/utils";
 import { BarChart3, TrendingDown, TrendingUp } from "lucide-react";
-import { useEffect, useState } from "react";
+import { usePortfolio, usePortfolioSummary, useRefreshPortfolioPrices } from "@/hooks/useInvestmentQueries";
+import { useState } from "react";
 
 interface PortfolioSummaryData {
   totalValue: number;
@@ -26,74 +26,31 @@ interface PortfolioSummaryData {
 /**
  * Render the Investments page showing portfolio summary cards and a holdings table.
  *
- * Loads portfolio data and summary on mount, manages loading and refresh states, and exposes a refresh handler that triggers server-side price updates and reloads data.
- *
  * @returns The Investments page JSX element.
  */
 export default function InvestmentsPage() {
-  const [assets, setAssets] = useState<PortfolioAsset[]>([]);
-  const [summary, setSummary] = useState<PortfolioSummaryData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | undefined>();
-  const [error, setError] = useState<string | null>(null);
 
-  const loadData = async () => {
-    setIsLoading(true);
-    try {
-      const [portfolioResult, summaryResult] = await Promise.all([
-        getPortfolio(),
-        getPortfolioSummary(),
-      ]);
+  const { data: assets = [], isLoading, error: portfolioError } = usePortfolio();
+  const { data: summaryData } = usePortfolioSummary();
+  const refreshMutation = useRefreshPortfolioPrices();
 
-      if (portfolioResult.success && portfolioResult.data) {
-        setAssets(portfolioResult.data as PortfolioAsset[]);
-        setLastUpdated(new Date());
-      }
-
-      if (
-        summaryResult.success &&
-        "data" in summaryResult &&
-        summaryResult.data
-      ) {
-        setSummary(summaryResult.data as PortfolioSummaryData);
-      }
-    } catch (error) {
-      console.error("Failed to load portfolio:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const summary = summaryData as PortfolioSummaryData | null | undefined;
 
   const handleRefresh = async () => {
-    setIsRefreshing(true);
-    setError(null);
     try {
-      // Trigger server-side revalidation
-      const result = await refreshPortfolioPrices();
-      if (!result.success) {
-        setError(result.error ?? "Failed to refresh prices");
-        return;
-      }
-      // Reload data to get fresh prices
-      await loadData();
+      await refreshMutation.mutateAsync();
+      setLastUpdated(new Date());
     } catch (error) {
       console.error("Failed to refresh prices:", error);
-      setError("Failed to refresh prices");
-    } finally {
-      setIsRefreshing(false);
     }
   };
-
-  useEffect(() => {
-    loadData();
-  }, []);
 
   return (
     <div className="space-y-6">
-      {error && (
+      {(portfolioError || refreshMutation.error) && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-          {error}
+          {portfolioError?.message || refreshMutation.error?.message}
         </div>
       )}
       <div className="flex items-center justify-between">
@@ -104,8 +61,8 @@ export default function InvestmentsPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <RecordSellTradeDialog onSuccess={loadData} />
-          <AddInvestmentDialog onSuccess={loadData} />
+          <RecordSellTradeDialog onSuccess={() => {}} />
+          <AddInvestmentDialog onSuccess={() => {}} />
         </div>
       </div>
 
@@ -223,9 +180,9 @@ export default function InvestmentsPage() {
           </CardHeader>
           <CardContent>
             <PortfolioTable
-              assets={assets}
+              assets={assets as PortfolioAsset[]}
               onRefresh={handleRefresh}
-              isRefreshing={isRefreshing}
+              isRefreshing={refreshMutation.isPending}
               lastUpdated={lastUpdated}
             />
           </CardContent>
