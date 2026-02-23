@@ -42,3 +42,10 @@ next-env.d.ts
 
 # prisma
 /src/generated
+
+# agent skills
+/skills
+.agent/*
+.agents/*
+.claude/*
+.kilocode/*

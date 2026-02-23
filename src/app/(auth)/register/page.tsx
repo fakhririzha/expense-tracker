@@ -72,16 +72,16 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4">
+    <div className="min-h-screen flex items-center justify-center bg-secondary p-4 py-12">
       <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1 text-center">
-          <div className="flex justify-center mb-4">
-            <div className="h-12 w-12 rounded-full bg-primary flex items-center justify-center">
-              <TrendingUp className="h-6 w-6 text-primary-foreground" />
+        <CardHeader className="space-y-4 text-center">
+          <div className="flex justify-center mb-2">
+            <div className="h-16 w-16 neo-border bg-primary flex items-center justify-center neo-shadow">
+              <TrendingUp className="h-8 w-8 text-primary-foreground" />
             </div>
           </div>
-          <CardTitle className="text-2xl font-bold">Create an account</CardTitle>
-          <CardDescription>
+          <CardTitle className="text-3xl font-black uppercase tracking-tight">FinHealth</CardTitle>
+          <CardDescription className="text-base font-medium">
             Start tracking your financial health today
           </CardDescription>
         </CardHeader>
