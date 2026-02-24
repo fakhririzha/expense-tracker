@@ -97,7 +97,7 @@ export function TransactionFilters({
           </SheetDescription>
         </SheetHeader>
 
-        <div className="mt-6 space-y-6">
+        <div className="mt-6 space-y-6 px-4">
           {/* Transaction Type */}
           <div className="space-y-2">
             <label className="text-sm font-medium">Transaction Type</label>
