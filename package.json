@@ -6,9 +6,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
-    "start": "next start -p 3000",
-    "lint": "eslint",
-    "postinstall": "pnpm dlx prisma@^7 db push && pnpm dlx prisma@^7 generate"
+    "start": "next start",
+    "lint": "eslint"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",
