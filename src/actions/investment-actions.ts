@@ -465,7 +465,7 @@ export async function recordTrade(data: TradeInput) {
         });
       }
 
-      // Create trade history with audit trail (BEFORE deleting/updating asset to preserve FK constraint)
+      // Create trade history BEFORE deleting asset (TradeHistory requires valid assetId FK)
       const trade = await tx.tradeHistory.create({
         data: {
           type,
