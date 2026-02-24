@@ -12,6 +12,7 @@ import {
 import { ArrowUpDown, Eye, Info, Loader2, RefreshCw, TrendingDown, TrendingUp } from "lucide-react";
 import { useState } from "react";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
     Table,
@@ -48,6 +49,7 @@ export interface PortfolioAsset {
   dayChangePercent: number;
   unitType: UnitType;
   unitLabel: string;
+  realizedPnL: number;
 }
 
 interface PortfolioTableProps {
@@ -104,12 +106,20 @@ export function PortfolioTable({
         );
       },
       cell: ({ row }) => {
+        const isSold = row.original.quantity === 0;
         return (
-          <div>
-            <div className="font-medium">{row.getValue("symbol")}</div>
-            <div className="text-sm text-muted-foreground">
-              {row.original.name}
+          <div className="flex items-center gap-2">
+            <div>
+              <div className="font-medium">{row.getValue("symbol")}</div>
+              <div className="text-sm text-muted-foreground">
+                {row.original.name}
+              </div>
             </div>
+            {isSold && (
+              <Badge variant="secondary" className="bg-muted text-muted-foreground">
+                Fully Sold
+              </Badge>
+            )}
           </div>
         );
       },
@@ -172,12 +182,22 @@ export function PortfolioTable({
         );
       },
       cell: ({ row }) => {
+        const isSold = row.original.quantity === 0;
         const price = row.getValue("currentPrice") as number;
         const currency = row.original.currency;
         const dayChangePercent = row.original.dayChangePercent;
         const isPositive = dayChangePercent >= 0;
         const unitLabel = row.original.unitLabel;
         const isNonUnit = row.original.unitType !== "UNIT";
+
+        // For sold assets, show dash
+        if (isSold) {
+          return (
+            <div className="text-muted-foreground">
+              —
+            </div>
+          );
+        }
 
         return (
           <div>
@@ -230,7 +250,18 @@ export function PortfolioTable({
         );
       },
       cell: ({ row }) => {
+        const isSold = row.original.quantity === 0;
         const value = row.getValue("currentValue") as number;
+        
+        // For sold assets, show dash instead of 0
+        if (isSold) {
+          return (
+            <div className="text-right font-medium text-muted-foreground">
+              —
+            </div>
+          );
+        }
+        
         return (
           <div className="text-right font-medium">
             {formatCurrency(value, displayCurrency)}
@@ -253,9 +284,16 @@ export function PortfolioTable({
         );
       },
       cell: ({ row }) => {
-        const pnl = row.getValue("unrealizedPnL") as number;
-        const pnlPercent = row.original.unrealizedPnLPercent;
+        const isSold = row.original.quantity === 0;
+        const unrealizedPnl = row.getValue("unrealizedPnL") as number;
+        const unrealizedPnlPercent = row.original.unrealizedPnLPercent;
+        const realizedPnl = row.original.realizedPnL;
+        
+        // For sold assets, show realized PnL; for active assets, show unrealized PnL
+        const pnl = isSold ? realizedPnl : unrealizedPnl;
+        const pnlPercent = isSold ? null : unrealizedPnlPercent;
         const isPositive = pnl >= 0;
+        const pnlLabel = isSold ? "Realized" : "Unrealized";
 
         return (
           <div className="text-right">
@@ -272,7 +310,7 @@ export function PortfolioTable({
                 isPositive ? "text-green-600" : "text-red-600"
               }`}
             >
-              {formatPercentage(pnlPercent)}
+              {pnlPercent !== null ? formatPercentage(pnlPercent) : pnlLabel}
             </div>
           </div>
         );
@@ -358,21 +396,25 @@ export function PortfolioTable({
           </TableHeader>
           <TableBody>
             {table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  data-state={row.getIsSelected() && "selected"}
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
+              table.getRowModel().rows.map((row) => {
+                const isSold = row.original.quantity === 0;
+                return (
+                  <TableRow
+                    key={row.id}
+                    data-state={row.getIsSelected() && "selected"}
+                    className={isSold ? "bg-muted/30 opacity-70" : ""}
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext()
+                        )}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                );
+              })
             ) : (
               <TableRow>
                 <TableCell

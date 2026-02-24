@@ -61,9 +61,9 @@ export async function getExecutiveMetrics(): Promise<{
       where: { userId: session.user.id, isActive: true },
     });
 
-    // Fetch all investment assets
+    // Fetch all investment assets (exclude assets with 0 quantity - sold positions)
     const investmentAssets = await prisma.investmentAsset.findMany({
-      where: { userId: session.user.id },
+      where: { userId: session.user.id, quantity: { gt: 0 } },
     });
 
     // Fetch transactions for the last 6 months for expense/income analysis
