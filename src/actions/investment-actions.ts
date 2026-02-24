@@ -788,6 +788,90 @@ export async function searchSymbolsAction(query: string) {
 }
 
 /**
+ * Fetches the current price for a single symbol with proper currency conversion.
+ * 
+ * - Indonesian stocks (symbols containing `.JK`) are returned as-is (already in IDR)
+ * - US stocks and precious metals are converted from USD to IDR using IDR=X rate
+ * - Precious metals can optionally be converted from TROY_OUNCE to GRAM
+ *
+ * @param symbol - The stock/asset symbol to fetch the price for
+ * @param unitType - Optional unit type for precious metals ("GRAM" or "TROY_OUNCE")
+ * @returns On success, an object with `success: true`, `data` containing the price in IDR, and optionally `rawPrice` (before conversion). On failure, an object with `success: false` and an `error` message.
+ */
+export async function getAssetPriceWithConversion(
+  symbol: string,
+  unitType?: "UNIT" | "TROY_OUNCE" | "GRAM"
+): Promise<{
+  success: boolean;
+  data?: number;
+  rawPrice?: number;
+  error?: string;
+  currency?: string;
+}> {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const upperSymbol = symbol.toUpperCase();
+    const isIndonesianStock = upperSymbol.includes(".JK");
+    const isPreciousMetalAsset = isPreciousMetal(upperSymbol);
+
+    // Fetch the asset price
+    const quote = await getAssetPrice(upperSymbol);
+    if (!quote || quote.regularMarketPrice === 0) {
+      return { success: false, error: "Failed to fetch price for symbol" };
+    }
+
+    let currentPrice = quote.regularMarketPrice;
+    const rawPrice = currentPrice;
+
+    if (isIndonesianStock) {
+      // Indonesian stocks are already in IDR - no conversion needed
+      return {
+        success: true,
+        data: currentPrice,
+        rawPrice,
+        currency: "IDR",
+      };
+    }
+
+    // For US stocks and precious metals, we need to convert USD to IDR
+    // Fetch USD to IDR exchange rate
+    const symbolsToFetch = ["IDR=X"];
+    const prices = await getMultipleAssetPrices(symbolsToFetch);
+    const usdIdrQuote = prices.get("IDR=X");
+    const usdToIdrRate = usdIdrQuote?.regularMarketPrice ?? null;
+
+    if (usdToIdrRate === null) {
+      return {
+        success: false,
+        error: "Failed to fetch USD to IDR exchange rate",
+      };
+    }
+
+    // Convert USD to IDR
+    currentPrice = currentPrice * usdToIdrRate;
+
+    // For precious metals, apply unit conversion if needed
+    if (isPreciousMetalAsset && unitType === "GRAM") {
+      currentPrice = convertPrice(currentPrice, "TROY_OUNCE", "GRAM");
+    }
+
+    return {
+      success: true,
+      data: currentPrice,
+      rawPrice,
+      currency: "IDR",
+    };
+  } catch (error) {
+    console.error("Get asset price error:", error);
+    return { success: false, error: "Failed to fetch asset price" };
+  }
+}
+
+/**
  * Triggers revalidation of portfolio pages so subsequent requests fetch fresh asset prices.
  *
  * @returns An object with `success: true` when revalidation was initiated; otherwise `success: false` and an `error` message (for unauthorized access or failure).

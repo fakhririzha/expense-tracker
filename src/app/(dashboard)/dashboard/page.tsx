@@ -35,12 +35,6 @@ export default async function DashboardPage() {
       getPortfolioSummary(),
     ]);
 
-  console.log('dashboard', {
-    metricsResult,
-    transactionSummary,
-    portfolioSummary,
-  });
-
   if (!metricsResult.success || !metricsResult.data) {
     return (
       <div className="p-6">
