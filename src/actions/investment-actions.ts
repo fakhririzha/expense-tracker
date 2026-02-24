@@ -455,16 +455,8 @@ export async function recordTrade(data: TradeInput) {
         realizedPnL = proceeds - (asset.avgBuyPrice * quantity);
         balanceAfter = balanceBefore + proceeds;
 
-        // Update or delete asset
-        const newQuantity = asset.quantity - quantity;
-        if (newQuantity === 0) {
-          await tx.investmentAsset.delete({ where: { id: assetId } });
-        } else {
-          await tx.investmentAsset.update({
-            where: { id: assetId },
-            data: { quantity: newQuantity },
-          });
-        }
+        // Calculate new quantity for later asset update/delete
+        // const newQuantity = asset.quantity - quantity;
 
         // Credit proceeds to account
         await tx.financialAccount.update({
@@ -473,7 +465,7 @@ export async function recordTrade(data: TradeInput) {
         });
       }
 
-      // Create trade history with audit trail
+      // Create trade history BEFORE deleting asset (TradeHistory requires valid assetId FK)
       const trade = await tx.tradeHistory.create({
         data: {
           type,
@@ -490,6 +482,19 @@ export async function recordTrade(data: TradeInput) {
           ...rest,
         },
       });
+
+      // For SELL trades: update or delete asset AFTER creating trade history
+      if (type === "SELL") {
+        const newQuantity = asset.quantity - quantity;
+        if (newQuantity === 0) {
+          await tx.investmentAsset.delete({ where: { id: assetId } });
+        } else {
+          await tx.investmentAsset.update({
+            where: { id: assetId },
+            data: { quantity: newQuantity },
+          });
+        }
+      }
 
       return {
         trade,
