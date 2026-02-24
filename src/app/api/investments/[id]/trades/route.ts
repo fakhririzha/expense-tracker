@@ -1,4 +1,5 @@
 import { auth } from "@/auth";
+import { TradeType } from "@/generated/prisma/client/client";
 import prisma from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -83,7 +84,7 @@ export async function GET(
       userId: session.user.id,
     };
 
-    if (type && type !== "ALL") {
+    if (type && type !== "ALL" && Object.values(TradeType).includes(type as TradeType)) {
       where.type = type;
     }
 

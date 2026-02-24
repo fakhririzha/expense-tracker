@@ -1,4 +1,5 @@
 import { auth } from "@/auth";
+import { TransactionType } from "@/generated/prisma/client/client";
 import prisma from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -19,7 +20,7 @@ export async function GET(request: NextRequest) {
       ],
     };
 
-    if (type) {
+    if (type && Object.values(TransactionType).includes(type as TransactionType)) {
       where.type = type;
     }
 
