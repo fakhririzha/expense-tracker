@@ -483,17 +483,19 @@ export async function recordTrade(data: TradeInput) {
         },
       });
 
-      // For SELL trades: update or delete asset AFTER creating trade history
+      // For SELL trades: update asset quantity (never delete - preserve FK relationships for TradeHistory)
       if (type === "SELL") {
         const newQuantity = asset.quantity - quantity;
-        if (newQuantity === 0) {
-          await tx.investmentAsset.delete({ where: { id: assetId } });
-        } else {
-          await tx.investmentAsset.update({
-            where: { id: assetId },
-            data: { quantity: newQuantity },
-          });
-        }
+        // When all units are sold, set avgBuyPrice to 0 since there's no remaining position
+        const newAvgBuyPrice = newQuantity === 0 ? 0 : asset.avgBuyPrice;
+        
+        await tx.investmentAsset.update({
+          where: { id: assetId },
+          data: {
+            quantity: newQuantity,
+            avgBuyPrice: newAvgBuyPrice,
+          },
+        });
       }
 
       return {
@@ -538,6 +540,7 @@ export async function getPortfolio() {
       return { success: false, error: "Unauthorized", data: [] };
     }
 
+    // Fetch all assets including sold ones (quantity === 0)
     const assets = await prisma.investmentAsset.findMany({
       where: { userId: session.user.id },
       orderBy: { createdAt: "desc" },
@@ -545,6 +548,25 @@ export async function getPortfolio() {
 
     if (assets.length === 0) {
       return { success: true, data: [] };
+    }
+
+    // Fetch realized PnL for each asset from trade history
+    const assetIds = assets.map((a: AssetItem) => a.id);
+    const realizedPnLByAsset = await prisma.tradeHistory.groupBy({
+      by: ['assetId'],
+      where: {
+        userId: session.user.id,
+        assetId: { in: assetIds },
+        type: "SELL",
+        realizedPnL: { not: null },
+      },
+      _sum: { realizedPnL: true },
+    });
+
+    // Create a map of assetId to realized PnL
+    const realizedPnLMap = new Map<string, number>();
+    for (const item of realizedPnLByAsset) {
+      realizedPnLMap.set(item.assetId, item._sum.realizedPnL ?? 0);
     }
 
     interface AssetItem {
@@ -561,8 +583,17 @@ export async function getPortfolio() {
     }
 
     // Fetch current prices for all assets
+    // Include IDR=X to get USD to IDR exchange rate for precious metal conversion
     const symbols = assets.map((a: AssetItem) => a.symbol);
+    const hasPreciousMetals = assets.some((a: AssetItem) => isPreciousMetal(a.symbol));
+    if (hasPreciousMetals) {
+      symbols.push("IDR=X"); // USD to IDR exchange rate
+    }
     const prices = await getMultipleAssetPrices(symbols);
+
+    // Get USD to IDR exchange rate for precious metal price conversion
+    const usdIdrQuote = prices.get("IDR=X");
+    const usdToIdrRate = usdIdrQuote?.regularMarketPrice ?? null;
 
     // Calculate metrics for each asset
     const portfolioWithMetrics = assets.map((asset: AssetItem) => {
@@ -572,10 +603,19 @@ export async function getPortfolio() {
       let currentPrice = quote?.regularMarketPrice ?? asset.avgBuyPrice;
       let previousClose = quote?.regularMarketPreviousClose ?? currentPrice;
       
-      // If this is a precious metal and user's unit is GRAM, convert prices
-      if (isPreciousMetal(asset.symbol) && asset.unitType === "GRAM") {
-        currentPrice = convertPrice(currentPrice, "TROY_OUNCE", "GRAM");
-        previousClose = convertPrice(previousClose, "TROY_OUNCE", "GRAM");
+      // For precious metals: convert USD to IDR first, then apply unit conversion
+      if (isPreciousMetal(asset.symbol)) {
+        // Step 1: Convert USD to IDR (Yahoo Finance returns precious metal prices in USD)
+        if (usdToIdrRate !== null) {
+          currentPrice = currentPrice * usdToIdrRate;
+          previousClose = previousClose * usdToIdrRate;
+        }
+        
+        // Step 2: Convert from TROY_OUNCE to GRAM if user's unit is GRAM
+        if (asset.unitType === "GRAM") {
+          currentPrice = convertPrice(currentPrice, "TROY_OUNCE", "GRAM");
+          previousClose = convertPrice(previousClose, "TROY_OUNCE", "GRAM");
+        }
       }
 
       const metrics = calculateInvestmentMetrics(
@@ -585,11 +625,15 @@ export async function getPortfolio() {
         previousClose
       );
 
+      // Get realized PnL for this asset
+      const realizedPnL = realizedPnLMap.get(asset.id) ?? 0;
+
       return {
         ...asset,
         currentPrice,
         previousClose,
         ...metrics,
+        realizedPnL,
         quote,
         unitLabel: getUnitLabel(asset.unitType),
       };
@@ -624,6 +668,7 @@ export async function getPortfolioSummary() {
     }
 
     interface PortfolioAsset {
+      quantity: number;
       currentValue: number;
       totalCost: number;
       unrealizedPnL: number;
@@ -637,7 +682,10 @@ export async function getPortfolioSummary() {
       totalDayChange: 0
     };
 
-    const summary = portfolio.reduce(
+    // Only count active assets (quantity > 0) in the summary
+    const activeAssets = portfolio.filter((asset: PortfolioAsset) => asset.quantity > 0);
+
+    const summary = activeAssets.reduce(
       (acc: PortfolioSummary, asset: PortfolioAsset) => {
         acc.totalValue += asset.currentValue;
         acc.totalCost += asset.totalCost;
@@ -673,7 +721,7 @@ export async function getPortfolioSummary() {
               100
             : 0,
         totalRealizedPnL: realizedPnL._sum.realizedPnL ?? 0,
-        assetCount: portfolio.length,
+        assetCount: activeAssets.length,
       },
     };
   } catch (error) {
