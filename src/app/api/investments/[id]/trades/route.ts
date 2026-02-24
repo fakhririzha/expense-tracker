@@ -1,6 +1,10 @@
 import { auth } from "@/auth";
+import { TradeType } from "@/generated/prisma/client/client";
 import prisma from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
+
+const ALL_TRADE_TYPE_FILTER = "ALL";
+const ALLOWED_TRADE_TYPES = [ALL_TRADE_TYPE_FILTER, ...Object.values(TradeType)] as const;
 
 /**
  * Retrieve trade history for a user's investment asset.
@@ -44,6 +48,11 @@ export async function GET(
     // Get query parameters for filtering/sorting
     const { searchParams } = new URL(request.url);
     const type = searchParams.get("type");
+    const isValidType = !type || ALLOWED_TRADE_TYPES.includes(type as typeof ALLOWED_TRADE_TYPES[number]);
+
+    if (!isValidType) {
+      return NextResponse.json({ error: "Invalid trade type filter" }, { status: 400 });
+    }
 
     // Whitelisted sort fields and orders for safe Prisma ordering
     const allowedSortBy = [
@@ -83,7 +92,7 @@ export async function GET(
       userId: session.user.id,
     };
 
-    if (type && type !== "ALL") {
+    if (type && type !== ALL_TRADE_TYPE_FILTER) {
       where.type = type;
     }
 
