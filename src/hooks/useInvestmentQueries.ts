@@ -8,6 +8,7 @@ import {
   recordTrade,
   refreshPortfolioPrices,
   searchSymbolsAction,
+  getAssetPriceWithConversion,
 } from "@/actions/investment-actions";
 import { accountKeys } from "./useAccountQueries";
 
@@ -22,6 +23,8 @@ export const investmentKeys = {
   sellable: () => [...investmentKeys.all, "sellable"] as const,
   symbols: (query: string) =>
     [...investmentKeys.all, "symbols", query] as const,
+  price: (symbol: string, unitType?: string) =>
+    [...investmentKeys.all, "price", symbol, unitType] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -81,6 +84,35 @@ export function useSearchSymbols(query: string) {
       return result.data;
     },
     enabled: query.length >= 2,
+  });
+}
+
+/**
+ * Hook to fetch the current price for a symbol with proper currency conversion.
+ * 
+ * - Indonesian stocks (symbols containing `.JK`) are returned as-is (already in IDR)
+ * - US stocks and precious metals are converted from USD to IDR using IDR=X rate
+ * - Precious metals can optionally be converted from TROY_OUNCE to GRAM
+ *
+ * @param symbol - The stock/asset symbol to fetch the price for
+ * @param unitType - Optional unit type for precious metals ("GRAM" or "TROY_OUNCE")
+ * @returns TanStack Query result with the converted price in IDR
+ */
+export function useAssetPrice(
+  symbol: string | undefined,
+  unitType?: "UNIT" | "TROY_OUNCE" | "GRAM"
+) {
+  return useQuery({
+    queryKey: investmentKeys.price(symbol || "", unitType),
+    queryFn: async () => {
+      if (!symbol) return null;
+      const result = await getAssetPriceWithConversion(symbol, unitType);
+      if (!result.success) throw new Error(result.error);
+      return result;
+    },
+    enabled: !!symbol && symbol.length > 0,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes
   });
 }
 

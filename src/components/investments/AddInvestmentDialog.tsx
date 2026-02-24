@@ -4,6 +4,7 @@ import { isPreciousMetal } from "@/lib/unit-conversion";
 import {
   useCreateInvestmentAsset,
   useSearchSymbols,
+  useAssetPrice,
 } from "@/hooks/useInvestmentQueries";
 import { InvestmentAccountSelector } from "./InvestmentAccountSelector";
 import { Button } from "@/components/ui/button";
@@ -46,7 +47,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Check, ChevronsUpDown, Loader2, Plus, Search } from "lucide-react";
 import { useState } from "react";
@@ -110,9 +111,23 @@ export function AddInvestmentDialog({ onSuccess }: AddInvestmentDialogProps) {
     },
   });
   
-  // Watch symbol to detect precious metals
+  // Watch symbol and unitType to detect precious metals and fetch current price
   const watchedSymbol = form.watch("symbol");
+  const watchedUnitType = form.watch("unitType");
   const isSymbolPreciousMetal = isPreciousMetal(watchedSymbol);
+
+  // Fetch current price with currency conversion
+  const { data: priceData, isLoading: isLoadingPrice } = useAssetPrice(
+    watchedSymbol || undefined,
+    watchedUnitType as "UNIT" | "TROY_OUNCE" | "GRAM" | undefined
+  );
+
+  // Format current price for display
+  const currentPriceDisplay = priceData?.data
+    ? formatCurrency(priceData.data, "IDR")
+    : isLoadingPrice && watchedSymbol
+    ? "Loading..."
+    : "N/A";
 
 
   const handleSelectSymbol = (result: SearchResult) => {
@@ -314,7 +329,7 @@ export function AddInvestmentDialog({ onSuccess }: AddInvestmentDialogProps) {
               name="avgBuyPrice"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Average Buy Price</FormLabel>
+                  <FormLabel>Average Buy Price (current price: {currentPriceDisplay})</FormLabel>
                   <FormControl>
                     <Input
                       type="number"
