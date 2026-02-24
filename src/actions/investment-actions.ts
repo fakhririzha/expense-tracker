@@ -583,8 +583,17 @@ export async function getPortfolio() {
     }
 
     // Fetch current prices for all assets
+    // Include IDR=X to get USD to IDR exchange rate for precious metal conversion
     const symbols = assets.map((a: AssetItem) => a.symbol);
+    const hasPreciousMetals = assets.some((a: AssetItem) => isPreciousMetal(a.symbol));
+    if (hasPreciousMetals) {
+      symbols.push("IDR=X"); // USD to IDR exchange rate
+    }
     const prices = await getMultipleAssetPrices(symbols);
+
+    // Get USD to IDR exchange rate for precious metal price conversion
+    const usdIdrQuote = prices.get("IDR=X");
+    const usdToIdrRate = usdIdrQuote?.regularMarketPrice ?? null;
 
     // Calculate metrics for each asset
     const portfolioWithMetrics = assets.map((asset: AssetItem) => {
@@ -594,10 +603,19 @@ export async function getPortfolio() {
       let currentPrice = quote?.regularMarketPrice ?? asset.avgBuyPrice;
       let previousClose = quote?.regularMarketPreviousClose ?? currentPrice;
       
-      // If this is a precious metal and user's unit is GRAM, convert prices
-      if (isPreciousMetal(asset.symbol) && asset.unitType === "GRAM") {
-        currentPrice = convertPrice(currentPrice, "TROY_OUNCE", "GRAM");
-        previousClose = convertPrice(previousClose, "TROY_OUNCE", "GRAM");
+      // For precious metals: convert USD to IDR first, then apply unit conversion
+      if (isPreciousMetal(asset.symbol)) {
+        // Step 1: Convert USD to IDR (Yahoo Finance returns precious metal prices in USD)
+        if (usdToIdrRate !== null) {
+          currentPrice = currentPrice * usdToIdrRate;
+          previousClose = previousClose * usdToIdrRate;
+        }
+        
+        // Step 2: Convert from TROY_OUNCE to GRAM if user's unit is GRAM
+        if (asset.unitType === "GRAM") {
+          currentPrice = convertPrice(currentPrice, "TROY_OUNCE", "GRAM");
+          previousClose = convertPrice(previousClose, "TROY_OUNCE", "GRAM");
+        }
       }
 
       const metrics = calculateInvestmentMetrics(
