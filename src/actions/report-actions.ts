@@ -88,10 +88,8 @@ async function convertToUserCurrency(
   fromCurrency: string,
   exchangeRate: number
 ): Promise<number> {
-  if (fromCurrency === "IDR") return amount * exchangeRate;
-  
   const userCurrency = await getUserCurrency();
-  if (fromCurrency === userCurrency) return amount * exchangeRate;
+  if (fromCurrency === userCurrency) return amount;
   
   // Try to get exchange rate
   const rate = await getExchangeRate(fromCurrency, userCurrency);
@@ -446,6 +444,21 @@ export async function getNetWorthHistory(params: {
       },
     });
 
+    const personalAssets = await prisma.personalAsset.findMany({
+      where: { userId: session.user.id },
+      select: {
+        disposedAt: true,
+        valuations: {
+          select: {
+            value: true,
+            currency: true,
+            valuedAt: true,
+          },
+          orderBy: [{ valuedAt: "desc" }, { createdAt: "desc" }],
+        },
+      },
+    });
+
     // Calculate current assets and liabilities
     let currentAssets = 0;
     let currentLiabilities = 0;
@@ -568,8 +581,27 @@ export async function getNetWorthHistory(params: {
       // - If no future month has data, use current balances (end of last month)
       
       const nextData = nextAvailableData[i];
-      const assets: number = nextData?.assets ?? currentAssets;
+      const accountAssets: number = nextData?.assets ?? currentAssets;
       const liabilities: number = nextData?.liabilities ?? currentLiabilities;
+      const [year, month] = monthKey.split("-").map(Number);
+      const monthEnd = new Date(year, month, 0, 23, 59, 59, 999);
+      let personalAssetValue = 0;
+
+      for (const asset of personalAssets) {
+        if (asset.disposedAt && asset.disposedAt <= monthEnd) continue;
+        const valuation = asset.valuations.find(
+          (item) => item.valuedAt <= monthEnd
+        );
+        if (!valuation) continue;
+
+        personalAssetValue += await convertToUserCurrency(
+          valuation.value,
+          valuation.currency,
+          1
+        );
+      }
+
+      const assets = accountAssets + personalAssetValue;
       
       result.push({
         date: monthKey,

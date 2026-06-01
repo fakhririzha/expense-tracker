@@ -161,6 +161,7 @@ export async function getCalendarEvents(params: {
           select: {
             id: true,
             name: true,
+            nameEncrypted: true,
           },
         },
       },

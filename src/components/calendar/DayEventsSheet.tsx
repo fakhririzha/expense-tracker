@@ -69,7 +69,7 @@ export function DayEventsSheet({
           </SheetDescription>
         </SheetHeader>
 
-        <div className="mt-6 space-y-6">
+        <div className="mt-6 space-y-6 px-4" id="day-events-sheet-content">
           {/* Summary */}
           {events.length > 0 && (
             <div className="space-y-3">
@@ -241,7 +241,6 @@ function EventCard({
           name=""
           amount={event.amount}
           currency={event.currency}
-          compact
           onClick={onClick}
         />
       </div>

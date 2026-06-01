@@ -8,6 +8,7 @@ import { getExecutiveMetrics } from "@/lib/executive-service";
 import { formatCurrency, formatPercentage } from "@/lib/utils";
 import {
     BarChart3,
+    Boxes,
     CreditCard,
     PiggyBank,
     TrendingDown,
@@ -57,7 +58,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Key Metrics Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <Card className="bg-primary text-primary-foreground">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-xl font-bold font-heading">Net Worth</CardTitle>
@@ -112,6 +113,23 @@ export default async function DashboardPage() {
             </div>
             <p className="text-sm font-medium text-muted-foreground mt-1">
               {metrics.monthsOfRunway.toFixed(1)} months runway
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-accent text-accent-foreground">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xl font-bold font-heading">
+              Personal Assets
+            </CardTitle>
+            <Boxes className="h-6 w-6 opacity-80" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-black tracking-tight">
+              {formatCurrency(metrics.totalPersonalAssets, currency)}
+            </div>
+            <p className="text-sm font-medium opacity-80 mt-1">
+              Owned items at current value
             </p>
           </CardContent>
         </Card>

@@ -3,6 +3,7 @@
 import { auth } from "@/auth";
 import prisma from "@/lib/db";
 import { format } from "date-fns";
+import { decryptUserField } from "@/lib/user-encryption";
 
 /**
  * Sanitizes a CSV cell to prevent spreadsheet formula injection.
@@ -27,6 +28,36 @@ function sanitizeCsvCell(value: string): string {
   const escaped = strValue.replace(/"/g, '""');
   // Insert single quote after leading whitespace if dangerous, then wrap in double quotes
   return `"${leadingWhitespace}${hasDangerousPrefix ? "'" : ""}${escaped.slice(leadingWhitespace.length)}"`;
+}
+
+async function decryptPersonalAssetFields<
+  T extends {
+    name: string;
+    nameEncrypted: string | null;
+    notes: string | null;
+    notesEncrypted: string | null;
+  }
+>(userId: string, asset: T): Promise<T & { name: string; notes: string | null }> {
+  let name = asset.name;
+  let notes = asset.notes;
+
+  if (asset.nameEncrypted) {
+    try {
+      name = await decryptUserField(userId, "personalAsset.name", asset.nameEncrypted);
+    } catch {
+      // Keep required plaintext fallback.
+    }
+  }
+
+  if (asset.notesEncrypted) {
+    try {
+      notes = await decryptUserField(userId, "personalAsset.notes", asset.notesEncrypted);
+    } catch {
+      // Keep plaintext fallback.
+    }
+  }
+
+  return { ...asset, name, notes };
 }
 
 /**
@@ -145,6 +176,7 @@ export async function exportAllData() {
       tradeHistory,
       recurringRules,
       savingsGoals,
+      personalAssets,
     ] = await Promise.all([
       prisma.financialAccount.findMany({
         where: { userId: session.user.id },
@@ -179,12 +211,24 @@ export async function exportAllData() {
       prisma.savingsGoal.findMany({
         where: { userId: session.user.id },
       }),
+      prisma.personalAsset.findMany({
+        where: { userId: session.user.id },
+        include: {
+          valuations: {
+            orderBy: [{ valuedAt: "desc" }, { createdAt: "desc" }],
+          },
+        },
+      }),
     ]);
+
+    const decryptedPersonalAssets = await Promise.all(
+      personalAssets.map((asset) => decryptPersonalAssetFields(session.user.id, asset))
+    );
 
     // Create a JSON backup
     const backup = {
       exportDate: new Date().toISOString(),
-      version: "1.0",
+      version: "1.1",
       data: {
         accounts,
         transactions: transactions.map((t) => ({
@@ -224,6 +268,22 @@ export async function exportAllData() {
         })),
         recurringRules,
         savingsGoals,
+        personalAssets: decryptedPersonalAssets.map((asset) => ({
+          id: asset.id,
+          name: asset.name,
+          category: asset.category,
+          currentValue: asset.currentValue,
+          currency: asset.currency,
+          currentValuedAt: asset.currentValuedAt,
+          purchaseDate: asset.purchaseDate,
+          purchasePrice: asset.purchasePrice,
+          purchaseCurrency: asset.purchaseCurrency,
+          notes: asset.notes,
+          disposedAt: asset.disposedAt,
+          createdAt: asset.createdAt,
+          updatedAt: asset.updatedAt,
+          valuations: asset.valuations,
+        })),
       },
     };
 
@@ -240,6 +300,11 @@ export async function exportAllData() {
         tradeHistory: tradeHistory.length,
         recurringRules: recurringRules.length,
         savingsGoals: savingsGoals.length,
+        personalAssets: personalAssets.length,
+        personalAssetValuations: personalAssets.reduce(
+          (count, asset) => count + asset.valuations.length,
+          0
+        ),
       },
     };
   } catch (error) {
@@ -485,6 +550,71 @@ export async function exportInvestmentsCSV() {
   } catch (error) {
     console.error("Export investments error:", error);
     return { success: false, error: "Failed to export investments" };
+  }
+}
+
+/**
+ * Export the user's personal asset inventory as a CSV snapshot.
+ */
+export async function exportPersonalAssetsCSV() {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const assets = await prisma.personalAsset.findMany({
+      where: { userId: session.user.id },
+      orderBy: [{ disposedAt: "asc" }, { createdAt: "asc" }],
+    });
+    const decryptedAssets = await Promise.all(
+      assets.map((asset) => decryptPersonalAssetFields(session.user.id, asset))
+    );
+
+    const headers = [
+      "Name",
+      "Category",
+      "Current Value",
+      "Currency",
+      "Valued At",
+      "Purchase Date",
+      "Purchase Price",
+      "Purchase Currency",
+      "Notes",
+      "Status",
+      "Disposed At",
+      "Created At",
+    ];
+
+    const rows = decryptedAssets.map((asset) => [
+      asset.name,
+      asset.category,
+      asset.currentValue.toString(),
+      asset.currency,
+      format(new Date(asset.currentValuedAt), "yyyy-MM-dd"),
+      asset.purchaseDate ? format(new Date(asset.purchaseDate), "yyyy-MM-dd") : "",
+      asset.purchasePrice?.toString() ?? "",
+      asset.purchaseCurrency ?? "",
+      asset.notes ?? "",
+      asset.disposedAt ? "Archived" : "Active",
+      asset.disposedAt ? format(new Date(asset.disposedAt), "yyyy-MM-dd") : "",
+      format(new Date(asset.createdAt), "yyyy-MM-dd"),
+    ]);
+
+    const csv = [
+      headers.map((header) => sanitizeCsvCell(header)).join(","),
+      ...rows.map((row) => row.map((cell) => sanitizeCsvCell(cell)).join(",")),
+    ].join("\n");
+
+    return {
+      success: true,
+      data: csv,
+      filename: `personal-assets-${format(new Date(), "yyyy-MM-dd-HHmmss")}.csv`,
+      count: assets.length,
+    };
+  } catch (error) {
+    console.error("Export personal assets error:", error);
+    return { success: false, error: "Failed to export personal assets" };
   }
 }
 

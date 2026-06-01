@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   BarChart3,
+  Boxes,
   Calendar,
   CreditCard,
   Database,
@@ -21,6 +22,7 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/dashboard/transactions", label: "Transactions", icon: Receipt },
   { href: "/dashboard/accounts", label: "Accounts", icon: Wallet },
+  { href: "/dashboard/assets", label: "Assets", icon: Boxes },
   { href: "/dashboard/budgets", label: "Budgets", icon: PieChart },
   { href: "/dashboard/goals", label: "Goals", icon: Goal },
   { href: "/dashboard/liabilities", label: "Liabilities", icon: CreditCard },

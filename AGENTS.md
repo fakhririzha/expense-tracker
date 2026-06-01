@@ -10,6 +10,7 @@ This file contains essential information for AI coding agents working on the Exp
 - **Account Management**: Create and manage multiple financial accounts (Bank, Cash, Investment, Loan, Credit Card)
 - **Transaction Tracking**: Record income, expenses, transfers, and liability payments with category classification
 - **Investment Portfolio**: Track stocks and investments with real-time price updates via Yahoo Finance
+- **Personal Assets**: Track durable owned items with dated manual valuations and disposal history
 - **Recurring Transactions**: Automate regular transactions with flexible scheduling (daily, weekly, monthly, etc.)
 - **Multi-Currency Support**: Track finances across different currencies with automatic exchange rate conversion
 - **Budgeting**: Create and monitor budgets with different periods (monthly, quarterly, yearly)
@@ -54,6 +55,7 @@ expense-tracker/
 │   │   ├── goal-actions.ts
 │   │   ├── import-actions.ts
 │   │   ├── investment-actions.ts
+│   │   ├── personal-asset-actions.ts
 │   │   ├── liability-payment-actions.ts
 │   │   ├── recurring-actions.ts
 │   │   ├── report-actions.ts
@@ -70,6 +72,7 @@ expense-tracker/
 │   │   │       ├── data/page.tsx
 │   │   │       ├── goals/page.tsx
 │   │   │       ├── investments/page.tsx
+│   │   │       ├── assets/page.tsx
 │   │   │       ├── liabilities/page.tsx
 │   │   │       ├── page.tsx           # Main dashboard
 │   │   │       ├── recurring/page.tsx
@@ -86,6 +89,7 @@ expense-tracker/
 │   │   └── page.tsx           # Landing page
 │   ├── components/            # React components
 │   │   ├── accounts/          # Account-related components
+│   │   ├── assets/            # Personal asset inventory components
 │   │   ├── budgets/           # Budget-related components
 │   │   ├── calendar/          # Calendar view components
 │   │   ├── dashboard/         # Dashboard widgets
@@ -108,6 +112,7 @@ expense-tracker/
 │   │   ├── useExchangeRateQuery.ts
 │   │   ├── useGoalQueries.ts
 │   │   ├── useInvestmentQueries.ts
+│   │   ├── usePersonalAssetQueries.ts
 │   │   ├── useLiabilityQueries.ts
 │   │   ├── useRecurringQueries.ts
 │   │   ├── useReportQueries.ts
@@ -201,6 +206,10 @@ pnpm dlx prisma@^7 db push && pnpm dlx prisma@^7 generate
 
 **TradeHistory**: Buy/sell trades for investment assets with realized PnL tracking
 
+**PersonalAsset**: Durable owned items with category, current manual valuation, optional purchase details, and disposal date
+
+**PersonalAssetValuation**: Dated valuation history for personal assets
+
 **RecurringRule**: Automated recurring transaction rules with intervals (DAILY, WEEKLY, BIWEEKLY, MONTHLY, QUARTERLY, YEARLY)
 
 **Category**: Transaction categories (user-defined or system)
@@ -219,6 +228,7 @@ enum AccountType { BANK, CASH, INVESTMENT, LOAN, CREDIT_CARD }
 enum TransactionType { INCOME, EXPENSE, TRANSFER, LIABILITY_PAYMENT }
 enum TradeType { BUY, SELL }
 enum UnitType { UNIT, TROY_OUNCE, GRAM }
+enum PersonalAssetCategory { ELECTRONICS, VEHICLE, PROPERTY, FURNITURE, JEWELRY, COLLECTIBLE, EQUIPMENT, OTHER }
 enum RecurringInterval { DAILY, WEEKLY, BIWEEKLY, MONTHLY, QUARTERLY, YEARLY }
 enum BudgetPeriod { MONTHLY, QUARTERLY, YEARLY }
 enum PaymentStatus { PENDING, PROCESSING, COMPLETED, FAILED, ROLLED_BACK }
