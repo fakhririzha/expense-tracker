@@ -135,7 +135,7 @@ export function AddGoalDialog({ onSuccess }: AddGoalDialogProps) {
         if (response.ok) {
           const data = await response.json();
           // Filter to asset accounts (BANK, CASH, INVESTMENT)
-          const assetAccounts = data.filter(
+          const assetAccounts = data?.bankAccounts?.filter(
             (acc: Account) =>
               acc.type === "BANK" || acc.type === "CASH" || acc.type === "INVESTMENT"
           );
@@ -171,7 +171,7 @@ export function AddGoalDialog({ onSuccess }: AddGoalDialogProps) {
           Add Goal
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-125 max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add Savings Goal</DialogTitle>
           <DialogDescription>

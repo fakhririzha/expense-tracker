@@ -105,6 +105,7 @@ export function LiabilityPaymentDialog({
     },
   });
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const watchedAmount = form.watch("amount");
   const watchedSourceId = form.watch("sourceAccountId");
   const watchedTargetId = form.watch("targetAccountId");
@@ -137,11 +138,12 @@ export function LiabilityPaymentDialog({
       }
     }
 
-    if (open) {
+    // eslint-disable-next-line react-hooks/incompatible-library
+    if (open && form.watch("referenceNumber") === "") {
       loadAccounts();
       generateReference();
     }
-  }, [open, generateReference]);
+  }, [open, form, generateReference]);
 
   // Update selected accounts when form values change
   useEffect(() => {
@@ -184,7 +186,7 @@ export function LiabilityPaymentDialog({
           Pay Liability
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-137.5 max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Liability Payment</DialogTitle>
           <DialogDescription>
