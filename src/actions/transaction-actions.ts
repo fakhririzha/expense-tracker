@@ -5,6 +5,7 @@ import prisma from "@/lib/db";
 import { Prisma } from "@/generated/prisma/client/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { encryptUserField, decryptUserField } from "@/lib/user-encryption";
 
 // Define TransactionType enum locally since Prisma client may not be generated yet
 const TransactionTypeEnum = {
@@ -29,6 +30,10 @@ const transactionSchema = z
     categoryId: z.string().optional(),
     isRecurring: z.boolean().default(false),
     recurringRuleId: z.string().optional(),
+    // Liability payment specific fields
+    referenceNumber: z.string().optional(),
+    // Audit field
+    createdBy: z.string().optional(),
   })
   .refine(
     (data) => {
@@ -153,6 +158,19 @@ export async function createTransaction(data: TransactionInput) {
       }
     }
 
+    // Encrypt sensitive fields
+    const encryptedDescription = rest.description 
+      ? await encryptUserField(session.user.id, "transaction.description", rest.description)
+      : null;
+    
+    const encryptedReferenceNumber = rest.referenceNumber
+      ? await encryptUserField(session.user.id, "transaction.referenceNumber", rest.referenceNumber)
+      : null;
+    
+    const encryptedCreatedBy = rest.createdBy
+      ? await encryptUserField(session.user.id, "transaction.createdBy", rest.createdBy)
+      : null;
+
     const createData = {
       amount,
       type,
@@ -160,6 +178,12 @@ export async function createTransaction(data: TransactionInput) {
       userId: session.user.id,
       toAccountId: type === "TRANSFER" ? toAccountId : null,
       ...rest,
+      description: null, // Nullify plaintext after encryption
+      descriptionEncrypted: encryptedDescription,
+      referenceNumber: null, // Nullify plaintext after encryption
+      referenceNumberEncrypted: encryptedReferenceNumber,
+      createdBy: null, // Nullify plaintext after encryption
+      createdByEncrypted: encryptedCreatedBy,
       categoryId,
       recurringRuleId,
     };
@@ -452,7 +476,64 @@ export async function getTransactions(options?: {
       prisma.transaction.count({ where }),
     ]);
 
-    return { success: true, data: transactions, total };
+    // Decrypt sensitive fields
+    const decryptedTransactions = await Promise.all(
+      transactions.map(async (tx) => {
+        // Use encrypted description if available, otherwise fall back to plaintext
+        let finalDescription = tx.description;
+        if (tx.descriptionEncrypted) {
+          try {
+            finalDescription = await decryptUserField(
+              session.user.id,
+              "transaction.description",
+              tx.descriptionEncrypted
+            );
+          } catch {
+            // If decryption fails, fall back to plaintext
+            finalDescription = tx.description;
+          }
+        }
+
+        // Use encrypted referenceNumber if available, otherwise fall back to plaintext
+        let finalReferenceNumber = tx.referenceNumber;
+        if (tx.referenceNumberEncrypted) {
+          try {
+            finalReferenceNumber = await decryptUserField(
+              session.user.id,
+              "transaction.referenceNumber",
+              tx.referenceNumberEncrypted
+            );
+          } catch {
+            // If decryption fails, fall back to plaintext
+            finalReferenceNumber = tx.referenceNumber;
+          }
+        }
+
+        // Use encrypted createdBy if available, otherwise fall back to plaintext
+        let finalCreatedBy = tx.createdBy;
+        if (tx.createdByEncrypted) {
+          try {
+            finalCreatedBy = await decryptUserField(
+              session.user.id,
+              "transaction.createdBy",
+              tx.createdByEncrypted
+            );
+          } catch {
+            // If decryption fails, fall back to plaintext
+            finalCreatedBy = tx.createdBy;
+          }
+        }
+
+        return {
+          ...tx,
+          description: finalDescription,
+          referenceNumber: finalReferenceNumber,
+          createdBy: finalCreatedBy,
+        };
+      })
+    );
+
+    return { success: true, data: decryptedTransactions, total };
   } catch (error) {
     console.error("Get transactions error:", error);
     return { success: false, error: "Failed to fetch transactions", data: [] };

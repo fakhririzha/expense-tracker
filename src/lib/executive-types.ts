@@ -54,6 +54,7 @@ export interface ExecutiveMetrics {
   totalCash: number;
   totalSavings: number;
   totalInvestments: number;
+  totalPersonalAssets: number;
   totalDebt: number;
   netWorth: number;
 

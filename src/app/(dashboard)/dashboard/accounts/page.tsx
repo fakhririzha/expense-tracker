@@ -89,10 +89,10 @@ export default function AccountsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-green-600">
-                {formatCurrency(summary.totalAssets)}
+                {formatCurrency(summary.totalAssets, summary.displayCurrency)}
               </div>
               <p className="text-xs text-muted-foreground">
-                Bank, Cash, Investments
+                Bank, Cash, Investments, Personal Assets
               </p>
             </CardContent>
           </Card>
@@ -106,7 +106,7 @@ export default function AccountsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-red-600">
-                {formatCurrency(summary.totalLiabilities)}
+                {formatCurrency(summary.totalLiabilities, summary.displayCurrency)}
               </div>
               <p className="text-xs text-muted-foreground">
                 Loans, Credit Cards
@@ -121,7 +121,7 @@ export default function AccountsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {formatCurrency(summary.netWorth)}
+                {formatCurrency(summary.netWorth, summary.displayCurrency)}
               </div>
               <p className="text-xs text-muted-foreground">
                 Assets - Liabilities

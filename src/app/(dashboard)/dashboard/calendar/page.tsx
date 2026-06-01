@@ -41,6 +41,7 @@ export default function CalendarPage() {
   const month = currentMonth.getMonth() + 1;
 
   const { data: events = [], isLoading: eventsLoading } = useCalendarEvents(year, month);
+  console.log(events);
   const { data: upcomingBills = [], isLoading: upcomingLoading } = useUpcomingBills(7);
   const { data: summary } = useMonthSummary(year, month);
 

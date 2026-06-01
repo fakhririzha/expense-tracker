@@ -9,6 +9,7 @@ import {
   validateLiabilityPayment,
   generatePaymentReference as generateRef,
 } from "@/lib/liability-payment-validation";
+import { encryptUserField, decryptUserField } from "@/lib/user-encryption";
 
 // Schema for liability payment input
 const liabilityPaymentSchema = z.object({
@@ -120,18 +121,31 @@ export async function createLiabilityPayment(
         const targetBalanceBefore = targetAccount.balance;
 
         // 3b. Create transaction record with PENDING status
+        const encryptedDescription = description
+          ? await encryptUserField(userId, "transaction.description", description)
+          : null;
+        const encryptedReferenceNumber = referenceNumber
+          ? await encryptUserField(userId, "transaction.referenceNumber", referenceNumber)
+          : null;
+        const encryptedCreatedBy = userId
+          ? await encryptUserField(userId, "transaction.createdBy", userId)
+          : null;
+
         const transaction = await tx.transaction.create({
           data: {
             amount,
             currency,
             exchangeRate,
             type: TransactionType.LIABILITY_PAYMENT, // Payments are treated as expenses
-            description,
+            description: null, // Nullify plaintext after encryption
+            descriptionEncrypted: encryptedDescription,
             date,
-            referenceNumber,
+            referenceNumber: null, // Nullify plaintext after encryption
+            referenceNumberEncrypted: encryptedReferenceNumber,
             isOverpayment: allowOverpayment && amount > Math.abs(targetBalanceBefore),
             paymentStatus: PaymentStatus.PROCESSING,
-            createdBy: userId,
+            createdBy: null, // Nullify plaintext after encryption
+            createdByEncrypted: encryptedCreatedBy,
             processedAt: new Date(),
             userId,
             accountId: sourceAccountId, // Source account is the "from" account
@@ -154,6 +168,17 @@ export async function createLiabilityPayment(
         });
 
         // 3e. Create audit trail record with consistent in-transaction balances
+        // Encrypt IP address and user agent for security (server-side, use placeholder)
+        const ipAddress = "server"; // Server-side placeholder
+        const userAgent = "FinHealth API"; // Server-side, use generic
+        
+        const encryptedIpAddress = ipAddress
+          ? await encryptUserField(userId, "liabilityPaymentAudit.ipAddress", ipAddress)
+          : null;
+        const encryptedUserAgent = userAgent
+          ? await encryptUserField(userId, "liabilityPaymentAudit.userAgent", userAgent)
+          : null;
+
         await tx.liabilityPaymentAudit.create({
           data: {
             transactionId: transaction.id,
@@ -168,6 +193,10 @@ export async function createLiabilityPayment(
             exchangeRate,
             executedBy: userId,
             executedAt: new Date(),
+            ipAddress: null, // Nullify plaintext after encryption
+            ipAddressEncrypted: encryptedIpAddress,
+            userAgent: null, // Nullify plaintext after encryption
+            userAgentEncrypted: encryptedUserAgent,
           },
         });
 
@@ -288,9 +317,55 @@ export async function getLiabilityPaymentDetails(transactionId: string) {
       };
     }
 
+    // Decrypt sensitive fields
+    let finalDescription = transaction.description;
+    let finalReferenceNumber = transaction.referenceNumber;
+    let finalCreatedBy = transaction.createdBy;
+
+    if (transaction.descriptionEncrypted) {
+      try {
+        finalDescription = await decryptUserField(
+          session.user.id,
+          "transaction.description",
+          transaction.descriptionEncrypted
+        );
+      } catch {
+        // Fall back to plaintext
+      }
+    }
+
+    if (transaction.referenceNumberEncrypted) {
+      try {
+        finalReferenceNumber = await decryptUserField(
+          session.user.id,
+          "transaction.referenceNumber",
+          transaction.referenceNumberEncrypted
+        );
+      } catch {
+        // Fall back to plaintext
+      }
+    }
+
+    if (transaction.createdByEncrypted) {
+      try {
+        finalCreatedBy = await decryptUserField(
+          session.user.id,
+          "transaction.createdBy",
+          transaction.createdByEncrypted
+        );
+      } catch {
+        // Fall back to plaintext
+      }
+    }
+
     return {
       success: true,
-      data: transaction,
+      data: {
+        ...transaction,
+        description: finalDescription,
+        referenceNumber: finalReferenceNumber,
+        createdBy: finalCreatedBy,
+      },
     };
   } catch (error) {
     console.error("Get liability payment details error:", error);
@@ -503,9 +578,61 @@ export async function getLiabilityPaymentHistory(
       prisma.transaction.count({ where }),
     ]);
 
+    // Decrypt sensitive fields for each payment
+    const decryptedPayments = await Promise.all(
+      payments.map(async (payment) => {
+        let finalDescription = payment.description;
+        let finalReferenceNumber = payment.referenceNumber;
+        let finalCreatedBy = payment.createdBy;
+
+        if (payment.descriptionEncrypted) {
+          try {
+            finalDescription = await decryptUserField(
+              session.user.id,
+              "transaction.description",
+              payment.descriptionEncrypted
+            );
+          } catch {
+            // Fall back to plaintext
+          }
+        }
+
+        if (payment.referenceNumberEncrypted) {
+          try {
+            finalReferenceNumber = await decryptUserField(
+              session.user.id,
+              "transaction.referenceNumber",
+              payment.referenceNumberEncrypted
+            );
+          } catch {
+            // Fall back to plaintext
+          }
+        }
+
+        if (payment.createdByEncrypted) {
+          try {
+            finalCreatedBy = await decryptUserField(
+              session.user.id,
+              "transaction.createdBy",
+              payment.createdByEncrypted
+            );
+          } catch {
+            // Fall back to plaintext
+          }
+        }
+
+        return {
+          ...payment,
+          description: finalDescription,
+          referenceNumber: finalReferenceNumber,
+          createdBy: finalCreatedBy,
+        };
+      })
+    );
+
     return {
       success: true,
-      data: payments,
+      data: decryptedPayments,
       total,
     };
   } catch (error) {

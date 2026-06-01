@@ -18,6 +18,7 @@ import {
   TrendingUp,
   Repeat,
   Layers,
+  Boxes,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -51,6 +52,12 @@ const exportCards = [
     description: "Export your investment portfolio",
     icon: TrendingUp,
     type: "investments" as const,
+  },
+  {
+    title: "Personal Assets",
+    description: "Export your owned items and current valuations",
+    icon: Boxes,
+    type: "assets" as const,
   },
   {
     title: "Recurring Rules",
@@ -153,7 +160,8 @@ export default function DataManagementPage() {
           <CardContent>
             <p className="text-sm text-muted-foreground mb-4">
               This includes all your accounts, transactions, budgets, categories,
-              investments, recurring rules, and savings goals. Perfect for backup
+              investments, personal assets, valuation histories, recurring rules,
+              and savings goals. Perfect for backup
               or migrating to another device.
             </p>
             <ExportDialog

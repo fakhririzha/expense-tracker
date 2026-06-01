@@ -7,6 +7,7 @@ import {
   exportAllData,
   exportCategoriesCSV,
   exportInvestmentsCSV,
+  exportPersonalAssetsCSV,
   exportRecurringRulesCSV,
 } from "@/actions/export-actions";
 import { getAccounts } from "@/actions/account-actions";
@@ -50,6 +51,7 @@ type ExportType =
   | "budgets"
   | "categories"
   | "investments"
+  | "assets"
   | "recurring"
   | "all";
 
@@ -98,6 +100,12 @@ const exportOptions: {
     value: "investments",
     label: "Investments",
     description: "Export your investment portfolio",
+    icon: <FileDown className="h-4 w-4" />,
+  },
+  {
+    value: "assets",
+    label: "Personal Assets",
+    description: "Export your owned item inventory",
     icon: <FileDown className="h-4 w-4" />,
   },
   {
@@ -174,6 +182,9 @@ export function ExportDialog({ trigger, defaultType }: ExportDialogProps) {
           break;
         case "investments":
           result = await exportInvestmentsCSV();
+          break;
+        case "assets":
+          result = await exportPersonalAssetsCSV();
           break;
         case "recurring":
           result = await exportRecurringRulesCSV();

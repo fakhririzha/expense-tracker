@@ -22,6 +22,11 @@ interface AssetData {
   currency: string;
 }
 
+interface PersonalAssetData {
+  currentValue: number;
+  currency: string;
+}
+
 interface TransactionData {
   type: string;
   amount: number;
@@ -64,6 +69,11 @@ export async function getExecutiveMetrics(): Promise<{
     // Fetch all investment assets (exclude assets with 0 quantity - sold positions)
     const investmentAssets = await prisma.investmentAsset.findMany({
       where: { userId: session.user.id, quantity: { gt: 0 } },
+    });
+
+    const personalAssets = await prisma.personalAsset.findMany({
+      where: { userId: session.user.id, disposedAt: null },
+      select: { currentValue: true, currency: true },
     });
 
     // Fetch transactions for the last 6 months for expense/income analysis
@@ -139,6 +149,15 @@ export async function getExecutiveMetrics(): Promise<{
     const totalUnrealizedPnL = investmentValue - investmentCost;
     const totalRealizedPnL = realizedPnLResult._sum.realizedPnL ?? 0;
 
+    let totalPersonalAssets = 0;
+    for (const asset of personalAssets as PersonalAssetData[]) {
+      const rate =
+        asset.currency === mainCurrency
+          ? 1
+          : (await getExchangeRate(asset.currency, mainCurrency)) ?? 1;
+      totalPersonalAssets += asset.currentValue * rate;
+    }
+
     // Calculate monthly averages from transactions
     let totalExpenses = 0;
     let totalIncome = 0;
@@ -164,7 +183,8 @@ export async function getExecutiveMetrics(): Promise<{
       incomeMonths.size > 0 ? totalIncome / incomeMonths.size : 0;
 
     // Calculate key metrics
-    const totalAssets = totalCash + totalSavings + investmentValue;
+    const totalAssets =
+      totalCash + totalSavings + investmentValue + totalPersonalAssets;
     const netWorth = totalAssets - totalDebt;
     const liquidAssets = totalCash + totalSavings;
 
@@ -199,6 +219,7 @@ export async function getExecutiveMetrics(): Promise<{
         totalCash,
         totalSavings,
         totalInvestments: investmentValue,
+        totalPersonalAssets,
         totalDebt,
         netWorth,
         debtToWealthRatio,

@@ -21,6 +21,7 @@ import {
 import { Prisma, UnitType } from "@/generated/prisma/client/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { encryptUserField, decryptUserField } from "@/lib/user-encryption";
 
 const investmentAssetSchema = z.object({
   symbol: z.string().min(1, "Symbol is required").toUpperCase(),
@@ -199,6 +200,11 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
         // Compute balanceAfter immediately before writing trade history
         const balanceAfter = updatedAccount.balance;
 
+        // Encrypt notes for trade history
+        const encryptedNotes = `Additional purchase of ${symbol}`
+          ? await encryptUserField(session.user.id, "tradeHistory.notes", `Additional purchase of ${symbol}`)
+          : null;
+
         // Record the buy trade with audit trail using fresh balance snapshots
         await tx.tradeHistory.create({
           data: {
@@ -213,7 +219,8 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
             balanceBefore,
             balanceAfter,
             date: new Date(),
-            notes: `Additional purchase of ${symbol}`,
+            notes: null, // Nullify plaintext after encryption
+            notesEncrypted: encryptedNotes,
           },
         });
 
@@ -283,6 +290,11 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
       // Compute balanceAfter immediately before writing trade history
       const balanceAfter = updatedAccount.balance;
 
+      // Encrypt notes for trade history
+      const encryptedNotes = `Initial purchase of ${symbol}`
+        ? await encryptUserField(session.user.id, "tradeHistory.notes", `Initial purchase of ${symbol}`)
+        : null;
+
       // Create initial BUY trade record with audit trail using fresh balance snapshots
       await tx.tradeHistory.create({
         data: {
@@ -297,7 +309,8 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
           balanceBefore,
           balanceAfter,
           date: new Date(),
-          notes: `Initial purchase of ${symbol}`,
+          notes: null, // Nullify plaintext after encryption
+          notesEncrypted: encryptedNotes,
           unitType: storageUnitType,
         },
       });
@@ -465,7 +478,12 @@ export async function recordTrade(data: TradeInput) {
         });
       }
 
-      // Create trade history BEFORE deleting asset (TradeHistory requires valid assetId FK)
+      // Create trade history with audit trail (BEFORE deleting/updating asset to preserve FK constraint)
+      // Encrypt notes if provided
+      const encryptedNotes = rest.notes
+        ? await encryptUserField(session.user.id, "tradeHistory.notes", rest.notes)
+        : null;
+
       const trade = await tx.tradeHistory.create({
         data: {
           type,
@@ -479,7 +497,8 @@ export async function recordTrade(data: TradeInput) {
           accountId: account.id,
           balanceBefore,
           balanceAfter,
-          ...rest,
+          notes: null, // Nullify plaintext after encryption
+          notesEncrypted: encryptedNotes,
         },
       });
 
@@ -755,7 +774,30 @@ export async function getTradeHistory(assetId?: string) {
       orderBy: { date: "desc" },
     });
 
-    return { success: true, data: trades };
+    // Decrypt sensitive fields
+    const decryptedTrades = await Promise.all(
+      trades.map(async (trade) => {
+        let finalNotes = trade.notes;
+        if (trade.notesEncrypted) {
+          try {
+            finalNotes = await decryptUserField(
+              session.user.id,
+              "tradeHistory.notes",
+              trade.notesEncrypted
+            );
+          } catch {
+            // Fall back to plaintext
+          }
+        }
+
+        return {
+          ...trade,
+          notes: finalNotes,
+        };
+      })
+    );
+
+    return { success: true, data: decryptedTrades };
   } catch (error) {
     console.error("Get trade history error:", error);
     return { success: false, error: "Failed to fetch trade history", data: [] };

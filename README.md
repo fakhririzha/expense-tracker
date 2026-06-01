@@ -30,6 +30,7 @@ Expense Tracker is a modern web application designed to help users manage their 
 - **All-in-One Financial Hub**: Manage accounts, transactions, and investments in one place
 - **Multi-Currency Support**: Track finances across different currencies with automatic exchange rate conversion
 - **Investment Tracking**: Monitor stock portfolios with real-time price data from Yahoo Finance
+- **Personal Asset Tracking**: Maintain dated valuations for owned items such as electronics, vehicles, and property
 - **Automated Recurring Transactions**: Set up and automatically process recurring income and expenses
 - **Financial Health Insights**: Get personalized wealth health scores and retirement progress indicators
 - **Secure Authentication**: Enterprise-grade authentication powered by Auth.js with JWT sessions
@@ -43,13 +44,14 @@ Expense Tracker is a modern web application designed to help users manage their 
 | **Account Management** | Create and manage multiple financial accounts (Bank, Cash, Investment, Loan, Credit Card) |
 | **Transaction Tracking** | Record income, expenses, and transfers with category classification |
 | **Investment Portfolio** | Track stocks and investments with real-time price updates via Yahoo Finance |
+| **Personal Assets** | Track durable owned items with manual valuation history and disposal dates |
 | **Recurring Transactions** | Automate regular transactions with flexible scheduling (daily, weekly, monthly, etc.) |
 | **Multi-Currency** | Support for multiple currencies with automatic exchange rate conversion |
 | **Financial Dashboard** | Executive overview with net worth, cash flow, and health metrics |
 
 ### Financial Metrics
 
-- **Net Worth Calculation**: Real-time computation of total assets minus liabilities
+- **Net Worth Calculation**: Real-time computation of financial accounts, investments, and personal assets minus liabilities
 - **Wealth Health Score**: Tier-based health rating (S, A, B, C, F) based on debt-to-wealth ratio
 - **Retirement Progress**: Visual tracking towards retirement savings goals
 - **Portfolio Performance**: Realized and unrealized gains/losses on investments

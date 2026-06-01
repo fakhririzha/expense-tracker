@@ -6,6 +6,7 @@ import { Prisma } from "@/generated/prisma/client/client";
 import { addDays, addMonths, addWeeks, addYears } from "date-fns";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { encryptUserField, decryptUserField } from "@/lib/user-encryption";
 
 const recurringRuleSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -52,9 +53,23 @@ export async function createRecurringRule(data: RecurringRuleInput) {
       }
     }
 
+    // Encrypt sensitive fields
+    const encryptedName = restData.name
+      ? await encryptUserField(session.user.id, "recurringRule.name", restData.name)
+      : null;
+    
+    const encryptedDescription = restData.description
+      ? await encryptUserField(session.user.id, "recurringRule.description", restData.description)
+      : null;
+
     const rule = await prisma.recurringRule.create({
       data: {
         ...restData,
+        // Keep plaintext name (required field), also store encrypted
+        nameEncrypted: encryptedName,
+        // Nullify optional plaintext after encryption
+        description: restData.description ? null : undefined,
+        descriptionEncrypted: encryptedDescription,
         categoryId: categoryId?.trim() || null,
         userId: session.user.id,
       },
@@ -104,12 +119,37 @@ export async function updateRecurringRule(
       }
     }
 
+    // Encrypt sensitive fields if provided
+    let encryptedName: string | null = null;
+    let encryptedDescription: string | null = null;
+    
+    if (data.name) {
+      encryptedName = await encryptUserField(session.user.id, "recurringRule.name", data.name);
+    }
+    if (data.description !== undefined) {
+      encryptedDescription = data.description
+        ? await encryptUserField(session.user.id, "recurringRule.description", data.description)
+        : null;
+    }
+
+    const updateData: Record<string, unknown> = {
+      ...data,
+      categoryId: data.categoryId !== undefined ? (data.categoryId?.trim() || null) : undefined,
+    };
+    
+    // If name is being updated, also store encrypted version
+    if (data.name) {
+      updateData.nameEncrypted = encryptedName;
+    }
+    // If description is being updated, nullify plaintext and store encrypted
+    if (data.description !== undefined) {
+      updateData.description = data.description ? null : undefined;
+      updateData.descriptionEncrypted = encryptedDescription;
+    }
+
     const rule = await prisma.recurringRule.update({
       where: { id },
-      data: {
-        ...data,
-        categoryId: data.categoryId !== undefined ? (data.categoryId?.trim() || null) : undefined,
-      },
+      data: updateData,
     });
 
     revalidatePath("/dashboard");
@@ -161,7 +201,46 @@ export async function getRecurringRules() {
       orderBy: { nextDueDate: "asc" },
     });
 
-    return { success: true, data: rules };
+    // Decrypt sensitive fields
+    const decryptedRules = await Promise.all(
+      rules.map(async (rule) => {
+        // Use encrypted name if available, otherwise fall back to plaintext
+        let finalName = rule.name;
+        if (rule.nameEncrypted) {
+          try {
+            finalName = await decryptUserField(
+              session.user.id,
+              "recurringRule.name",
+              rule.nameEncrypted
+            );
+          } catch {
+            // Fall back to plaintext
+          }
+        }
+
+        // Use encrypted description if available, otherwise fall back to plaintext
+        let finalDescription = rule.description;
+        if (rule.descriptionEncrypted) {
+          try {
+            finalDescription = await decryptUserField(
+              session.user.id,
+              "recurringRule.description",
+              rule.descriptionEncrypted
+            );
+          } catch {
+            // Fall back to plaintext
+          }
+        }
+
+        return {
+          ...rule,
+          name: finalName,
+          description: finalDescription,
+        };
+      })
+    );
+
+    return { success: true, data: decryptedRules };
   } catch (error) {
     console.error("Get recurring rules error:", error);
     return { success: false, error: "Failed to fetch recurring rules", data: [] };

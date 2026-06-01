@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import prisma from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { encryptUserField, decryptUserField } from "@/lib/user-encryption";
 
 // Schema for goal validation
 const goalSchema = z.object({
@@ -70,7 +71,46 @@ export async function getGoals() {
       orderBy: { createdAt: "desc" },
     });
 
-    return { success: true, data: goals };
+    // Decrypt sensitive fields
+    const decryptedGoals = await Promise.all(
+      goals.map(async (goal) => {
+        // Use encrypted name if available, otherwise fall back to plaintext
+        let finalName = goal.name;
+        if (goal.nameEncrypted) {
+          try {
+            finalName = await decryptUserField(
+              session.user.id,
+              "savingsGoal.name",
+              goal.nameEncrypted
+            );
+          } catch {
+            // Fall back to plaintext
+          }
+        }
+
+        // Use encrypted description if available, otherwise fall back to plaintext
+        let finalDescription = goal.description;
+        if (goal.descriptionEncrypted) {
+          try {
+            finalDescription = await decryptUserField(
+              session.user.id,
+              "savingsGoal.description",
+              goal.descriptionEncrypted
+            );
+          } catch {
+            // Fall back to plaintext
+          }
+        }
+
+        return {
+          ...goal,
+          name: finalName,
+          description: finalDescription,
+        };
+      })
+    );
+
+    return { success: true, data: decryptedGoals };
   } catch (error) {
     console.error("Get goals error:", error);
     return { success: false, error: "Failed to fetch goals", data: [] };
@@ -107,7 +147,41 @@ export async function getGoal(id: string) {
       return { success: false, error: "Goal not found" };
     }
 
-    return { success: true, data: goal };
+    // Decrypt sensitive fields
+    let finalName = goal.name;
+    if (goal.nameEncrypted) {
+      try {
+        finalName = await decryptUserField(
+          session.user.id,
+          "savingsGoal.name",
+          goal.nameEncrypted
+        );
+      } catch {
+        // Fall back to plaintext
+      }
+    }
+
+    let finalDescription = goal.description;
+    if (goal.descriptionEncrypted) {
+      try {
+        finalDescription = await decryptUserField(
+          session.user.id,
+          "savingsGoal.description",
+          goal.descriptionEncrypted
+        );
+      } catch {
+        // Fall back to plaintext
+      }
+    }
+
+    return {
+      success: true,
+      data: {
+        ...goal,
+        name: finalName,
+        description: finalDescription,
+      },
+    };
   } catch (error) {
     console.error("Get goal error:", error);
     return { success: false, error: "Failed to fetch goal" };
@@ -149,13 +223,26 @@ export async function createGoal(data: GoalInput) {
       }
     }
 
+    // Encrypt sensitive fields
+    const encryptedName = restData.name
+      ? await encryptUserField(session.user.id, "savingsGoal.name", restData.name)
+      : null;
+    
+    const encryptedDescription = restData.description
+      ? await encryptUserField(session.user.id, "savingsGoal.description", restData.description)
+      : null;
+
     const goal = await prisma.savingsGoal.create({
       data: {
         ...restData,
         targetDate: validatedFields.data.targetDate || null,
         icon: validatedFields.data.icon || null,
         color: validatedFields.data.color || null,
-        description: validatedFields.data.description || null,
+        // Nullify optional plaintext after encryption
+        description: validatedFields.data.description ? null : undefined,
+        descriptionEncrypted: encryptedDescription,
+        // Keep plaintext name (required field), also store encrypted
+        nameEncrypted: encryptedName,
         accountId: accountId?.trim() || null,
         userId: session.user.id,
       },
@@ -227,6 +314,34 @@ export async function updateGoal(id: string, data: Partial<GoalInput>) {
       }
     }
 
+    // Encrypt sensitive fields if provided
+    let encryptedName: string | null = null;
+    let encryptedDescription: string | null = null;
+    
+    if (validatedFields.data.name) {
+      encryptedName = await encryptUserField(session.user.id, "savingsGoal.name", validatedFields.data.name);
+    }
+    if (validatedFields.data.description !== undefined) {
+      encryptedDescription = validatedFields.data.description
+        ? await encryptUserField(session.user.id, "savingsGoal.description", validatedFields.data.description)
+        : null;
+    }
+
+    const updateData: Record<string, unknown> = {
+      ...validatedFields.data,
+      accountId: sanitizedAccountId,
+    };
+    
+    // If name is being updated, also store encrypted version
+    if (validatedFields.data.name) {
+      updateData.nameEncrypted = encryptedName;
+    }
+    // If description is being updated, nullify plaintext and store encrypted
+    if (validatedFields.data.description !== undefined) {
+      updateData.description = validatedFields.data.description ? null : undefined;
+      updateData.descriptionEncrypted = encryptedDescription;
+    }
+
     // Check if goal should be marked as completed
     const newCurrentAmount = validatedFields.data.currentAmount ?? existingGoal.currentAmount;
     const newTargetAmount = validatedFields.data.targetAmount ?? existingGoal.targetAmount;
@@ -235,8 +350,7 @@ export async function updateGoal(id: string, data: Partial<GoalInput>) {
     const goal = await prisma.savingsGoal.update({
       where: { id },
       data: {
-        ...validatedFields.data,
-        accountId: sanitizedAccountId,
+        ...updateData,
         isCompleted,
       },
       include: {
@@ -482,7 +596,44 @@ export async function getGoalsSummary() {
 
     const now = new Date();
 
-    const goalsWithProgress: GoalWithProgress[] = goals.map((goal) => {
+    // Decrypt sensitive fields for each goal
+    const decryptedGoals = await Promise.all(
+      goals.map(async (goal) => {
+        let finalName = goal.name;
+        if (goal.nameEncrypted) {
+          try {
+            finalName = await decryptUserField(
+              session.user.id,
+              "savingsGoal.name",
+              goal.nameEncrypted
+            );
+          } catch {
+            // Fall back to plaintext
+          }
+        }
+
+        let finalDescription = goal.description;
+        if (goal.descriptionEncrypted) {
+          try {
+            finalDescription = await decryptUserField(
+              session.user.id,
+              "savingsGoal.description",
+              goal.descriptionEncrypted
+            );
+          } catch {
+            // Fall back to plaintext
+          }
+        }
+
+        return {
+          ...goal,
+          name: finalName,
+          description: finalDescription,
+        };
+      })
+    );
+
+    const goalsWithProgress: GoalWithProgress[] = decryptedGoals.map((goal) => {
       const percentage = goal.targetAmount > 0 ? (goal.currentAmount / goal.targetAmount) * 100 : 0;
       const remaining = goal.targetAmount - goal.currentAmount;
 
