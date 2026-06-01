@@ -218,6 +218,8 @@ model Transaction {
   @@index([categoryId])
   @@index([date])
   @@index([referenceNumber])
+  @@index([financialAccountId], map: "Transaction_financialAccountId_fkey")
+  @@index([recurringRuleId], map: "Transaction_recurringRuleId_fkey")
 }
 
 // ==================== INVESTMENT MODELS ====================
