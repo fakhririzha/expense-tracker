@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { encryptUserField, decryptUserField } from "@/lib/user-encryption";
 import { getExchangeRate } from "@/lib/finance-service";
+import { getCurrentPortfolioValuation } from "@/lib/investment-valuation-service";
 
 // Define AccountType enum locally
 const AccountTypeEnum = {
@@ -335,12 +336,36 @@ export async function getAccountsSummary() {
     summary.totalAssets += totalPersonalAssets;
     summary.byType.PERSONAL_ASSET = totalPersonalAssets;
 
+    let totalInvestments: number | null = null;
+    let valuationError: string | null = null;
+    try {
+      const portfolio = await getCurrentPortfolioValuation(
+        session.user.id,
+        user.mainCurrency
+      );
+      totalInvestments = portfolio.summary.totalValue;
+      summary.totalAssets += totalInvestments;
+      summary.byType.INVESTMENT_HOLDINGS = totalInvestments;
+    } catch (error) {
+      console.error("Get accounts portfolio valuation error:", error);
+      valuationError =
+        error instanceof Error
+          ? error.message
+          : "Current investment valuation is unavailable";
+    }
+
+    const totalAssets = totalInvestments === null ? null : summary.totalAssets;
+
     return {
       success: true,
       data: {
         ...summary,
-        netWorth: summary.totalAssets - summary.totalLiabilities,
+        totalAssets,
+        netWorth:
+          totalAssets === null ? null : totalAssets - summary.totalLiabilities,
+        totalInvestments,
         totalPersonalAssets,
+        valuationError,
         displayCurrency: user.mainCurrency,
         accounts: decryptedAccounts,
       },

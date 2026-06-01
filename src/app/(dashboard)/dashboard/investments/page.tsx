@@ -7,9 +7,10 @@ import {
   PortfolioTable,
 } from "@/components/investments/PortfolioTable";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { formatCurrency, formatPercentage } from "@/lib/utils";
 import { BarChart3, TrendingDown, TrendingUp } from "lucide-react";
-import { usePortfolio, usePortfolioSummary, useRefreshPortfolioPrices } from "@/hooks/useInvestmentQueries";
+import { usePortfolio, useRefreshPortfolioPrices } from "@/hooks/useInvestmentQueries";
 import { useState } from "react";
 
 interface PortfolioSummaryData {
@@ -30,12 +31,14 @@ interface PortfolioSummaryData {
  */
 export default function InvestmentsPage() {
   const [lastUpdated, setLastUpdated] = useState<Date | undefined>();
+  const { mainCurrency } = useCurrency();
 
-  const { data: assets = [], isLoading, error: portfolioError } = usePortfolio();
-  const { data: summaryData } = usePortfolioSummary();
+  const { data: portfolio, isLoading, error: portfolioError } = usePortfolio();
   const refreshMutation = useRefreshPortfolioPrices();
 
-  const summary = summaryData as PortfolioSummaryData | null | undefined;
+  const assets = portfolio?.assets ?? [];
+  const summary = portfolio?.summary as PortfolioSummaryData | undefined;
+  const displayCurrency = portfolio?.displayCurrency ?? mainCurrency;
 
   const handleRefresh = async () => {
     try {
@@ -78,7 +81,7 @@ export default function InvestmentsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {formatCurrency(summary.totalValue)}
+                {formatCurrency(summary.totalValue, displayCurrency)}
               </div>
               <p className="text-xs text-muted-foreground">
                 {summary.assetCount} assets
@@ -92,7 +95,7 @@ export default function InvestmentsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {formatCurrency(summary.totalCost)}
+                {formatCurrency(summary.totalCost, displayCurrency)}
               </div>
               <p className="text-xs text-muted-foreground">Cost basis</p>
             </CardContent>
@@ -118,7 +121,7 @@ export default function InvestmentsPage() {
                 }`}
               >
                 {summary.totalUnrealizedPnL >= 0 ? "+" : ""}
-                {formatCurrency(summary.totalUnrealizedPnL)}
+                {formatCurrency(summary.totalUnrealizedPnL, displayCurrency)}
               </div>
               <p
                 className={`text-xs ${
@@ -152,7 +155,7 @@ export default function InvestmentsPage() {
                 }`}
               >
                 {summary.totalDayChange >= 0 ? "+" : ""}
-                {formatCurrency(summary.totalDayChange)}
+                {formatCurrency(summary.totalDayChange, displayCurrency)}
               </div>
               <p
                 className={`text-xs ${
@@ -181,6 +184,7 @@ export default function InvestmentsPage() {
           <CardContent>
             <PortfolioTable
               assets={assets as PortfolioAsset[]}
+              displayCurrency={displayCurrency}
               onRefresh={handleRefresh}
               isRefreshing={refreshMutation.isPending}
               lastUpdated={lastUpdated}

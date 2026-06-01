@@ -316,7 +316,7 @@ const result = await createInvestmentAsset({
   symbol: "AAPL",
   quantity: 10,
   avgBuyPrice: 150.00,
-  currency: "USD"
+  accountId: "investment-account-id"
 });
 ```
 

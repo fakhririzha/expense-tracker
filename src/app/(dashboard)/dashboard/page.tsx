@@ -1,4 +1,3 @@
-import { getPortfolioSummary } from "@/actions/investment-actions";
 import { getTransactionSummary } from "@/actions/transaction-actions";
 import { auth } from "@/auth";
 import { RetirementProgress } from "@/components/dashboard/RetirementProgress";
@@ -29,12 +28,10 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  const [metricsResult, transactionSummary, portfolioSummary] =
-    await Promise.all([
-      getExecutiveMetrics(),
-      getTransactionSummary(),
-      getPortfolioSummary(),
-    ]);
+  const [metricsResult, transactionSummary] = await Promise.all([
+    getExecutiveMetrics(),
+    getTransactionSummary(),
+  ]);
 
   if (!metricsResult.success || !metricsResult.data) {
     return (
@@ -58,7 +55,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Key Metrics Grid */}
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <Card className="bg-primary text-primary-foreground">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-xl font-bold font-heading">Net Worth</CardTitle>
@@ -66,7 +63,9 @@ export default async function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-black tracking-tight">
-              {formatCurrency(metrics.netWorth, currency)}
+              {metrics.netWorth === null
+                ? "Unavailable"
+                : formatCurrency(metrics.netWorth, currency)}
             </div>
             <p className="text-sm font-medium opacity-80 mt-1">
               Total assets minus liabilities
@@ -83,22 +82,27 @@ export default async function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-black tracking-tight">
-              {formatCurrency(metrics.totalInvestments, currency)}
+              {metrics.totalInvestments === null
+                ? "Unavailable"
+                : formatCurrency(metrics.totalInvestments, currency)}
             </div>
-            {"data" in portfolioSummary &&
-              portfolioSummary.data &&
-              !Array.isArray(portfolioSummary.data) && (
+            {metrics.portfolioSummary && (
                 <p
                   className={`text-sm font-medium mt-1 ${
-                    portfolioSummary.data.totalUnrealizedPnL >= 0
+                    metrics.portfolioSummary.totalUnrealizedPnL >= 0
                       ? "text-green-800"
                       : "text-red-800"
                   }`}
                 >
-                  {formatPercentage(portfolioSummary.data.totalUnrealizedPnLPercent)}{" "}
+                  {formatPercentage(metrics.portfolioSummary.totalUnrealizedPnLPercent)}{" "}
                   unrealized
                 </p>
-              )}
+            )}
+            {metrics.valuationError && (
+              <p className="text-sm font-medium mt-1 text-red-800">
+                Live valuation unavailable
+              </p>
+            )}
           </CardContent>
         </Card>
 
@@ -144,7 +148,9 @@ export default async function DashboardPage() {
               {formatCurrency(metrics.totalDebt, currency)}
             </div>
             <p className="text-sm font-medium opacity-80 mt-1">
-              {metrics.debtToWealthRatio.toFixed(1)}% debt-to-wealth
+              {metrics.debtToWealthRatio === null
+                ? "Debt ratio unavailable"
+                : `${metrics.debtToWealthRatio.toFixed(1)}% debt-to-wealth`}
             </p>
           </CardContent>
         </Card>
@@ -152,16 +158,38 @@ export default async function DashboardPage() {
 
       {/* Health Score and Retirement Progress */}
       <div className="grid gap-6 md:grid-cols-2">
-        <WealthHealthCard
-          tier={metrics.healthTier}
-          debtToWealthRatio={metrics.debtToWealthRatio}
-          monthsOfRunway={metrics.monthsOfRunway}
-        />
-        <RetirementProgress
-          currentNetWorth={metrics.netWorth}
-          targetAmount={metrics.retirementTarget}
-          currency={currency}
-        />
+        {metrics.healthTier && metrics.debtToWealthRatio !== null ? (
+          <WealthHealthCard
+            tier={metrics.healthTier}
+            debtToWealthRatio={metrics.debtToWealthRatio}
+            monthsOfRunway={metrics.monthsOfRunway}
+          />
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle>Financial Health Score</CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm text-muted-foreground">
+              Unavailable until the live investment valuation can be loaded.
+            </CardContent>
+          </Card>
+        )}
+        {metrics.netWorth === null ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Retirement Progress</CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm text-muted-foreground">
+              Unavailable until the live investment valuation can be loaded.
+            </CardContent>
+          </Card>
+        ) : (
+          <RetirementProgress
+            currentNetWorth={metrics.netWorth}
+            targetAmount={metrics.retirementTarget}
+            currency={currency}
+          />
+        )}
       </div>
 
       {/* Monthly Cash Flow */}
@@ -204,9 +232,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Investment Performance Summary */}
-      {"data" in portfolioSummary &&
-        portfolioSummary.data &&
-        !Array.isArray(portfolioSummary.data) && (
+      {metrics.portfolioSummary ? (
         <Card>
           <CardHeader>
             <CardTitle className="text-xl font-bold font-heading">Investment Performance</CardTitle>
@@ -216,27 +242,27 @@ export default async function DashboardPage() {
               <div>
                 <p className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Portfolio Value</p>
                 <p className="text-2xl font-black">
-                  {formatCurrency(portfolioSummary.data.totalValue, currency)}
+                  {formatCurrency(metrics.portfolioSummary.totalValue, currency)}
                 </p>
               </div>
               <div>
                 <p className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Total Cost</p>
                 <p className="text-2xl font-black">
-                  {formatCurrency(portfolioSummary.data.totalCost, currency)}
+                  {formatCurrency(metrics.portfolioSummary.totalCost, currency)}
                 </p>
               </div>
               <div>
                 <p className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Unrealized P&L</p>
                 <p
                   className={`text-2xl font-black ${
-                    portfolioSummary.data.totalUnrealizedPnL >= 0
+                    metrics.portfolioSummary.totalUnrealizedPnL >= 0
                       ? "text-green-600"
                       : "text-red-600"
                   }`}
                 >
-                  {portfolioSummary.data.totalUnrealizedPnL >= 0 ? "+" : ""}
+                  {metrics.portfolioSummary.totalUnrealizedPnL >= 0 ? "+" : ""}
                   {formatCurrency(
-                    portfolioSummary.data.totalUnrealizedPnL,
+                    metrics.portfolioSummary.totalUnrealizedPnL,
                     currency
                   )}
                 </p>
@@ -245,19 +271,31 @@ export default async function DashboardPage() {
                 <p className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Realized P&L</p>
                 <p
                   className={`text-2xl font-black ${
-                    portfolioSummary.data.totalRealizedPnL >= 0
+                    metrics.portfolioSummary.totalRealizedPnL >= 0
                       ? "text-green-600"
                       : "text-red-600"
                   }`}
                 >
-                  {portfolioSummary.data.totalRealizedPnL >= 0 ? "+" : ""}
+                  {metrics.portfolioSummary.totalRealizedPnL >= 0 ? "+" : ""}
                   {formatCurrency(
-                    portfolioSummary.data.totalRealizedPnL,
+                    metrics.portfolioSummary.totalRealizedPnL,
                     currency
                   )}
                 </p>
               </div>
             </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-xl font-bold font-heading">
+              Investment Performance
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground">
+            {metrics.valuationError ||
+              "Current investment valuation is unavailable."}
           </CardContent>
         </Card>
       )}

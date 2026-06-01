@@ -1,7 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getPortfolio,
-  getPortfolioSummary,
   getInvestmentAccountsAction,
   getSellableInvestments,
   createInvestmentAsset,
@@ -18,13 +17,12 @@ import { accountKeys } from "./useAccountQueries";
 export const investmentKeys = {
   all: ["investments"] as const,
   portfolio: () => [...investmentKeys.all, "portfolio"] as const,
-  summary: () => [...investmentKeys.all, "summary"] as const,
   accounts: () => [...investmentKeys.all, "accounts"] as const,
   sellable: () => [...investmentKeys.all, "sellable"] as const,
   symbols: (query: string) =>
     [...investmentKeys.all, "symbols", query] as const,
-  price: (symbol: string, unitType?: string) =>
-    [...investmentKeys.all, "price", symbol, unitType] as const,
+  price: (symbol: string, targetCurrency?: string, unitType?: string) =>
+    [...investmentKeys.all, "price", symbol, targetCurrency, unitType] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -38,17 +36,6 @@ export function usePortfolio() {
       const result = await getPortfolio();
       if (!result.success) throw new Error(result.error);
       return result.data;
-    },
-  });
-}
-
-export function usePortfolioSummary() {
-  return useQuery({
-    queryKey: investmentKeys.summary(),
-    queryFn: async () => {
-      const result = await getPortfolioSummary();
-      if (!result.success) throw new Error(result.error);
-      return "data" in result ? result.data : null;
     },
   });
 }
@@ -90,27 +77,32 @@ export function useSearchSymbols(query: string) {
 /**
  * Hook to fetch the current price for a symbol with proper currency conversion.
  * 
- * - Indonesian stocks (symbols containing `.JK`) are returned as-is (already in IDR)
- * - US stocks and precious metals are converted from USD to IDR using IDR=X rate
+ * - Converts quotes into the selected investment account's currency
  * - Precious metals can optionally be converted from TROY_OUNCE to GRAM
  *
  * @param symbol - The stock/asset symbol to fetch the price for
+ * @param targetCurrency - Investment account currency for the preview
  * @param unitType - Optional unit type for precious metals ("GRAM" or "TROY_OUNCE")
- * @returns TanStack Query result with the converted price in IDR
+ * @returns TanStack Query result with the converted price
  */
 export function useAssetPrice(
   symbol: string | undefined,
+  targetCurrency: string | undefined,
   unitType?: "UNIT" | "TROY_OUNCE" | "GRAM"
 ) {
   return useQuery({
-    queryKey: investmentKeys.price(symbol || "", unitType),
+    queryKey: investmentKeys.price(symbol || "", targetCurrency, unitType),
     queryFn: async () => {
-      if (!symbol) return null;
-      const result = await getAssetPriceWithConversion(symbol, unitType);
+      if (!symbol || !targetCurrency) return null;
+      const result = await getAssetPriceWithConversion(
+        symbol,
+        targetCurrency,
+        unitType
+      );
       if (!result.success) throw new Error(result.error);
       return result;
     },
-    enabled: !!symbol && symbol.length > 0,
+    enabled: !!symbol && symbol.length > 0 && !!targetCurrency,
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes
   });
@@ -159,6 +151,7 @@ export function useRefreshPortfolioPrices() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: investmentKeys.all });
+      qc.invalidateQueries({ queryKey: accountKeys.all });
     },
   });
 }
