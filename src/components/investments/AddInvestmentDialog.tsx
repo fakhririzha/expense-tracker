@@ -5,6 +5,7 @@ import {
   useCreateInvestmentAsset,
   useSearchSymbols,
   useAssetPrice,
+  useInvestmentAccounts,
 } from "@/hooks/useInvestmentQueries";
 import { InvestmentAccountSelector } from "./InvestmentAccountSelector";
 import { Button } from "@/components/ui/button";
@@ -67,7 +68,6 @@ const investmentFormSchema = z.object({
   name: z.string().optional(),
   quantity: z.number().positive("Quantity must be positive"),
   avgBuyPrice: z.number().positive("Average buy price must be positive"),
-  currency: z.string(),
   accountId: z.string().min(1, "Investment account is required"),
   unitType: z.enum(["UNIT", "TROY_OUNCE", "GRAM"]).optional(),
 });
@@ -97,6 +97,7 @@ export function AddInvestmentDialog({ onSuccess }: AddInvestmentDialogProps) {
   const [selectedSymbol, setSelectedSymbol] = useState<SearchResult | null>(null);
   const createMutation = useCreateInvestmentAsset();
   const { data: searchResults = [], isLoading: isSearching } = useSearchSymbols(searchQuery);
+  const { data: investmentAccounts = [] } = useInvestmentAccounts();
 
   const form = useForm<InvestmentFormValues>({
     resolver: zodResolver(investmentFormSchema),
@@ -105,7 +106,6 @@ export function AddInvestmentDialog({ onSuccess }: AddInvestmentDialogProps) {
       name: "",
       quantity: 0,
       avgBuyPrice: 0,
-      currency: "IDR",
       accountId: "",
       unitType: undefined,
     },
@@ -114,17 +114,22 @@ export function AddInvestmentDialog({ onSuccess }: AddInvestmentDialogProps) {
   // Watch symbol and unitType to detect precious metals and fetch current price
   const watchedSymbol = form.watch("symbol");
   const watchedUnitType = form.watch("unitType");
+  const watchedAccountId = form.watch("accountId");
+  const selectedAccount = investmentAccounts.find(
+    (account) => account.id === watchedAccountId
+  );
   const isSymbolPreciousMetal = isPreciousMetal(watchedSymbol);
 
   // Fetch current price with currency conversion
   const { data: priceData, isLoading: isLoadingPrice } = useAssetPrice(
     watchedSymbol || undefined,
+    selectedAccount?.currency,
     watchedUnitType as "UNIT" | "TROY_OUNCE" | "GRAM" | undefined
   );
 
   // Format current price for display
   const currentPriceDisplay = priceData?.data
-    ? formatCurrency(priceData.data, "IDR")
+    ? formatCurrency(priceData.data, priceData.currency)
     : isLoadingPrice && watchedSymbol
     ? "Loading..."
     : "N/A";
@@ -338,20 +343,6 @@ export function AddInvestmentDialog({ onSuccess }: AddInvestmentDialogProps) {
                       {...field}
                       onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                     />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="currency"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Currency</FormLabel>
-                  <FormControl>
-                    <Input placeholder="IDR" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

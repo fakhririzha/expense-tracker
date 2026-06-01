@@ -2,7 +2,8 @@
 
 import { auth } from "@/auth";
 import prisma from "@/lib/db";
-import { getExchangeRate, getMultipleAssetPrices } from "@/lib/finance-service";
+import { getExchangeRate } from "@/lib/finance-service";
+import { getCurrentPortfolioValuation } from "@/lib/investment-valuation-service";
 import {
   type ExecutiveMetrics,
   HEALTH_TIERS,
@@ -12,13 +13,6 @@ import {
 interface AccountData {
   type: string;
   balance: number;
-  currency: string;
-}
-
-interface AssetData {
-  symbol: string;
-  quantity: number;
-  avgBuyPrice: number;
   currency: string;
 }
 
@@ -61,45 +55,30 @@ export async function getExecutiveMetrics(): Promise<{
 
     const mainCurrency = user.mainCurrency;
 
-    // Fetch all accounts
-    const accounts = await prisma.financialAccount.findMany({
-      where: { userId: session.user.id, isActive: true },
-    });
-
-    // Fetch all investment assets (exclude assets with 0 quantity - sold positions)
-    const investmentAssets = await prisma.investmentAsset.findMany({
-      where: { userId: session.user.id, quantity: { gt: 0 } },
-    });
-
-    const personalAssets = await prisma.personalAsset.findMany({
-      where: { userId: session.user.id, disposedAt: null },
-      select: { currentValue: true, currency: true },
-    });
-
     // Fetch transactions for the last 6 months for expense/income analysis
     const sixMonthsAgo = new Date();
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
-    const transactions = await prisma.transaction.findMany({
-      where: {
-        userId: session.user.id,
-        date: { gte: sixMonthsAgo },
-      },
-    });
-
-    // Fetch realized PnL
-    const realizedPnLResult = await prisma.tradeHistory.aggregate({
-      where: {
-        userId: session.user.id,
-        type: "SELL",
-        realizedPnL: { not: null },
-      },
-      _sum: { realizedPnL: true },
-    });
+    const [accounts, personalAssets, transactions] = await Promise.all([
+      prisma.financialAccount.findMany({
+        where: { userId: session.user.id, isActive: true },
+      }),
+      prisma.personalAsset.findMany({
+        where: { userId: session.user.id, disposedAt: null },
+        select: { currentValue: true, currency: true },
+      }),
+      prisma.transaction.findMany({
+        where: {
+          userId: session.user.id,
+          date: { gte: sixMonthsAgo },
+        },
+      }),
+    ]);
 
     // Calculate account totals (normalized to main currency)
     let totalCash = 0;
     let totalSavings = 0;
+    let totalInvestmentCash = 0;
     let totalDebt = 0;
 
     for (const account of accounts as AccountData[]) {
@@ -117,6 +96,9 @@ export async function getExecutiveMetrics(): Promise<{
         case "BANK":
           totalSavings += normalizedBalance;
           break;
+        case "INVESTMENT":
+          totalInvestmentCash += normalizedBalance;
+          break;
         case "LOAN":
         case "CREDIT_CARD":
           totalDebt += Math.abs(normalizedBalance);
@@ -124,30 +106,21 @@ export async function getExecutiveMetrics(): Promise<{
       }
     }
 
-    // Calculate investment values
-    let investmentValue = 0;
-    let investmentCost = 0;
-
-    if (investmentAssets.length > 0) {
-      const symbols = investmentAssets.map((a: AssetData) => a.symbol);
-      const prices = await getMultipleAssetPrices(symbols);
-
-      for (const asset of investmentAssets as AssetData[]) {
-        const quote = prices.get(asset.symbol);
-        const currentPrice = quote?.regularMarketPrice ?? asset.avgBuyPrice;
-
-        const assetRate =
-          asset.currency === mainCurrency
-            ? 1
-            : (await getExchangeRate(asset.currency, mainCurrency)) ?? 1;
-
-        investmentValue += asset.quantity * currentPrice * assetRate;
-        investmentCost += asset.quantity * asset.avgBuyPrice * assetRate;
-      }
+    let portfolioSummary: ExecutiveMetrics["portfolioSummary"] = null;
+    let valuationError: string | null = null;
+    try {
+      const portfolio = await getCurrentPortfolioValuation(
+        session.user.id,
+        mainCurrency
+      );
+      portfolioSummary = portfolio.summary;
+    } catch (error) {
+      console.error("Get executive portfolio valuation error:", error);
+      valuationError =
+        error instanceof Error
+          ? error.message
+          : "Current investment valuation is unavailable";
     }
-
-    const totalUnrealizedPnL = investmentValue - investmentCost;
-    const totalRealizedPnL = realizedPnLResult._sum.realizedPnL ?? 0;
 
     let totalPersonalAssets = 0;
     for (const asset of personalAssets as PersonalAssetData[]) {
@@ -183,13 +156,18 @@ export async function getExecutiveMetrics(): Promise<{
       incomeMonths.size > 0 ? totalIncome / incomeMonths.size : 0;
 
     // Calculate key metrics
-    const totalAssets =
-      totalCash + totalSavings + investmentValue + totalPersonalAssets;
-    const netWorth = totalAssets - totalDebt;
+    const totalAssets = portfolioSummary
+      ? totalCash +
+        totalSavings +
+        totalInvestmentCash +
+        portfolioSummary.totalValue +
+        totalPersonalAssets
+      : null;
+    const netWorth = totalAssets === null ? null : totalAssets - totalDebt;
     const liquidAssets = totalCash + totalSavings;
 
     const debtToWealthRatio =
-      totalAssets > 0 ? (totalDebt / totalAssets) * 100 : 0;
+      totalAssets === null ? null : totalAssets > 0 ? (totalDebt / totalAssets) * 100 : 0;
     const liquidityRatio =
       avgMonthlyExpenses > 0 ? liquidAssets / avgMonthlyExpenses : 0;
     const savingsRate =
@@ -200,40 +178,45 @@ export async function getExecutiveMetrics(): Promise<{
       avgMonthlyExpenses > 0 ? liquidAssets / avgMonthlyExpenses : 0;
 
     // Determine health tier
-    const healthTier = calculateHealthTier(
-      netWorth,
-      debtToWealthRatio,
-      monthsOfRunway
-    );
+    const healthTier =
+      netWorth === null || debtToWealthRatio === null
+        ? null
+        : calculateHealthTier(netWorth, debtToWealthRatio, monthsOfRunway);
 
     // Calculate retirement progress
     const retirementTarget = user.retirementTarget;
     const retirementProgress =
-      retirementTarget && retirementTarget > 0
+      netWorth !== null && retirementTarget && retirementTarget > 0
         ? Math.min((netWorth / retirementTarget) * 100, 100)
-        : 0;
+        : netWorth === null
+          ? null
+          : 0;
 
     return {
       success: true,
       data: {
         totalCash,
         totalSavings,
-        totalInvestments: investmentValue,
+        totalInvestmentCash,
+        totalInvestments: portfolioSummary?.totalValue ?? null,
         totalPersonalAssets,
         totalDebt,
+        totalAssets,
         netWorth,
         debtToWealthRatio,
         liquidityRatio,
         healthTier,
-        healthTierInfo: HEALTH_TIERS[healthTier],
+        healthTierInfo: healthTier ? HEALTH_TIERS[healthTier] : null,
         avgMonthlyExpenses,
         avgMonthlyIncome,
         savingsRate,
         monthsOfRunway,
-        investmentValue,
-        investmentCost,
-        totalUnrealizedPnL,
-        totalRealizedPnL,
+        investmentValue: portfolioSummary?.totalValue ?? null,
+        investmentCost: portfolioSummary?.totalCost ?? null,
+        totalUnrealizedPnL: portfolioSummary?.totalUnrealizedPnL ?? null,
+        totalRealizedPnL: portfolioSummary?.totalRealizedPnL ?? null,
+        portfolioSummary,
+        valuationError,
         retirementTarget,
         retirementProgress,
         displayCurrency: mainCurrency,

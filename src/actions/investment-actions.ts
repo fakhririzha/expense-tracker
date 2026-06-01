@@ -8,16 +8,14 @@ import {
     getInvestmentAccounts,
 } from "@/lib/investment-validation";
 import {
-    calculateInvestmentMetrics,
     getAssetPrice,
-    getMultipleAssetPrices,
     searchSymbols,
 } from "@/lib/finance-service";
+import { isPreciousMetal } from "@/lib/unit-conversion";
 import {
-    isPreciousMetal,
-    convertPrice,
-    getUnitLabel,
-} from "@/lib/unit-conversion";
+    getAssetPriceInCurrency,
+    getCurrentPortfolioValuation,
+} from "@/lib/investment-valuation-service";
 import { Prisma, UnitType } from "@/generated/prisma/client/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -28,7 +26,6 @@ const investmentAssetSchema = z.object({
   name: z.string().optional(),
   quantity: z.number().positive("Quantity must be positive"),
   avgBuyPrice: z.number().positive("Average buy price must be positive"),
-  currency: z.string().default("IDR"),
   accountId: z.string().min(1, "Investment account is required"),
   unitType: z.enum(["UNIT", "TROY_OUNCE", "GRAM"]).optional(),
 });
@@ -83,7 +80,7 @@ async function withSerializableTransaction<T>(
  *
  * Determines storage unit type for the asset (respecting an explicit `unitType`, defaulting to `TROY_OUNCE` for precious metals, otherwise `UNIT`), validates the account has sufficient funds, and performs the asset and account updates inside a serializable transaction to prevent race conditions. Triggers revalidation of relevant dashboard paths on success.
  *
- * @param data - Fields describing the asset and initial purchase (must include `symbol`, `quantity`, `avgBuyPrice`, and `accountId`; may include `name`, `currency`, and `unitType`)
+ * @param data - Fields describing the asset and initial purchase (must include `symbol`, `quantity`, `avgBuyPrice`, and `accountId`; may include `name` and `unitType`)
  * @returns On success, an object with `success: true` and either `created: true` or `updated: true`, `data` containing the created/updated asset, and `account` containing `id`, `name`, `balanceBefore`, and `balanceAfter`. On failure, an object with `success: false` and `error` describing the problem.
  */
 export async function createInvestmentAsset(data: InvestmentAssetInput) {
@@ -146,8 +143,21 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
     });
 
     if (existingAsset) {
+      if (existingAsset.currency !== account.currency) {
+        return {
+          success: false,
+          error: `Existing ${symbol} holding uses ${existingAsset.currency}. Select an investment account with the same currency.`,
+        };
+      }
+      if (existingAsset.unitType !== storageUnitType) {
+        return {
+          success: false,
+          error: `Existing ${symbol} holding uses ${existingAsset.unitType}. Additional purchases must use the same unit.`,
+        };
+      }
+
       // Update existing asset with weighted average price calculation
-      const { quantity: newQuantity, avgBuyPrice: newAvgBuyPrice, currency } = rest;
+      const { quantity: newQuantity, avgBuyPrice: newAvgBuyPrice } = rest;
 
       // Execute atomic transaction with Serializable isolation to prevent race conditions
       const updatedAsset = await withSerializableTransaction(async (tx) => {
@@ -171,6 +181,16 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
         if (!assetToUpdate) {
           throw new Error("Asset not found during update");
         }
+        if (assetToUpdate.currency !== lockedAccount.currency) {
+          throw new Error(
+            `Existing ${symbol} holding uses ${assetToUpdate.currency}. Select an investment account with the same currency.`
+          );
+        }
+        if (assetToUpdate.unitType !== storageUnitType) {
+          throw new Error(
+            `Existing ${symbol} holding uses ${assetToUpdate.unitType}. Additional purchases must use the same unit.`
+          );
+        }
 
         // Calculate new weighted average buy price
         // Formula: (oldQty * oldPrice + newQty * newPrice) / (oldQty + newQty)
@@ -186,7 +206,6 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
             quantity: totalQuantity,
             avgBuyPrice: weightedAvgBuyPrice,
             name: rest.name || assetToUpdate.name,
-            currency: currency || assetToUpdate.currency,
             accountId: account.id, // Link to investment account
           },
         });
@@ -221,6 +240,7 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
             date: new Date(),
             notes: null, // Nullify plaintext after encryption
             notesEncrypted: encryptedNotes,
+            unitType: assetToUpdate.unitType,
           },
         });
 
@@ -251,7 +271,7 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
       assetName = quote?.shortName || quote?.longName || symbol;
     }
 
-    const { quantity, avgBuyPrice, currency } = rest;
+    const { quantity, avgBuyPrice } = rest;
 
     // Create asset and initial trade history in atomic transaction with Serializable isolation
     const asset = await withSerializableTransaction(async (tx) => {
@@ -275,7 +295,7 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
           userId: session.user.id,
           quantity,
           avgBuyPrice,
-          currency,
+          currency: account.currency,
           unitType: storageUnitType,
           accountId: account.id,
         },
@@ -423,6 +443,11 @@ export async function recordTrade(data: TradeInput) {
       if (!asset) {
         throw new Error("Asset not found");
       }
+      if (asset.currency !== account.currency) {
+        throw new Error(
+          `${asset.symbol} uses ${asset.currency}. Select an investment account with the same currency.`
+        );
+      }
 
       const balanceBefore = account.balance;
       let balanceAfter: number;
@@ -499,6 +524,7 @@ export async function recordTrade(data: TradeInput) {
           balanceAfter,
           notes: null, // Nullify plaintext after encryption
           notesEncrypted: encryptedNotes,
+          unitType: asset.unitType,
         },
       });
 
@@ -548,204 +574,42 @@ export async function recordTrade(data: TradeInput) {
 /**
  * Retrieve the authenticated user's investment assets enriched with current prices and computed metrics.
  *
- * Fetches the user's assets, obtains market prices, adjusts prices for precious-metal units when necessary, computes investment metrics (unrealized P&L, day change, etc.), and returns each asset augmented with `currentPrice`, `previousClose`, computed metric fields, `quote`, and a human-readable `unitLabel`.
+ * Fetches the user's assets, obtains market prices, adjusts prices for currency and precious-metal units when necessary, computes investment metrics, and returns one overview containing normalized assets, summary totals, and display currency.
  *
- * @returns An object with `success` boolean, `data` as an array of portfolio items (each including the original asset fields plus `currentPrice`, `previousClose`, computed metrics, `quote`, and `unitLabel`), and `error` when the operation fails.
+ * @returns An object with `success` boolean, `data` containing the portfolio overview, and `error` when the operation fails.
  */
 export async function getPortfolio() {
-  try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized", data: [] };
-    }
-
-    // Fetch all assets including sold ones (quantity === 0)
-    const assets = await prisma.investmentAsset.findMany({
-      where: { userId: session.user.id },
-      orderBy: { createdAt: "desc" },
-    });
-
-    if (assets.length === 0) {
-      return { success: true, data: [] };
-    }
-
-    // Fetch realized PnL for each asset from trade history
-    const assetIds = assets.map((a: AssetItem) => a.id);
-    const realizedPnLByAsset = await prisma.tradeHistory.groupBy({
-      by: ['assetId'],
-      where: {
-        userId: session.user.id,
-        assetId: { in: assetIds },
-        type: "SELL",
-        realizedPnL: { not: null },
-      },
-      _sum: { realizedPnL: true },
-    });
-
-    // Create a map of assetId to realized PnL
-    const realizedPnLMap = new Map<string, number>();
-    for (const item of realizedPnLByAsset) {
-      realizedPnLMap.set(item.assetId, item._sum.realizedPnL ?? 0);
-    }
-
-    interface AssetItem {
-      id: string;
-      symbol: string;
-      name: string | null;
-      quantity: number;
-      avgBuyPrice: number;
-      currency: string;
-      userId: string;
-      createdAt: Date;
-      updatedAt: Date;
-      unitType: UnitType;
-    }
-
-    // Fetch current prices for all assets
-    // Include IDR=X to get USD to IDR exchange rate for precious metal conversion
-    const symbols = assets.map((a: AssetItem) => a.symbol);
-    const hasPreciousMetals = assets.some((a: AssetItem) => isPreciousMetal(a.symbol));
-    if (hasPreciousMetals) {
-      symbols.push("IDR=X"); // USD to IDR exchange rate
-    }
-    const prices = await getMultipleAssetPrices(symbols);
-
-    // Get USD to IDR exchange rate for precious metal price conversion
-    const usdIdrQuote = prices.get("IDR=X");
-    const usdToIdrRate = usdIdrQuote?.regularMarketPrice ?? null;
-
-    // Calculate metrics for each asset
-    const portfolioWithMetrics = assets.map((asset: AssetItem) => {
-      const quote = prices.get(asset.symbol);
-      // Yahoo Finance returns prices in TROY_OUNCE for precious metals
-      // Convert to user's display unit if needed
-      let currentPrice = quote?.regularMarketPrice ?? asset.avgBuyPrice;
-      let previousClose = quote?.regularMarketPreviousClose ?? currentPrice;
-      
-      // For precious metals: convert USD to IDR first, then apply unit conversion
-      if (isPreciousMetal(asset.symbol)) {
-        // Step 1: Convert USD to IDR (Yahoo Finance returns precious metal prices in USD)
-        if (usdToIdrRate !== null) {
-          currentPrice = currentPrice * usdToIdrRate;
-          previousClose = previousClose * usdToIdrRate;
-        }
-        
-        // Step 2: Convert from TROY_OUNCE to GRAM if user's unit is GRAM
-        if (asset.unitType === "GRAM") {
-          currentPrice = convertPrice(currentPrice, "TROY_OUNCE", "GRAM");
-          previousClose = convertPrice(previousClose, "TROY_OUNCE", "GRAM");
-        }
-      }
-
-      const metrics = calculateInvestmentMetrics(
-        asset.quantity,
-        asset.avgBuyPrice,
-        currentPrice,
-        previousClose
-      );
-
-      // Get realized PnL for this asset
-      const realizedPnL = realizedPnLMap.get(asset.id) ?? 0;
-
-      return {
-        ...asset,
-        currentPrice,
-        previousClose,
-        ...metrics,
-        realizedPnL,
-        quote,
-        unitLabel: getUnitLabel(asset.unitType),
-      };
-    });
-
-    return { success: true, data: portfolioWithMetrics };
-  } catch (error) {
-    console.error("Get portfolio error:", error);
-    return { success: false, error: "Failed to fetch portfolio", data: [] };
-  }
-}
-
-export async function getPortfolioSummary() {
   try {
     const session = await auth();
     if (!session?.user?.id) {
       return { success: false, error: "Unauthorized" };
     }
 
-    const portfolioResult = await getPortfolio();
-    if (!portfolioResult.success || !portfolioResult.data) {
-      return portfolioResult;
-    }
-
-    const portfolio = portfolioResult.data;
-
-    interface PortfolioSummary {
-      totalValue: number;
-      totalCost: number;
-      totalUnrealizedPnL: number;
-      totalDayChange: number;
-    }
-
-    interface PortfolioAsset {
-      quantity: number;
-      currentValue: number;
-      totalCost: number;
-      unrealizedPnL: number;
-      dayChange: number;
-    }
-
-    const initialSummary: PortfolioSummary = {
-      totalValue: 0,
-      totalCost: 0,
-      totalUnrealizedPnL: 0,
-      totalDayChange: 0
-    };
-
-    // Only count active assets (quantity > 0) in the summary
-    const activeAssets = portfolio.filter((asset: PortfolioAsset) => asset.quantity > 0);
-
-    const summary = activeAssets.reduce(
-      (acc: PortfolioSummary, asset: PortfolioAsset) => {
-        acc.totalValue += asset.currentValue;
-        acc.totalCost += asset.totalCost;
-        acc.totalUnrealizedPnL += asset.unrealizedPnL;
-        acc.totalDayChange += asset.dayChange;
-        return acc;
-      },
-      initialSummary
-    );
-
-    // Get realized PnL from trade history
-    const realizedPnL = await prisma.tradeHistory.aggregate({
-      where: {
-        userId: session.user.id,
-        type: "SELL",
-        realizedPnL: { not: null },
-      },
-      _sum: { realizedPnL: true },
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { mainCurrency: true },
     });
+
+    if (!user) {
+      return { success: false, error: "User not found" };
+    }
 
     return {
       success: true,
-      data: {
-        ...summary,
-        totalUnrealizedPnLPercent:
-          summary.totalCost > 0
-            ? (summary.totalUnrealizedPnL / summary.totalCost) * 100
-            : 0,
-        totalDayChangePercent:
-          summary.totalValue - summary.totalDayChange > 0
-            ? (summary.totalDayChange /
-                (summary.totalValue - summary.totalDayChange)) *
-              100
-            : 0,
-        totalRealizedPnL: realizedPnL._sum.realizedPnL ?? 0,
-        assetCount: activeAssets.length,
-      },
+      data: await getCurrentPortfolioValuation(
+        session.user.id,
+        user.mainCurrency
+      ),
     };
   } catch (error) {
-    console.error("Get portfolio summary error:", error);
-    return { success: false, error: "Failed to fetch portfolio summary" };
+    console.error("Get portfolio error:", error);
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to fetch portfolio valuation",
+    };
   }
 }
 
@@ -832,16 +696,17 @@ export async function searchSymbolsAction(query: string) {
 /**
  * Fetches the current price for a single symbol with proper currency conversion.
  * 
- * - Indonesian stocks (symbols containing `.JK`) are returned as-is (already in IDR)
- * - US stocks and precious metals are converted from USD to IDR using IDR=X rate
+ * - The quote is converted into the selected investment account's currency
  * - Precious metals can optionally be converted from TROY_OUNCE to GRAM
  *
  * @param symbol - The stock/asset symbol to fetch the price for
+ * @param targetCurrency - Investment account currency for the price preview
  * @param unitType - Optional unit type for precious metals ("GRAM" or "TROY_OUNCE")
- * @returns On success, an object with `success: true`, `data` containing the price in IDR, and optionally `rawPrice` (before conversion). On failure, an object with `success: false` and an `error` message.
+ * @returns On success, an object with `success: true`, `data` containing the converted price, and optionally `rawPrice` (before conversion). On failure, an object with `success: false` and an `error` message.
  */
 export async function getAssetPriceWithConversion(
   symbol: string,
+  targetCurrency: string,
   unitType?: "UNIT" | "TROY_OUNCE" | "GRAM"
 ): Promise<{
   success: boolean;
@@ -855,61 +720,30 @@ export async function getAssetPriceWithConversion(
     if (!session?.user?.id) {
       return { success: false, error: "Unauthorized" };
     }
-
-    const upperSymbol = symbol.toUpperCase();
-    const isIndonesianStock = upperSymbol.includes(".JK");
-    const isPreciousMetalAsset = isPreciousMetal(upperSymbol);
-
-    // Fetch the asset price
-    const quote = await getAssetPrice(upperSymbol);
-    if (!quote || quote.regularMarketPrice === 0) {
-      return { success: false, error: "Failed to fetch price for symbol" };
+    const normalizedTargetCurrency = targetCurrency.trim().toUpperCase();
+    if (!normalizedTargetCurrency) {
+      return { success: false, error: "Target currency is required" };
     }
 
-    let currentPrice = quote.regularMarketPrice;
-    const rawPrice = currentPrice;
-
-    if (isIndonesianStock) {
-      // Indonesian stocks are already in IDR - no conversion needed
-      return {
-        success: true,
-        data: currentPrice,
-        rawPrice,
-        currency: "IDR",
-      };
-    }
-
-    // For US stocks and precious metals, we need to convert USD to IDR
-    // Fetch USD to IDR exchange rate
-    const symbolsToFetch = ["IDR=X"];
-    const prices = await getMultipleAssetPrices(symbolsToFetch);
-    const usdIdrQuote = prices.get("IDR=X");
-    const usdToIdrRate = usdIdrQuote?.regularMarketPrice ?? null;
-
-    if (usdToIdrRate === null) {
-      return {
-        success: false,
-        error: "Failed to fetch USD to IDR exchange rate",
-      };
-    }
-
-    // Convert USD to IDR
-    currentPrice = currentPrice * usdToIdrRate;
-
-    // For precious metals, apply unit conversion if needed
-    if (isPreciousMetalAsset && unitType === "GRAM") {
-      currentPrice = convertPrice(currentPrice, "TROY_OUNCE", "GRAM");
-    }
+    const price = await getAssetPriceInCurrency(
+      symbol,
+      normalizedTargetCurrency,
+      unitType
+    );
 
     return {
       success: true,
-      data: currentPrice,
-      rawPrice,
-      currency: "IDR",
+      data: price.currentPrice,
+      rawPrice: price.rawPrice,
+      currency: price.currency,
     };
   } catch (error) {
     console.error("Get asset price error:", error);
-    return { success: false, error: "Failed to fetch asset price" };
+    return {
+      success: false,
+      error:
+        error instanceof Error ? error.message : "Failed to fetch asset price",
+    };
   }
 }
 

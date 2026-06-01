@@ -89,10 +89,14 @@ export default function AccountsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-green-600">
-                {formatCurrency(summary.totalAssets, summary.displayCurrency)}
+                {summary.totalAssets === null
+                  ? "Unavailable"
+                  : formatCurrency(summary.totalAssets, summary.displayCurrency)}
               </div>
               <p className="text-xs text-muted-foreground">
-                Bank, Cash, Investments, Personal Assets
+                {summary.valuationError
+                  ? "Live investment valuation unavailable"
+                  : "Bank, Cash, Investments, Personal Assets"}
               </p>
             </CardContent>
           </Card>
@@ -121,10 +125,14 @@ export default function AccountsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {formatCurrency(summary.netWorth, summary.displayCurrency)}
+                {summary.netWorth === null
+                  ? "Unavailable"
+                  : formatCurrency(summary.netWorth, summary.displayCurrency)}
               </div>
               <p className="text-xs text-muted-foreground">
-                Assets - Liabilities
+                {summary.valuationError
+                  ? "Live investment valuation unavailable"
+                  : "Assets - Liabilities"}
               </p>
             </CardContent>
           </Card>

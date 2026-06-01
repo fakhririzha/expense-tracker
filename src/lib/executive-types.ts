@@ -53,18 +53,20 @@ export interface ExecutiveMetrics {
   // Net Worth Components
   totalCash: number;
   totalSavings: number;
-  totalInvestments: number;
+  totalInvestmentCash: number;
+  totalInvestments: number | null;
   totalPersonalAssets: number;
   totalDebt: number;
-  netWorth: number;
+  totalAssets: number | null;
+  netWorth: number | null;
 
   // Ratios
-  debtToWealthRatio: number;
+  debtToWealthRatio: number | null;
   liquidityRatio: number; // Liquid assets / monthly expenses
 
   // Health Assessment
-  healthTier: HealthTier;
-  healthTierInfo: HealthTierInfo;
+  healthTier: HealthTier | null;
+  healthTierInfo: HealthTierInfo | null;
 
   // Monthly Metrics
   avgMonthlyExpenses: number;
@@ -73,14 +75,25 @@ export interface ExecutiveMetrics {
   monthsOfRunway: number;
 
   // Investment Performance
-  investmentValue: number;
-  investmentCost: number;
-  totalUnrealizedPnL: number;
-  totalRealizedPnL: number;
+  investmentValue: number | null;
+  investmentCost: number | null;
+  totalUnrealizedPnL: number | null;
+  totalRealizedPnL: number | null;
+  portfolioSummary: {
+    totalValue: number;
+    totalCost: number;
+    totalUnrealizedPnL: number;
+    totalUnrealizedPnLPercent: number;
+    totalDayChange: number;
+    totalDayChangePercent: number;
+    totalRealizedPnL: number;
+    assetCount: number;
+  } | null;
+  valuationError: string | null;
 
   // Retirement Progress
   retirementTarget: number | null;
-  retirementProgress: number;
+  retirementProgress: number | null;
 
   // Currency
   displayCurrency: string;
