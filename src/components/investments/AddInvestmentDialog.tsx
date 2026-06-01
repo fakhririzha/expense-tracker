@@ -112,6 +112,7 @@ export function AddInvestmentDialog({ onSuccess }: AddInvestmentDialogProps) {
   });
   
   // Watch symbol and unitType to detect precious metals and fetch current price
+  // eslint-disable-next-line react-hooks/incompatible-library
   const watchedSymbol = form.watch("symbol");
   const watchedUnitType = form.watch("unitType");
   const watchedAccountId = form.watch("accountId");
@@ -171,7 +172,7 @@ export function AddInvestmentDialog({ onSuccess }: AddInvestmentDialogProps) {
           Add Investment
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-125">
         <DialogHeader>
           <DialogTitle>Add/Update Investment</DialogTitle>
           <DialogDescription>
@@ -207,7 +208,7 @@ export function AddInvestmentDialog({ onSuccess }: AddInvestmentDialogProps) {
                         </Button>
                       </FormControl>
                     </PopoverTrigger>
-                    <PopoverContent className="w-[450px] p-0">
+                    <PopoverContent className="w-112.5 p-0">
                       <Command>
                         <CommandInput
                           placeholder="Type to search symbols..."
