@@ -42,7 +42,7 @@ import { cn } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
 import { CalendarIcon, CreditCard, RefreshCw, Landmark } from "lucide-react";
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -90,7 +90,11 @@ export function LiabilityPaymentDialog({
   const [selectedSourceAccount, setSelectedSourceAccount] = useState<Account | null>(null);
   const [selectedTargetAccount, setSelectedTargetAccount] = useState<Account | null>(null);
   const createPaymentMutation = useCreateLiabilityPayment();
-  const generateRefMutation = useGeneratePaymentReference();
+  const {
+    mutateAsync: generatePaymentReference,
+    isPending: isGeneratingReference,
+  } = useGeneratePaymentReference();
+  const initializedOpenRef = useRef(false);
 
   const form = useForm<PaymentFormValues>({
     resolver: zodResolver(paymentFormSchema),
@@ -113,12 +117,12 @@ export function LiabilityPaymentDialog({
   // Generate reference number
   const generateReference = useCallback(async () => {
     try {
-      const reference = await generateRefMutation.mutateAsync();
+      const reference = await generatePaymentReference();
       form.setValue("referenceNumber", reference);
     } catch {
       // silently ignore
     }
-  }, [form, generateRefMutation]);
+  }, [form, generatePaymentReference]);
 
   // Load accounts when dialog opens
   useEffect(() => {
@@ -138,8 +142,19 @@ export function LiabilityPaymentDialog({
       }
     }
 
-    if (open && form.getValues("referenceNumber") === "") {
-      loadAccounts();
+    if (!open) {
+      initializedOpenRef.current = false;
+      return;
+    }
+
+    if (initializedOpenRef.current) {
+      return;
+    }
+
+    initializedOpenRef.current = true;
+    loadAccounts();
+
+    if (form.getValues("referenceNumber") === "") {
       generateReference();
     }
   }, [open, form, generateReference]);
@@ -347,6 +362,7 @@ export function LiabilityPaymentDialog({
                       variant="outline"
                       size="icon"
                       onClick={generateReference}
+                      disabled={isGeneratingReference}
                       title="Generate new reference"
                     >
                       <RefreshCw className="h-4 w-4" />
