@@ -119,7 +119,7 @@ export function TransactionTable({
               variant={type === "INCOME" ? "default" : "destructive"}
               className="capitalize"
             >
-              {type.toLowerCase()}
+              {type.replace("_", " ")}
             </Badge>
           </div>
         );
@@ -219,6 +219,7 @@ export function TransactionTable({
     },
   ];
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data: transactions,
     columns,
