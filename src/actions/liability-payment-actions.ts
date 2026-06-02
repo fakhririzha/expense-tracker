@@ -136,7 +136,7 @@ export async function createLiabilityPayment(
             amount,
             currency,
             exchangeRate,
-            type: TransactionType.LIABILITY_PAYMENT, // Payments are treated as expenses
+            type: TransactionType.LIABILITY_PAYMENT,
             description: null, // Nullify plaintext after encryption
             descriptionEncrypted: encryptedDescription,
             date,
@@ -300,8 +300,7 @@ export async function getLiabilityPaymentDetails(transactionId: string) {
       where: {
         id: transactionId,
         userId: session.user.id,
-        type: TransactionType.EXPENSE,
-        toAccountId: { not: null },
+        liabilityPaymentAudit: { isNot: null },
       },
       include: {
         account: true,
@@ -538,9 +537,7 @@ export async function getLiabilityPaymentHistory(
 
     const where: Record<string, unknown> = {
       userId: session.user.id,
-      type: TransactionType.EXPENSE,
-      toAccountId: { not: null },
-      referenceNumber: { not: null }, // Only liability payments have reference numbers
+      liabilityPaymentAudit: { isNot: null },
     };
 
     if (accountId) {
@@ -717,9 +714,7 @@ export async function getLiabilityPaymentSummary(startDate?: Date, endDate?: Dat
 
     const where: Record<string, unknown> = {
       userId: session.user.id,
-      type: TransactionType.EXPENSE,
-      toAccountId: { not: null },
-      referenceNumber: { not: null },
+      liabilityPaymentAudit: { isNot: null },
       paymentStatus: PaymentStatus.COMPLETED,
     };
 
