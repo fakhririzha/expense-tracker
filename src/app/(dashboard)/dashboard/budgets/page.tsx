@@ -17,7 +17,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatCurrency } from "@/lib/utils";
 import { Wallet, TrendingUp, TrendingDown, AlertTriangle, Loader2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useBudgetsSummary, useBudgetVsActual } from "@/hooks/useBudgetQueries";
 
 interface BudgetVsActual {
@@ -62,12 +62,10 @@ export default function BudgetsPage() {
   const overBudgetCount = (budgets as BudgetWithProgress[]).filter((b) => b.percentage >= 100).length;
 
   // Filter budgets by period
-  const filteredBudgets = useMemo(() =>
+  const filteredBudgets =
     periodFilter === "all"
       ? (budgets as BudgetWithProgress[])
-      : (budgets as BudgetWithProgress[]).filter((b) => b.period === periodFilter),
-    [budgets, periodFilter]
-  );
+      : (budgets as BudgetWithProgress[]).filter((b) => b.period === periodFilter);
 
   if (selectedBudget) {
     return (
@@ -170,7 +168,7 @@ export default function BudgetsPage() {
           {/* Period Filter */}
           <div className="flex items-center gap-4">
             <Select value={periodFilter} onValueChange={setPeriodFilter}>
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="w-45">
                 <SelectValue placeholder="Filter by period" />
               </SelectTrigger>
               <SelectContent>
