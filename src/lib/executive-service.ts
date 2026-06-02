@@ -219,6 +219,7 @@ export async function getExecutiveMetrics(): Promise<{
         valuationError,
         retirementTarget,
         retirementProgress,
+        monthlyBudget: user.monthlyBudget,
         displayCurrency: mainCurrency,
       },
     };
@@ -260,27 +261,4 @@ function calculateHealthTier(
 
   // Default to F if none match
   return "F";
-}
-
-export async function updateUserPreferences(data: {
-  mainCurrency?: string;
-  retirementTarget?: number;
-  monthlyBudget?: number;
-}) {
-  try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
-
-    await prisma.user.update({
-      where: { id: session.user.id },
-      data,
-    });
-
-    return { success: true };
-  } catch (error) {
-    console.error("Update user preferences error:", error);
-    return { success: false, error: "Failed to update preferences" };
-  }
 }

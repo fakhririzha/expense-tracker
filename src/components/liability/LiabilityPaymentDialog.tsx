@@ -138,7 +138,6 @@ export function LiabilityPaymentDialog({
       }
     }
 
-    // eslint-disable-next-line react-hooks/incompatible-library
     if (open && form.getValues("referenceNumber") === "") {
       loadAccounts();
       generateReference();

@@ -1,10 +1,12 @@
 import { getTransactionSummary } from "@/actions/transaction-actions";
 import { auth } from "@/auth";
+import { MonthlyBudgetStatus } from "@/components/dashboard/MonthlyBudgetStatus";
 import { RetirementProgress } from "@/components/dashboard/RetirementProgress";
 import { WealthHealthCard } from "@/components/dashboard/WealthHealthBadge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getExecutiveMetrics } from "@/lib/executive-service";
 import { formatCurrency, formatPercentage } from "@/lib/utils";
+import { endOfMonth, startOfMonth } from "date-fns";
 import {
     BarChart3,
     Boxes,
@@ -28,9 +30,10 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  const [metricsResult, transactionSummary] = await Promise.all([
+  const now = new Date();
+  const [metricsResult, currentMonthSummary] = await Promise.all([
     getExecutiveMetrics(),
-    getTransactionSummary(),
+    getTransactionSummary(startOfMonth(now), endOfMonth(now)),
   ]);
 
   if (!metricsResult.success || !metricsResult.data) {
@@ -43,6 +46,10 @@ export default async function DashboardPage() {
 
   const metrics = metricsResult.data;
   const currency = metrics.displayCurrency;
+  const currentMonthExpenses =
+    currentMonthSummary.success && currentMonthSummary.data
+      ? currentMonthSummary.data.totalExpense
+      : null;
 
   return (
     <div className="p-6 space-y-6">
@@ -193,7 +200,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Monthly Cash Flow */}
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-xl font-bold font-heading">
@@ -205,11 +212,9 @@ export default async function DashboardPage() {
             <div className="text-3xl font-black text-green-600 tracking-tight">
               {formatCurrency(metrics.avgMonthlyIncome, currency)}
             </div>
-            {transactionSummary.success && transactionSummary.data && (
-              <p className="text-xs text-muted-foreground">
-                Based on last 6 months
-              </p>
-            )}
+            <p className="text-xs text-muted-foreground">
+              Based on last 6 months
+            </p>
           </CardContent>
         </Card>
 
@@ -229,6 +234,12 @@ export default async function DashboardPage() {
             </p>
           </CardContent>
         </Card>
+
+        <MonthlyBudgetStatus
+          monthlyBudget={metrics.monthlyBudget}
+          currentMonthExpenses={currentMonthExpenses}
+          currency={currency}
+        />
       </div>
 
       {/* Investment Performance Summary */}

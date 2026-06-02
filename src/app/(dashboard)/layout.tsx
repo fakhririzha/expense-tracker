@@ -13,7 +13,7 @@ import { CurrencyProvider } from "@/contexts/CurrencyContext";
 import prisma from "@/lib/db";
 import { getInitials } from "@/lib/utils";
 import { Sidebar } from "@/components/dashboard/Sidebar";
-import { LogOut, TrendingUp } from "lucide-react";
+import { LogOut, TrendingUp, UserRound } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -101,6 +101,15 @@ export default async function DashboardLayout({
                         </p>
                       </div>
                     </DropdownMenuLabel>
+                    <DropdownMenuItem asChild className="focus:bg-accent focus:font-bold focus:shadow-[2px_2px_0_0_#000] focus:translate-x-px focus:translate-y-px transition-all rounded-none my-1">
+                      <Link
+                        href="/dashboard/profile"
+                        className="flex w-full items-center font-bold uppercase tracking-widest text-sm"
+                      >
+                        <UserRound className="mr-2 h-4 w-4" strokeWidth={3} />
+                        Profile
+                      </Link>
+                    </DropdownMenuItem>
                     <DropdownMenuItem asChild className="focus:bg-accent focus:font-bold focus:shadow-[2px_2px_0_0_#000] focus:translate-x-px focus:translate-y-px transition-all rounded-none my-1">
                       <form action={logout}>
                         <button className="flex w-full items-center font-bold uppercase tracking-widest text-sm">

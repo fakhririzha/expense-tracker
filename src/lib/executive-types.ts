@@ -94,6 +94,7 @@ export interface ExecutiveMetrics {
   // Retirement Progress
   retirementTarget: number | null;
   retirementProgress: number | null;
+  monthlyBudget: number | null;
 
   // Currency
   displayCurrency: string;

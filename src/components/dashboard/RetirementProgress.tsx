@@ -1,8 +1,10 @@
 "use client";
 
 import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
 import { Target, TrendingUp } from "lucide-react";
+import Link from "next/link";
 
 interface RetirementProgressProps {
   currentNetWorth: number;
@@ -28,10 +30,13 @@ export function RetirementProgress({
   if (!targetAmount || targetAmount <= 0) {
     return (
       <div className="p-6 neo-border neo-shadow bg-secondary">
-        <div className="flex items-center gap-2 font-bold opacity-80">
+        <div className="flex items-center gap-2 font-bold">
           <Target className="h-6 w-6" />
           <span>Set a retirement target to track your progress</span>
         </div>
+        <Button asChild size="sm" variant="outline" className="mt-4">
+          <Link href="/dashboard/profile">Set Retirement Target</Link>
+        </Button>
       </div>
     );
   }
