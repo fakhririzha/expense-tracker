@@ -101,7 +101,7 @@ export default function ReportsPage() {
             Analyze your financial data and track your progress
           </p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 max-md:flex-col max-md:gap-y-4 max-md:items-start">
           <DateRangePicker value={dateRange} onChange={setDateRange} />
           <Button variant="outline" disabled>
             <Download className="mr-2 h-4 w-4" />

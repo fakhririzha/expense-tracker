@@ -113,13 +113,13 @@ export function AddRecurringRuleDialog({ onSuccess }: AddRecurringRuleDialogProp
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
+      <DialogTrigger asChild className="max-md:w-full">
         <Button>
           <Plus className="mr-2 h-4 w-4" />
           Add Recurring Rule
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-125 max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add Recurring Rule</DialogTitle>
           <DialogDescription>
