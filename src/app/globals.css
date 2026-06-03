@@ -131,23 +131,25 @@
     box-shadow: 4px 4px 0px 0px var(--color-foreground);
     @apply transition-all duration-200;
   }
-  
-  .neo-shadow:active:not(:disabled) {
-    box-shadow: 0px 0px 0px 0px var(--color-foreground);
-    transform: translate(4px, 4px);
-  }
 
   .neo-shadow-sm {
     box-shadow: 2px 2px 0px 0px var(--color-foreground);
     @apply transition-all duration-200;
   }
 
+  .neo-border {
+    @apply border-2 border-foreground;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .neo-shadow:active:not(:disabled) {
+    box-shadow: 0px 0px 0px 0px var(--color-foreground);
+    transform: translate(4px, 4px);
+  }
+
   .neo-shadow-sm:active:not(:disabled) {
     box-shadow: 0px 0px 0px 0px var(--color-foreground);
     transform: translate(2px, 2px);
-  }
-
-  .neo-border {
-    @apply border-2 border-foreground;
   }
 }
