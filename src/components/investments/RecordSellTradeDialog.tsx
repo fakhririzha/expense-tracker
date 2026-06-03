@@ -91,6 +91,7 @@ export function RecordSellTradeDialog({ onSuccess }: RecordSellTradeDialogProps)
     },
   });
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const selectedAssetId = form.watch("assetId");
   const selectedQuantity = form.watch("quantity");
 
@@ -141,7 +142,7 @@ export function RecordSellTradeDialog({ onSuccess }: RecordSellTradeDialogProps)
           Record Sell Trade
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-125">
         <DialogHeader>
           <DialogTitle>Record Sell Trade</DialogTitle>
           <DialogDescription>
