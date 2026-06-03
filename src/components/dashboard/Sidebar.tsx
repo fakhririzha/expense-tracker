@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import {
   Sheet,
   SheetClose,
@@ -11,6 +12,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { useSidebarMetrics } from "@/hooks/useSidebarMetrics";
 import { cn } from "@/lib/utils";
 import {
   BarChart3,
@@ -24,6 +26,7 @@ import {
   PieChart,
   Receipt,
   RefreshCw,
+  Target,
   TrendingUp,
   Wallet,
 } from "lucide-react";
@@ -84,6 +87,134 @@ function NavItems({
   );
 }
 
+function SidebarGoalSnapshot() {
+  const { data, isLoading } = useSidebarMetrics();
+
+  if (isLoading) {
+    return (
+      <div className="bg-primary text-primary-foreground p-4 neo-border shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] space-y-4">
+        <div>
+          <p className="font-black text-xs uppercase tracking-widest opacity-90">
+            Goal Snapshot
+          </p>
+          <div className="mt-2 h-4 w-28 animate-pulse bg-primary-foreground/20" />
+        </div>
+        <div className="space-y-3">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <div className="h-3 w-24 animate-pulse bg-primary-foreground/20" />
+              <div className="h-3 w-16 animate-pulse bg-primary-foreground/20" />
+            </div>
+            <div className="h-2 w-full animate-pulse bg-primary-foreground/20" />
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <div className="h-3 w-24 animate-pulse bg-primary-foreground/20" />
+              <div className="h-3 w-16 animate-pulse bg-primary-foreground/20" />
+            </div>
+            <div className="h-2 w-full animate-pulse bg-primary-foreground/20" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const retirementSet = !!data?.retirementTarget && data.retirementTarget > 0;
+  const budgetSet = !!data?.monthlyBudget && data.monthlyBudget > 0;
+
+  const retirementLeftPercent =
+    retirementSet && data?.retirementLeftPercent !== null
+      ? data.retirementLeftPercent
+      : null;
+  const budgetLeftPercent =
+    budgetSet && data?.monthlyBudgetLeftPercent !== null
+      ? data.monthlyBudgetLeftPercent
+      : null;
+
+  const retirementLabel = retirementSet
+    ? retirementLeftPercent === null
+      ? "Unavailable"
+      : `${retirementLeftPercent.toFixed(1)}% left`
+    : "Not set";
+
+  const budgetLabel = budgetSet
+    ? budgetLeftPercent === null
+      ? "Unavailable"
+      : `${budgetLeftPercent.toFixed(1)}% left`
+    : "Not set";
+
+  const retirementDetail = retirementSet
+    ? retirementLeftPercent === null
+      ? "Retirement progress is unavailable right now."
+      : `${retirementLeftPercent.toFixed(1)}% remaining to target`
+    : "Set a retirement target in your profile.";
+
+  const budgetDetail = budgetSet
+    ? budgetLeftPercent === null
+      ? "Current-month spending is unavailable right now."
+      : `${budgetLeftPercent.toFixed(1)}% of your monthly budget remains`
+    : "Set a monthly budget target in your profile.";
+
+  return (
+    <div className="bg-primary text-primary-foreground p-4 neo-border shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="font-black text-xs uppercase tracking-widest opacity-90">
+            Goal Snapshot
+          </p>
+          <p className="font-black text-lg mt-1">Stay on target</p>
+        </div>
+        <Target className="h-6 w-6 shrink-0" strokeWidth={2.5} />
+      </div>
+
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-widest opacity-90">
+                Retirement Left
+              </p>
+              <p className="text-xs font-bold opacity-80">{retirementDetail}</p>
+            </div>
+            <span className="shrink-0 text-sm font-black">{retirementLabel}</span>
+          </div>
+          <Progress
+            value={retirementLeftPercent !== null ? 100 - retirementLeftPercent : 0}
+            className="h-2 bg-primary-foreground/20"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-widest opacity-90">
+                Budget Left
+              </p>
+              <p className="text-xs font-bold opacity-80">{budgetDetail}</p>
+            </div>
+            <span className="shrink-0 text-sm font-black">{budgetLabel}</span>
+          </div>
+          <Progress
+            value={budgetLeftPercent !== null ? 100 - budgetLeftPercent : 0}
+            className="h-2 bg-primary-foreground/20"
+          />
+        </div>
+      </div>
+
+      {(!retirementSet || !budgetSet) && (
+        <Button
+          asChild
+          size="sm"
+          variant="outline"
+          className="w-full rounded-none border-black bg-primary-foreground text-primary hover:bg-primary-foreground/90 hover:text-primary"
+        >
+          <Link href="/dashboard/profile">Update profile targets</Link>
+        </Button>
+      )}
+    </div>
+  );
+}
+
 export function Sidebar() {
   const pathname = usePathname();
 
@@ -101,10 +232,7 @@ export function Sidebar() {
       </nav>
 
       <div className="p-4 border-t-4 border-black">
-        <div className="bg-primary text-primary-foreground p-4 neo-border shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-          <p className="font-black text-xs uppercase tracking-widest opacity-90">Net Worth Goal</p>
-          <p className="font-black text-lg mt-1">Keep Grinding</p>
-        </div>
+        <SidebarGoalSnapshot />
       </div>
     </aside>
   );
@@ -149,12 +277,7 @@ export function MobileSidebar() {
         </nav>
 
         <div className="border-t-4 border-black p-4">
-          <div className="bg-primary text-primary-foreground p-4 neo-border shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-            <p className="font-black text-xs uppercase tracking-widest opacity-90">
-              Net Worth Goal
-            </p>
-            <p className="font-black text-lg mt-1">Keep Grinding</p>
-          </div>
+          <SidebarGoalSnapshot />
         </div>
       </SheetContent>
     </Sheet>

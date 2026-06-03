@@ -25,6 +25,10 @@ const fieldOptions: { value: keyof ColumnMappingType; label: string; required: b
   { value: "toAccount", label: "To Account", required: false },
   { value: "category", label: "Category", required: false },
   { value: "description", label: "Description", required: false },
+  { value: "location", label: "Location", required: false },
+  { value: "latitude", label: "Latitude", required: false },
+  { value: "longitude", label: "Longitude", required: false },
+  { value: "googleMapsLink", label: "Google Maps Link", required: false },
   { value: "currency", label: "Currency", required: false },
 ];
 

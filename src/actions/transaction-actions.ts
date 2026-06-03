@@ -8,6 +8,7 @@ import { z } from "zod";
 import { encryptUserField, decryptUserField } from "@/lib/user-encryption";
 
 // Define TransactionType enum locally since Prisma client may not be generated yet
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const TransactionTypeEnum = {
   INCOME: "INCOME",
   EXPENSE: "EXPENSE",
@@ -17,6 +18,15 @@ const TransactionTypeEnum = {
 
 type TransactionType = (typeof TransactionTypeEnum)[keyof typeof TransactionTypeEnum];
 
+function normalizeOptionalText(value?: string) {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 const transactionSchema = z
   .object({
     amount: z.number().positive("Amount must be positive"),
@@ -24,6 +34,10 @@ const transactionSchema = z
     exchangeRate: z.number().positive().default(1),
     type: z.enum(["INCOME", "EXPENSE", "TRANSFER", "LIABILITY_PAYMENT"]),
     description: z.string().optional(),
+    location: z.string().optional(),
+    latitude: z.number().optional(),
+    longitude: z.number().optional(),
+    googleMapsLink: z.string().optional(),
     date: z.date().default(() => new Date()),
     accountId: z.string().min(1, "From account is required"),
     toAccountId: z.string().optional(),
@@ -89,7 +103,7 @@ export async function createTransaction(data: TransactionInput) {
       };
     }
 
-      const { amount, type, accountId, toAccountId, ...rest } = validatedFields.data;
+    const { amount, type, accountId, toAccountId, ...rest } = validatedFields.data;
 
     // Verify account belongs to user
     const account = await prisma.financialAccount.findFirst({
@@ -178,6 +192,10 @@ export async function createTransaction(data: TransactionInput) {
       userId: session.user.id,
       toAccountId: type === "TRANSFER" ? toAccountId : null,
       ...rest,
+      location: normalizeOptionalText(rest.location) ?? null,
+      latitude: rest.latitude ?? null,
+      longitude: rest.longitude ?? null,
+      googleMapsLink: normalizeOptionalText(rest.googleMapsLink) ?? null,
       description: null, // Nullify plaintext after encryption
       descriptionEncrypted: encryptedDescription,
       referenceNumber: null, // Nullify plaintext after encryption
@@ -257,7 +275,7 @@ export async function updateTransaction(
       return { success: false, error: "Transaction not found" };
     }
 
-    const { amount, type, accountId, categoryId, recurringRuleId, ...rest } = data;
+    const { amount, type, accountId, categoryId, recurringRuleId } = data;
 
     // Compute the new type (either from the patch or keep existing)
     const newType = type ?? existingTransaction.type;
@@ -299,6 +317,25 @@ export async function updateTransaction(
         }
       }
     }
+
+    let encryptedDescription: string | null | undefined;
+    if (data.description !== undefined) {
+      const sanitizedDescription = normalizeOptionalText(data.description);
+      encryptedDescription = sanitizedDescription
+        ? await encryptUserField(
+            session.user.id,
+            "transaction.description",
+            sanitizedDescription
+          )
+        : null;
+    }
+
+    const sanitizedLocation =
+      data.location !== undefined ? normalizeOptionalText(data.location) : undefined;
+    const sanitizedGoogleMapsLink =
+      data.googleMapsLink !== undefined
+        ? normalizeOptionalText(data.googleMapsLink)
+        : undefined;
 
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Reverse old balance change
@@ -362,6 +399,14 @@ export async function updateTransaction(
           amount: newAmount,
           type: newType,
           accountId: newAccountId,
+          date: data.date ?? existingTransaction.date,
+          description: data.description !== undefined ? null : undefined,
+          descriptionEncrypted:
+            data.description !== undefined ? encryptedDescription : undefined,
+          location: sanitizedLocation,
+          latitude: data.latitude !== undefined ? data.latitude ?? null : undefined,
+          longitude: data.longitude !== undefined ? data.longitude ?? null : undefined,
+          googleMapsLink: sanitizedGoogleMapsLink,
           categoryId: categoryId !== undefined ? (categoryId?.trim() || null) : undefined,
           recurringRuleId: recurringRuleId !== undefined ? (recurringRuleId?.trim() || null) : undefined,
         },

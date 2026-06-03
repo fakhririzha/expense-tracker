@@ -117,6 +117,10 @@ export async function exportTransactionsCSV(params?: {
       "Account",
       "To Account",
       "Description",
+      "Location",
+      "Latitude",
+      "Longitude",
+      "Google Maps Link",
       "Currency",
       "Exchange Rate",
     ];
@@ -130,6 +134,10 @@ export async function exportTransactionsCSV(params?: {
       t.account.name,
       t.toAccount?.name || "",
       t.description || "",
+      t.location || "",
+      t.latitude?.toString() || "",
+      t.longitude?.toString() || "",
+      t.googleMapsLink || "",
       t.currency,
       t.exchangeRate.toString(),
     ]);
@@ -228,7 +236,7 @@ export async function exportAllData() {
     // Create a JSON backup
     const backup = {
       exportDate: new Date().toISOString(),
-      version: "1.1",
+      version: "1.2",
       data: {
         accounts,
         transactions: transactions.map((t) => ({
@@ -238,6 +246,10 @@ export async function exportAllData() {
           exchangeRate: t.exchangeRate,
           type: t.type,
           description: t.description,
+          location: t.location,
+          latitude: t.latitude,
+          longitude: t.longitude,
+          googleMapsLink: t.googleMapsLink,
           date: t.date,
           accountName: t.account.name,
           categoryName: t.category?.name || null,

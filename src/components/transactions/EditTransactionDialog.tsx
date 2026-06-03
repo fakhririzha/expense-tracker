@@ -47,6 +47,10 @@ const editTransactionFormSchema = z
     amount: z.number().positive("Amount must be positive"),
     type: z.enum(["INCOME", "EXPENSE", "TRANSFER"]),
     description: z.string().optional(),
+    location: z.string().optional(),
+    latitude: z.number().optional(),
+    longitude: z.number().optional(),
+    googleMapsLink: z.string().optional(),
     date: z.date(),
     accountId: z.string().min(1, "Account is required"),
     toAccountId: z.string().optional(),
@@ -88,17 +92,15 @@ interface Category {
   type: string;
 }
 
-interface Account {
-  id: string;
-  name: string;
-  type: string;
-}
-
 interface Transaction {
   id: string;
   amount: number;
   type: "INCOME" | "EXPENSE" | "TRANSFER" | "LIABILITY_PAYMENT";
   description: string | null;
+  location: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  googleMapsLink: string | null;
   date: Date;
   toAccountId: string | null;
   account: {
@@ -156,6 +158,10 @@ export function EditTransactionDialog({
       amount: 0,
       type: "EXPENSE",
       description: "",
+      location: "",
+      latitude: undefined,
+      longitude: undefined,
+      googleMapsLink: "",
       date: new Date(),
       accountId: "",
       toAccountId: "",
@@ -172,6 +178,10 @@ export function EditTransactionDialog({
         amount: transaction.amount,
         type: transaction.type === "LIABILITY_PAYMENT" ? "EXPENSE" : transaction.type,
         description: transaction.description || "",
+        location: transaction.location || "",
+        latitude: transaction.latitude ?? undefined,
+        longitude: transaction.longitude ?? undefined,
+        googleMapsLink: transaction.googleMapsLink || "",
         date: new Date(transaction.date),
         accountId: transaction.account.id,
         toAccountId: transaction.toAccountId || "",
@@ -213,6 +223,10 @@ export function EditTransactionDialog({
           amount: data.amount,
           type: data.type,
           description: data.description,
+          location: data.location,
+          latitude: data.latitude,
+          longitude: data.longitude,
+          googleMapsLink: data.googleMapsLink,
           date: data.date,
           accountId: data.accountId,
           toAccountId: data.toAccountId,
@@ -231,7 +245,7 @@ export function EditTransactionDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-160 max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Transaction</DialogTitle>
           <DialogDescription>
@@ -364,6 +378,7 @@ export function EditTransactionDialog({
                             .filter(
                               (account) =>
                                 account.type === "BANK" &&
+                                // eslint-disable-next-line react-hooks/incompatible-library
                                 account.id !== form.watch("accountId")
                             )
                             .map((account) => (
@@ -444,6 +459,88 @@ export function EditTransactionDialog({
                   <FormLabel>Description (Optional)</FormLabel>
                   <FormControl>
                     <Input placeholder="Enter description" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="location"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Location (Optional)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Place, address, or venue" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="latitude"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Latitude (Optional)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="any"
+                        placeholder="-6.200000"
+                        value={field.value ?? ""}
+                        onChange={(e) =>
+                          field.onChange(
+                            e.target.value === "" ? undefined : parseFloat(e.target.value)
+                          )
+                        }
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="longitude"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Longitude (Optional)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="any"
+                        placeholder="106.816666"
+                        value={field.value ?? ""}
+                        onChange={(e) =>
+                          field.onChange(
+                            e.target.value === "" ? undefined : parseFloat(e.target.value)
+                          )
+                        }
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <FormField
+              control={form.control}
+              name="googleMapsLink"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Google Maps Link (Optional)</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="url"
+                      placeholder="https://www.google.com/maps/search/?api=1&query=..."
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
