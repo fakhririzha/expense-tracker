@@ -413,9 +413,7 @@ export async function importTransactions(
         select: { id: true, name: true, currency: true },
       }),
       prisma.category.findMany({
-        where: {
-          OR: [{ userId: session.user.id }, { isSystem: true }],
-        },
+        where: { userId: session.user.id },
         select: { id: true, name: true, type: true },
       }),
     ]);
@@ -711,7 +709,7 @@ export async function importAccounts(
  * - `name` is required.
  * - `amount` must be greater than zero.
  * - `period` must be one of `MONTHLY`, `QUARTERLY`, or `YEARLY` (case-insensitive).
- * If `category` is provided, the function attempts to link it to an existing user or system category; if not found, the budget is created without a category. Row numbers in reported errors start at 2 (header = row 1).
+ * If `category` is provided, the function attempts to link it to one of the current user's categories; if not found, the budget is created without a category. Row numbers in reported errors start at 2 (header = row 1).
  *
  * @param budgets - Array of budget records to import. Each item should contain:
  *   - `name`: display name of the budget
@@ -754,9 +752,7 @@ export async function importBudgets(
 
     // Get categories for lookup
     const categories = await prisma.category.findMany({
-      where: {
-        OR: [{ userId: session.user.id }, { isSystem: true }],
-      },
+      where: { userId: session.user.id },
       select: { id: true, name: true },
     });
 

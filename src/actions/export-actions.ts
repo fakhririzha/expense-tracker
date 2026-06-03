@@ -469,9 +469,7 @@ export async function exportCategoriesCSV() {
     }
 
     const categories = await prisma.category.findMany({
-      where: {
-        OR: [{ userId: session.user.id }, { isSystem: true }],
-      },
+      where: { userId: session.user.id },
       orderBy: [{ isSystem: "desc" }, { name: "asc" }],
     });
 

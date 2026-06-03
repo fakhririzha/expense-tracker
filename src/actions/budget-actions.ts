@@ -118,7 +118,7 @@ export async function getBudget(id: string) {
 /**
  * Create a new budget for the authenticated user.
  *
- * Validates the provided budget payload, enforces category ownership (or system category) to prevent IDOR,
+ * Validates the provided budget payload, enforces category ownership to prevent IDOR,
  * persists the budget linked to the current user, and revalidates dashboard cache paths.
  *
  * @param data - The budget input to create (validated against `budgetSchema`)
@@ -139,13 +139,13 @@ export async function createBudget(data: BudgetInput) {
       };
     }
 
-    // Validate category belongs to user OR is a system category (IDOR prevention)
+    // Validate category belongs to the current user (IDOR prevention)
     const { categoryId, ...restData } = validatedFields.data;
     if (categoryId) {
       const category = await prisma.category.findFirst({
         where: {
           id: categoryId,
-          OR: [{ userId: session.user.id }, { isSystem: true }],
+          userId: session.user.id,
         },
       });
       if (!category) {
@@ -214,14 +214,14 @@ export async function updateBudget(id: string, data: Partial<BudgetInput>) {
       return { success: false, error: "Budget not found" };
     }
 
-    // Validate category belongs to user OR is a system category (IDOR prevention)
+    // Validate category belongs to the current user (IDOR prevention)
     if (data.categoryId !== undefined) {
       const sanitizedCategoryId = data.categoryId?.trim() || null;
       if (sanitizedCategoryId) {
         const category = await prisma.category.findFirst({
           where: {
             id: sanitizedCategoryId,
-            OR: [{ userId: session.user.id }, { isSystem: true }],
+            userId: session.user.id,
           },
         });
         if (!category) {

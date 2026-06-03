@@ -149,12 +149,12 @@ export async function createTransaction(data: TransactionInput) {
     const categoryId = rest.categoryId?.trim() || null;
     const recurringRuleId = rest.recurringRuleId?.trim() || null;
 
-    // Validate category belongs to user OR is a system category (IDOR prevention)
+    // Validate category belongs to the current user (IDOR prevention)
     if (categoryId) {
       const category = await prisma.category.findFirst({
         where: {
           id: categoryId,
-          OR: [{ userId: session.user.id }, { isSystem: true }],
+          userId: session.user.id,
         },
       });
       if (!category) {
@@ -289,14 +289,14 @@ export async function updateTransaction(
       };
     }
 
-    // Validate category belongs to user OR is a system category (IDOR prevention)
+    // Validate category belongs to the current user (IDOR prevention)
     if (categoryId !== undefined) {
       const sanitizedCategoryId = categoryId?.trim() || null;
       if (sanitizedCategoryId) {
         const category = await prisma.category.findFirst({
           where: {
             id: sanitizedCategoryId,
-            OR: [{ userId: session.user.id }, { isSystem: true }],
+            userId: session.user.id,
           },
         });
         if (!category) {

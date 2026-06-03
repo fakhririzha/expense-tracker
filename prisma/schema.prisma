@@ -152,7 +152,7 @@ model Category {
   icon     String?
   color    String?
   type     TransactionType
-  isSystem Boolean         @default(false) // System categories can't be deleted
+  isSystem Boolean         @default(false) // Seed/default marker for starter categories
 
   userId String?
   user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
