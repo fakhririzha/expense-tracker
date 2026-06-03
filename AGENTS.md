@@ -10,6 +10,7 @@ This file contains essential information for AI coding agents working on the Exp
 - **Account Management**: Create and manage multiple financial accounts (Bank, Cash, Investment, Loan, Credit Card)
 - **Transaction Tracking**: Record income, expenses, transfers, and liability payments with category classification
 - **Investment Portfolio**: Track stocks and investments with real-time price updates via Yahoo Finance
+- **Investment Portfolio**: Track stocks and investments with real-time price updates via Yahoo Finance. When fetching pricing data via Yahoo Finance, ensure implementations include fallback values, caching, and error handling in case the API is rate-limited or unavailable.
 - **Personal Assets**: Track durable owned items with dated manual valuations and disposal history
 - **Recurring Transactions**: Automate regular transactions with flexible scheduling (daily, weekly, monthly, etc.)
 - **Multi-Currency Support**: Track finances across different currencies with automatic exchange rate conversion
@@ -85,6 +86,7 @@ expense-tracker/
 │   │   │   ├── cron/recurring/route.ts    # Daily recurring transaction processor
 │   │   │   └── investments/
 │   │   ├── globals.css        # Global styles with CSS variables
+│   │   ├── globals.css        # Global styles with CSS variables (e.g., bg-primary, text-muted-foreground, border-border) linked to semantic Tailwind classes
 │   │   ├── layout.tsx         # Root layout with fonts and providers
 │   │   └── page.tsx           # Landing page
 │   ├── components/            # React components
@@ -279,6 +281,11 @@ import { cn } from '@/lib/utils';
 
 ## Server Actions Pattern
 
+All data mutations follow a standardized Server Action pattern with explicit error handling:
+
+- In Server Action catch blocks, identify specific Prisma errors (e.g., P2002 for unique constraint violations, P2025 for record not found) and return targeted, user-friendly error messages rather than consistently falling back to generic strings.
+- Example: When a unique constraint violation occurs, inform the user which field caused the conflict instead of a generic "Failed to create" message.
+
 All data mutations use Next.js Server Actions. Here's the standard pattern:
 
 ```typescript
@@ -435,6 +442,7 @@ import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 - **Route Protection**: Middleware checks authentication status
 - **Cron Endpoints**: Protected by `CRON_SECRET` header check
 - **User Isolation**: All queries must include `userId` filter
+- **User Isolation**: All queries for user-owned models (e.g., Accounts, Transactions, Budgets) must include a `userId` filter. Do not apply this to global tables like ExchangeRate.
 
 ## Testing
 

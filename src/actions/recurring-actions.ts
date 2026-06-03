@@ -39,13 +39,13 @@ export async function createRecurringRule(data: RecurringRuleInput) {
       };
     }
 
-    // Validate category belongs to user OR is a system category (IDOR prevention)
+    // Validate category belongs to the current user (IDOR prevention)
     const { categoryId, ...restData } = validatedFields.data;
     if (categoryId) {
       const category = await prisma.category.findFirst({
         where: {
           id: categoryId,
-          OR: [{ userId: session.user.id }, { isSystem: true }],
+          userId: session.user.id,
         },
       });
       if (!category) {
@@ -103,14 +103,14 @@ export async function updateRecurringRule(
       return { success: false, error: "Recurring rule not found" };
     }
 
-    // Validate category belongs to user OR is a system category (IDOR prevention)
+    // Validate category belongs to the current user (IDOR prevention)
     if (data.categoryId !== undefined) {
       const sanitizedCategoryId = data.categoryId?.trim() || null;
       if (sanitizedCategoryId) {
         const category = await prisma.category.findFirst({
           where: {
             id: sanitizedCategoryId,
-            OR: [{ userId: session.user.id }, { isSystem: true }],
+            userId: session.user.id,
           },
         });
         if (!category) {

@@ -21,10 +21,7 @@ export async function GET(request: NextRequest) {
     }
 
     const where: Record<string, unknown> = {
-      OR: [
-        { userId: session.user.id },
-        { isSystem: true },
-      ],
+      userId: session.user.id,
     };
 
     if (type) {
@@ -38,7 +35,9 @@ export async function GET(request: NextRequest) {
         id: true,
         name: true,
         icon: true,
+        color: true,
         type: true,
+        isSystem: true,
       },
     });
 
