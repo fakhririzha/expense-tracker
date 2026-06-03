@@ -132,10 +132,7 @@ export async function getCalendarEvents(params: {
       });
     }
 
-    // 2. Get scheduled transactions in the month (future transactions)
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
+    // 2. Get scheduled transactions in the month
     const transactions = await prisma.transaction.findMany({
       where: {
         userId: session.user.id,
@@ -143,8 +140,6 @@ export async function getCalendarEvents(params: {
           gte: monthStart,
           lte: monthEnd,
         },
-        // Only include future transactions or recurring transactions
-        OR: [{ date: { gte: today } }, { isRecurring: true }],
         ...(accountId && { accountId }),
         ...(type && { type }),
       },
