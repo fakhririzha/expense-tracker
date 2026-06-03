@@ -16,6 +16,7 @@ import {
     ArrowDownCircle,
     ArrowUpCircle,
     ArrowUpDown,
+    ExternalLink,
     MoreHorizontal,
     Pencil,
     Trash2,
@@ -47,6 +48,10 @@ export interface Transaction {
   exchangeRate: number;
   type: "INCOME" | "EXPENSE" | "TRANSFER" | "LIABILITY_PAYMENT";
   description: string | null;
+  location: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  googleMapsLink: string | null;
   date: Date;
   isRecurring: boolean;
   toAccountId: string | null;
@@ -145,6 +150,43 @@ export function TransactionTable({
       cell: ({ row }) => {
         const description = row.getValue("description") as string | null;
         return description || <span className="text-muted-foreground">-</span>;
+      },
+    },
+    {
+      accessorKey: "location",
+      header: "Location",
+      cell: ({ row }) => {
+        const location = row.original.location;
+        const latitude = row.original.latitude;
+        const longitude = row.original.longitude;
+        const googleMapsLink = row.original.googleMapsLink;
+
+        if (!location && latitude == null && longitude == null && !googleMapsLink) {
+          return <span className="text-muted-foreground">-</span>;
+        }
+
+        return (
+          <div className="space-y-1">
+            {location && <div className="max-w-55 truncate">{location}</div>}
+            {(latitude != null || longitude != null) && (
+              <div className="text-xs text-muted-foreground">
+                {latitude != null ? latitude.toFixed(6) : "?"},{" "}
+                {longitude != null ? longitude.toFixed(6) : "?"}
+              </div>
+            )}
+            {googleMapsLink && (
+              <a
+                href={googleMapsLink}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+              >
+                Open in Maps
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            )}
+          </div>
+        );
       },
     },
     {

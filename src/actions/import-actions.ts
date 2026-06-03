@@ -4,7 +4,6 @@ import { auth } from "@/auth";
 import prisma from "@/lib/db";
 import { Prisma } from "@/generated/prisma/client/client";
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
 
 // Column mapping types
 export type ColumnMapping = {
@@ -15,6 +14,10 @@ export type ColumnMapping = {
   account?: string;
   toAccount?: string;
   description?: string;
+  location?: string;
+  latitude?: string;
+  longitude?: string;
+  googleMapsLink?: string;
   currency?: string;
 };
 
@@ -27,6 +30,10 @@ export type ParsedTransaction = {
   account: string;
   toAccount?: string;
   description?: string;
+  location?: string;
+  latitude?: string;
+  longitude?: string;
+  googleMapsLink?: string;
   currency?: string;
   isValid: boolean;
   errors: string[];
@@ -41,17 +48,6 @@ export type ImportResult = {
   errors: Array<{ row: number; error: string }>;
 };
 
-// Validation schema for transaction import
-const transactionImportSchema = z.object({
-  date: z.string().min(1, "Date is required"),
-  amount: z.number().positive("Amount must be positive"),
-  type: z.enum(["INCOME", "EXPENSE", "TRANSFER"]),
-  category: z.string().optional(),
-  account: z.string().min(1, "Account is required"),
-  description: z.string().optional(),
-  currency: z.string().default("IDR"),
-});
-
 /**
  * Prevent CSV/Excel formula injection by prefixing values that start with `=`, `+`, `-`, or `@` with a zero-width space.
  *
@@ -65,6 +61,15 @@ function sanitizeCsvCell(value: string | null | undefined): string | undefined {
     return '\u200B' + value;
   }
   return value;
+}
+
+function parseOptionalNumber(value: string | undefined): number | undefined {
+  if (value === undefined || value.trim() === "") {
+    return undefined;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 /**
@@ -135,8 +140,8 @@ export async function parseCSVContent(csvContent: string) {
  * Detects CSV headers that correspond to known import fields.
  *
  * Matches provided header names against common patterns for date, amount, type,
- * category, account, destination account (toAccount), description, and currency,
- * and selects the first matching header for each field.
+ * category, account, destination account (toAccount), description, location,
+ * coordinates, maps link, and currency, and selects the first matching header for each field.
  *
  * @param headers - The list of CSV header names to analyze
  * @returns A ColumnMapping where each key is assigned the first matching header name, or remains undefined if no match was found
@@ -151,6 +156,10 @@ export async function detectColumnMapping(headers: string[]): Promise<ColumnMapp
   const accountPatterns = ["account", "account_name", "from_account", "source"];
   const toAccountPatterns = ["to_account", "to account", "destination", "dest_account", "target_account"];
   const descriptionPatterns = ["description", "desc", "memo", "note", "notes"];
+  const locationPatterns = ["location", "place", "address", "venue"];
+  const latitudePatterns = ["latitude", "lat"];
+  const longitudePatterns = ["longitude", "lng", "lon"];
+  const mapsLinkPatterns = ["google maps link", "google_maps_link", "maps link", "maps url", "google maps url"];
   const currencyPatterns = ["currency", "curr", "ccy"];
 
   for (const header of headers) {
@@ -173,6 +182,17 @@ export async function detectColumnMapping(headers: string[]): Promise<ColumnMapp
       descriptionPatterns.some((p) => h.includes(p))
     ) {
       mapping.description = header;
+    } else if (!mapping.location && locationPatterns.some((p) => h.includes(p))) {
+      mapping.location = header;
+    } else if (!mapping.latitude && latitudePatterns.some((p) => h.includes(p))) {
+      mapping.latitude = header;
+    } else if (!mapping.longitude && longitudePatterns.some((p) => h.includes(p))) {
+      mapping.longitude = header;
+    } else if (
+      !mapping.googleMapsLink &&
+      mapsLinkPatterns.some((p) => h.includes(p))
+    ) {
+      mapping.googleMapsLink = header;
     } else if (
       !mapping.currency &&
       currencyPatterns.some((p) => h.includes(p))
@@ -215,6 +235,12 @@ export async function mapToTransactions(
     const descriptionValue = sanitizeCsvCell(mapping.description
       ? row[mapping.description]
       : undefined);
+    const locationValue = sanitizeCsvCell(mapping.location ? row[mapping.location] : undefined);
+    const latitudeValue = mapping.latitude ? row[mapping.latitude]?.trim() || undefined : undefined;
+    const longitudeValue = mapping.longitude ? row[mapping.longitude]?.trim() || undefined : undefined;
+    const googleMapsLinkValue = sanitizeCsvCell(
+      mapping.googleMapsLink ? row[mapping.googleMapsLink] : undefined
+    );
     const currencyValue = mapping.currency ? row[mapping.currency] : "IDR";
 
     // Validate required fields
@@ -257,6 +283,14 @@ export async function mapToTransactions(
       }
     }
 
+    if (latitudeValue && parseOptionalNumber(latitudeValue) === undefined) {
+      errors.push("Latitude must be a valid number");
+    }
+
+    if (longitudeValue && parseOptionalNumber(longitudeValue) === undefined) {
+      errors.push("Longitude must be a valid number");
+    }
+
     transactions.push({
       date: dateValue,
       amount,
@@ -265,6 +299,10 @@ export async function mapToTransactions(
       account: accountValue,
       toAccount: toAccountValue,
       description: descriptionValue,
+      location: locationValue,
+      latitude: latitudeValue,
+      longitude: longitudeValue,
+      googleMapsLink: googleMapsLinkValue,
       currency: currencyValue || "IDR",
       isValid: errors.length === 0,
       errors,
@@ -476,18 +514,22 @@ export async function importTransactions(
         // Create transaction and update account balance(s) atomically
         await prisma.$transaction(async (txClient: Prisma.TransactionClient) => {
           // Create transaction
-          await txClient.transaction.create({
-            data: {
-              amount: tx.amount,
-              currency: tx.currency || account!.currency,
-              exchangeRate: 1,
-              type: tx.type as "INCOME" | "EXPENSE" | "TRANSFER",
-              description: tx.description,
-              date: parsedDate,
-              accountId: account!.id,
-              toAccountId: tx.type === "TRANSFER" ? toAccount!.id : null,
-              categoryId: category?.id || null,
-              userId: session.user.id,
+        await txClient.transaction.create({
+          data: {
+            amount: tx.amount,
+            currency: tx.currency || account!.currency,
+            exchangeRate: 1,
+            type: tx.type as "INCOME" | "EXPENSE" | "TRANSFER",
+            description: tx.description,
+            location: tx.location,
+            latitude: parseOptionalNumber(tx.latitude) ?? null,
+            longitude: parseOptionalNumber(tx.longitude) ?? null,
+            googleMapsLink: tx.googleMapsLink,
+            date: parsedDate,
+            accountId: account!.id,
+            toAccountId: tx.type === "TRANSFER" ? toAccount!.id : null,
+            categoryId: category?.id || null,
+            userId: session.user.id,
             },
           });
 
@@ -806,11 +848,11 @@ export async function importBudgets(
  */
 export async function getImportTemplate(type: "transactions" | "accounts" | "budgets") {
   const templates = {
-    transactions: `Date,Amount,Type,Category,Account,To Account,Description,Currency
-2024-01-15,50000,INCOME,Salary,Bank Account,,Monthly salary,IDR
-2024-01-16,25000,EXPENSE,Food,Cash,,Groceries,IDR
-2024-01-17,10000,EXPENSE,Transport,Bank Account,,Taxi fare,IDR
-2024-01-18,30000,TRANSFER,,Bank Account,Savings,Transfer to savings,IDR`,
+    transactions: `Date,Amount,Type,Category,Account,To Account,Description,Location,Latitude,Longitude,Google Maps Link,Currency
+2024-01-15,50000,INCOME,Salary,Bank Account,,Monthly salary,Office,-6.200000,106.816666,https://www.google.com/maps/search/?api=1&query=-6.200000%2C106.816666,IDR
+2024-01-16,25000,EXPENSE,Food,Cash,,Groceries,Restaurant,,,,IDR
+2024-01-17,10000,EXPENSE,Transport,Bank Account,,Taxi fare,Train station,-6.175110,106.865036,https://www.google.com/maps/search/?api=1&query=-6.175110%2C106.865036,IDR
+2024-01-18,30000,TRANSFER,,Bank Account,Savings,Transfer to savings,,,,,IDR`,
     accounts: `Name,Type,Currency,Balance,Description
 Bank Account,BANK,IDR,1000000,Main bank account
 Cash,CASH,IDR,500000,Pocket money

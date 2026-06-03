@@ -37,15 +37,23 @@ import {
 import { cn } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
-import { CalendarIcon, Plus } from "lucide-react";
+import { CalendarIcon, Loader2, MapPin, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+
+function buildGoogleMapsLink(latitude: number, longitude: number) {
+  return `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
+}
 
 const transactionFormSchema = z.object({
   amount: z.number().positive("Amount must be positive"),
   type: z.enum(["INCOME", "EXPENSE", "TRANSFER"]),
   description: z.string().optional(),
+  location: z.string().optional(),
+  latitude: z.number().optional(),
+  longitude: z.number().optional(),
+  googleMapsLink: z.string().optional(),
   date: z.date(),
   accountId: z.string().min(1, "From account is required"),
   toAccountId: z.string().optional(),
@@ -60,12 +68,6 @@ interface Category {
   id: string;
   name: string;
   icon: string | null;
-  type: string;
-}
-
-interface Account {
-  id: string;
-  name: string;
   type: string;
 }
 
@@ -84,6 +86,7 @@ interface AddTransactionDialogProps {
 export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
   const [open, setOpen] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [isFetchingLocation, setIsFetchingLocation] = useState(false);
 
   const { data: accountsData = [] } = useAccounts();
   const createMutation = useCreateTransaction();
@@ -100,6 +103,10 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
       amount: 0,
       type: "EXPENSE",
       description: "",
+      location: "",
+      latitude: undefined,
+      longitude: undefined,
+      googleMapsLink: "",
       date: new Date(),
       accountId: "",
       toAccountId: "",
@@ -110,6 +117,41 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
   });
 
   const selectedType = form.watch("type");
+
+  const handleUseCurrentLocation = () => {
+    if (!("geolocation" in navigator)) {
+      form.setError("root", {
+        message: "Geolocation is not supported by this browser.",
+      });
+      return;
+    }
+
+    setIsFetchingLocation(true);
+    form.clearErrors("root");
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        form.setValue("latitude", latitude, { shouldValidate: true });
+        form.setValue("longitude", longitude, { shouldValidate: true });
+        form.setValue("googleMapsLink", buildGoogleMapsLink(latitude, longitude), {
+          shouldValidate: true,
+        });
+        setIsFetchingLocation(false);
+      },
+      () => {
+        form.setError("root", {
+          message: "Unable to retrieve your location. Permission may have been denied.",
+        });
+        setIsFetchingLocation(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 60000,
+      }
+    );
+  };
 
   useEffect(() => {
     /**
@@ -156,7 +198,7 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
           Add Transaction
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-160 max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add Transaction</DialogTitle>
           <DialogDescription>
@@ -271,6 +313,7 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
                           .filter(
                             (account) =>
                               account.type === "BANK" &&
+                              // eslint-disable-next-line react-hooks/incompatible-library
                               account.id !== form.watch("accountId")
                           )
                           .map((account) => (
@@ -338,6 +381,108 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
                       ))}
                     </SelectContent>
                   </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="location"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Location (Optional)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Place, address, or venue" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="latitude"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Latitude (Optional)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="any"
+                        placeholder="Enter your latitude or use current location"
+                        value={field.value ?? ""}
+                        onChange={(e) =>
+                          field.onChange(
+                            e.target.value === "" ? undefined : parseFloat(e.target.value)
+                          )
+                        }
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="longitude"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Longitude (Optional)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="any"
+                        placeholder="Enter your longitude or use current location"
+                        value={field.value ?? ""}
+                        onChange={(e) =>
+                          field.onChange(
+                            e.target.value === "" ? undefined : parseFloat(e.target.value)
+                          )
+                        }
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleUseCurrentLocation}
+                disabled={isFetchingLocation}
+                className="w-full sm:w-auto"
+              >
+                {isFetchingLocation ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <MapPin className="mr-2 h-4 w-4" />
+                )}
+                Use current location
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                Captures your browser-reported coordinates only when you choose to.
+              </p>
+            </div>
+
+            <FormField
+              control={form.control}
+              name="googleMapsLink"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Google Maps Link (Optional)</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="url"
+                      placeholder="https://www.google.com/maps/search/?api=1&query=..."
+                      {...field}
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}

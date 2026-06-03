@@ -48,7 +48,7 @@ export function ImportPreview({ transactions, maxRows = 20 }: ImportPreviewProps
       </div>
 
       {/* Preview Table */}
-      <div className="h-[300px] overflow-auto rounded-md border">
+      <div className="h-75 overflow-auto rounded-md border">
         <Table>
           <TableHeader>
             <TableRow>
@@ -58,6 +58,9 @@ export function ImportPreview({ transactions, maxRows = 20 }: ImportPreviewProps
               <TableHead>Type</TableHead>
               <TableHead>Account</TableHead>
               <TableHead>Category</TableHead>
+              <TableHead>Location</TableHead>
+              <TableHead>Coordinates</TableHead>
+              <TableHead>Maps</TableHead>
               <TableHead>Status</TableHead>
             </TableRow>
           </TableHeader>
@@ -85,6 +88,26 @@ export function ImportPreview({ transactions, maxRows = 20 }: ImportPreviewProps
                 </TableCell>
                 <TableCell>{tx.account}</TableCell>
                 <TableCell>{tx.category || "-"}</TableCell>
+                <TableCell>{tx.location || "-"}</TableCell>
+                <TableCell>
+                  {tx.latitude != null || tx.longitude != null
+                    ? `${tx.latitude ?? "?"}, ${tx.longitude ?? "?"}`
+                    : "-"}
+                </TableCell>
+                <TableCell>
+                  {tx.googleMapsLink ? (
+                    <a
+                      href={tx.googleMapsLink}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-primary hover:underline"
+                    >
+                      Open
+                    </a>
+                  ) : (
+                    "-"
+                  )}
+                </TableCell>
                 <TableCell>
                   {tx.isValid ? (
                     <Badge variant="secondary" className="bg-green-100 text-green-800">
@@ -95,7 +118,7 @@ export function ImportPreview({ transactions, maxRows = 20 }: ImportPreviewProps
                       <Badge variant="secondary" className="bg-red-100 text-red-800">
                         Invalid
                       </Badge>
-                      <div className="text-xs text-red-600 max-w-[200px]">
+                      <div className="text-xs text-red-600 max-w-50">
                         {tx.errors.join(", ")}
                       </div>
                     </div>

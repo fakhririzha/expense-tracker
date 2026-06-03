@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
+    "db:migrate:dev": "npx prisma@^7.4.1 migrate dev",
+    "db:migrate:prod": "npx prisma@^7.4.1 migrate deploy",
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint"
