@@ -12,8 +12,8 @@ import {
 import { CurrencyProvider } from "@/contexts/CurrencyContext";
 import prisma from "@/lib/db";
 import { getInitials } from "@/lib/utils";
-import { Sidebar } from "@/components/dashboard/Sidebar";
-import { LogOut, TrendingUp, UserRound } from "lucide-react";
+import { MobileSidebar, Sidebar } from "@/components/dashboard/Sidebar";
+import { LogOut, UserRound } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -59,13 +59,7 @@ export default async function DashboardLayout({
           <header className="sticky top-0 z-50 w-full border-b-4 border-black bg-white">
             <div className="flex h-16 items-center justify-between px-4 md:px-8">
               
-              {/* Mobile View Branding / Menu Trigger (Placeholder for now) */}
-              <div className="md:hidden flex items-center">
-                <Link href="/dashboard" className="flex items-center space-x-2 bg-primary text-primary-foreground px-3 py-1.5 neo-border shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-y-px hover:translate-x-px hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] transition-all">
-                  <TrendingUp className="h-5 w-5" strokeWidth={3} />
-                  <span className="font-black text-lg tracking-tight uppercase font-heading">FinHealth</span>
-                </Link>
-              </div>
+              <MobileSidebar />
 
               {/* Flex spacer for desktop so profile is on right */}
               <div className="hidden md:block flex-1"></div>
