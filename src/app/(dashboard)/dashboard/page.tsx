@@ -3,10 +3,14 @@ import { auth } from "@/auth";
 import { MonthlyBudgetStatus } from "@/components/dashboard/MonthlyBudgetStatus";
 import { RetirementProgress } from "@/components/dashboard/RetirementProgress";
 import { WealthHealthCard } from "@/components/dashboard/WealthHealthBadge";
+import { DashboardChangelogDialog } from "@/components/dashboard/DashboardChangelogDialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getExecutiveMetrics } from "@/lib/executive-service";
 import { formatCurrency, formatPercentage } from "@/lib/utils";
 import { endOfMonth, startOfMonth } from "date-fns";
+import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import {
     BarChart3,
     Boxes,
@@ -17,6 +21,25 @@ import {
     Wallet,
 } from "lucide-react";
 import { redirect } from "next/navigation";
+
+async function getDashboardChangelog() {
+  try {
+    const changelogPath = path.join(process.cwd(), "content", "changelog.md");
+    const markdown = await readFile(changelogPath, "utf8");
+    const trimmedMarkdown = markdown.trim();
+
+    if (!trimmedMarkdown) {
+      return null;
+    }
+
+    const version = createHash("sha256").update(trimmedMarkdown).digest("hex");
+
+    return { markdown: trimmedMarkdown, version };
+  } catch (error) {
+    console.error("Failed to load dashboard changelog", error);
+    return null;
+  }
+}
 
 /**
  * Render the authenticated user's dashboard, showing executive metrics, monthly cash flow,
@@ -31,9 +54,10 @@ export default async function DashboardPage() {
   }
 
   const now = new Date();
-  const [metricsResult, currentMonthSummary] = await Promise.all([
+  const [metricsResult, currentMonthSummary, changelog] = await Promise.all([
     getExecutiveMetrics(),
     getTransactionSummary(startOfMonth(now), endOfMonth(now)),
+    getDashboardChangelog(),
   ]);
 
   if (!metricsResult.success || !metricsResult.data) {
@@ -53,6 +77,13 @@ export default async function DashboardPage() {
 
   return (
     <div className="p-6 space-y-6">
+      {changelog ? (
+        <DashboardChangelogDialog
+          markdown={changelog.markdown}
+          version={changelog.version}
+        />
+      ) : null}
+
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold">Dashboard</h1>
