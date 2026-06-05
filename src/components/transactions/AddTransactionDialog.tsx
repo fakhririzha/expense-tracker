@@ -96,6 +96,7 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
     name: a.name,
     type: a.type,
   }));
+  const transferAccountTypes = new Set(["BANK", "CASH"]);
 
   const form = useForm<TransactionFormValues>({
     resolver: zodResolver(transactionFormSchema),
@@ -280,7 +281,7 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
                       </FormControl>
                       <SelectContent>
                         {accounts
-                          .filter((account) => account.type === "BANK")
+                          .filter((account) => transferAccountTypes.has(account.type))
                           .map((account) => (
                             <SelectItem key={account.id} value={account.id}>
                               {account.name}
@@ -312,7 +313,7 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
                         {accounts
                           .filter(
                             (account) =>
-                              account.type === "BANK" &&
+                              transferAccountTypes.has(account.type) &&
                               // eslint-disable-next-line react-hooks/incompatible-library
                               account.id !== form.watch("accountId")
                           )

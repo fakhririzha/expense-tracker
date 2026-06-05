@@ -129,12 +129,12 @@ export async function createTransaction(data: TransactionInput) {
         return { success: false, error: "To account not found" };
       }
 
-      if (toAccount.type !== "BANK") {
-        return { success: false, error: "Transfers can only be made to bank accounts" };
+      if (!["BANK", "CASH"].includes(toAccount.type)) {
+        return { success: false, error: "Transfers can only be made to bank or cash accounts" };
       }
 
-      if (account.type !== "BANK") {
-        return { success: false, error: "Transfers can only be made from bank accounts" };
+      if (!["BANK", "CASH"].includes(account.type)) {
+        return { success: false, error: "Transfers can only be made from bank or cash accounts" };
       }
 
       if (accountId === toAccountId) {
