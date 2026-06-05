@@ -151,6 +151,7 @@ export function EditTransactionDialog({
     name: a.name,
     type: a.type,
   }));
+  const transferAccountTypes = new Set(["BANK", "CASH"]);
 
   const form = useForm<EditTransactionFormValues>({
     resolver: zodResolver(editTransactionFormSchema),
@@ -343,12 +344,12 @@ export function EditTransactionDialog({
                             <SelectValue placeholder="Select source account" />
                           </SelectTrigger>
                         </FormControl>
-                        <SelectContent>
-                          {accounts
-                            .filter((account) => account.type === "BANK")
-                            .map((account) => (
-                              <SelectItem key={account.id} value={account.id}>
-                                {account.name}
+                      <SelectContent>
+                        {accounts
+                          .filter((account) => transferAccountTypes.has(account.type))
+                          .map((account) => (
+                            <SelectItem key={account.id} value={account.id}>
+                              {account.name}
                               </SelectItem>
                             ))}
                         </SelectContent>
@@ -373,14 +374,14 @@ export function EditTransactionDialog({
                             <SelectValue placeholder="Select destination account" />
                           </SelectTrigger>
                         </FormControl>
-                        <SelectContent>
-                          {accounts
-                            .filter(
-                              (account) =>
-                                account.type === "BANK" &&
-                                // eslint-disable-next-line react-hooks/incompatible-library
-                                account.id !== form.watch("accountId")
-                            )
+                      <SelectContent>
+                        {accounts
+                          .filter(
+                            (account) =>
+                              transferAccountTypes.has(account.type) &&
+                              // eslint-disable-next-line react-hooks/incompatible-library
+                              account.id !== form.watch("accountId")
+                          )
                             .map((account) => (
                               <SelectItem key={account.id} value={account.id}>
                                 {account.name}
