@@ -1,4 +1,4 @@
-import { getTransactionSummary } from "@/actions/transaction-actions";
+import { getBudgetSpendingSummary } from "@/actions/budget-actions";
 import { auth } from "@/auth";
 import { MonthlyBudgetStatus } from "@/components/dashboard/MonthlyBudgetStatus";
 import { RetirementProgress } from "@/components/dashboard/RetirementProgress";
@@ -56,7 +56,7 @@ export default async function DashboardPage() {
   const now = new Date();
   const [metricsResult, currentMonthSummary, changelog] = await Promise.all([
     getExecutiveMetrics(),
-    getTransactionSummary(startOfMonth(now), endOfMonth(now)),
+    getBudgetSpendingSummary(startOfMonth(now), endOfMonth(now)),
     getDashboardChangelog(),
   ]);
 
@@ -72,7 +72,7 @@ export default async function DashboardPage() {
   const currency = metrics.displayCurrency;
   const currentMonthExpenses =
     currentMonthSummary.success && currentMonthSummary.data
-      ? currentMonthSummary.data.totalExpense
+      ? currentMonthSummary.data.totalSpent
       : null;
 
   return (

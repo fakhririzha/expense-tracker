@@ -1,5 +1,5 @@
 import { getExecutiveMetrics } from "@/lib/executive-service";
-import { getTransactionSummary } from "@/actions/transaction-actions";
+import { getBudgetSpendingSummary } from "@/actions/budget-actions";
 import { useQuery } from "@tanstack/react-query";
 import { endOfMonth, startOfMonth } from "date-fns";
 
@@ -38,7 +38,7 @@ export function useSidebarMetrics() {
 
       const [metricsResult, monthSummaryResult] = await Promise.allSettled([
         getExecutiveMetrics(),
-        getTransactionSummary(startDate, endDate),
+        getBudgetSpendingSummary(startDate, endDate),
       ]);
 
       const metrics =
@@ -62,7 +62,7 @@ export function useSidebarMetrics() {
           : null;
 
       const monthlyBudget = metrics?.monthlyBudget ?? null;
-      const currentMonthExpenses = monthSummary?.totalExpense ?? null;
+      const currentMonthExpenses = monthSummary?.totalSpent ?? null;
       const monthlyBudgetAvailable =
         metricsResult.status === "fulfilled" &&
         metricsResult.value.success &&
