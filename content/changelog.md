@@ -1,5 +1,11 @@
 # FinHealth Changelog
 
+## v3.4.3
+
+- Monthly budget tracking now includes liability payments alongside regular expenses in the dashboard and sidebar budget snapshot.
+- All-category budget progress and budget-vs-actual views now count liability payments, while category-specific budgets continue to track regular expenses only.
+- General reports and calendar summaries were left unchanged, so their expense totals keep the existing behavior.
+
 ## v3.4.2
 
 - Added an in-dashboard changelog dialog so updates are visible directly from the main dashboard.

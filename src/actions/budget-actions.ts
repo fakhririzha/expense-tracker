@@ -44,6 +44,80 @@ export interface BudgetWithProgress {
   projectedSpending: number;
 }
 
+interface BudgetCategorySummary {
+  id: string;
+  name: string;
+  icon: string | null;
+  color: string | null;
+}
+
+interface BudgetAccountSummary {
+  id: string;
+  name: string;
+  currency: string;
+}
+
+export interface BudgetTransactionListItem {
+  id: string;
+  amount: number;
+  currency: string;
+  exchangeRate: number;
+  type: TransactionType;
+  description: string | null;
+  date: Date;
+  category: BudgetCategorySummary | null;
+  account: BudgetAccountSummary;
+}
+
+const BUDGET_SPENDING_TYPES: TransactionType[] = [
+  TransactionType.EXPENSE,
+  TransactionType.LIABILITY_PAYMENT,
+];
+
+function getNormalizedAmount(transaction: {
+  amount: number;
+  exchangeRate: number;
+}): number {
+  return transaction.amount * transaction.exchangeRate;
+}
+
+/**
+ * Summarize spending for budget-focused surfaces.
+ *
+ * Includes regular expenses and liability payments, normalized into the user's
+ * main currency using the transaction's stored exchange rate.
+ */
+export async function getBudgetSpendingSummary(startDate: Date, endDate: Date) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const transactions = await prisma.transaction.findMany({
+      where: {
+        userId: session.user.id,
+        type: { in: BUDGET_SPENDING_TYPES },
+        date: { gte: startDate, lte: endDate },
+      },
+      select: {
+        amount: true,
+        exchangeRate: true,
+      },
+    });
+
+    const totalSpent = transactions.reduce(
+      (sum, transaction) => sum + getNormalizedAmount(transaction),
+      0
+    );
+
+    return { success: true, data: { totalSpent } };
+  } catch (error) {
+    console.error("Get budget spending summary error:", error);
+    return { success: false, error: "Failed to fetch budget spending summary" };
+  }
+}
+
 /**
  * Fetches all budgets for the authenticated user, including each budget's category summary (id, name, icon, color).
  *
@@ -300,8 +374,6 @@ export async function deleteBudget(id: string) {
 function getBudgetDateRange(budget: { period: string; startDate: Date; endDate?: Date | null }): { start: Date; end: Date } {
   // Use budget's startDate as the base for period calculations
   const baseDate = budget.startDate;
-  // Use endDate if provided, otherwise derive from startDate
-  const effectiveEndDate = budget.endDate ?? budget.startDate;
   
   switch (budget.period) {
     case "MONTHLY":
@@ -361,32 +433,29 @@ export async function getBudgetProgress(id: string): Promise<{ success: boolean;
     const { start, end } = getBudgetDateRange(budget);
 
     // Get transactions for the budget period
-    const whereClause: {
-      userId: string;
-      type: TransactionType;
-      date: { gte: Date; lte: Date };
-      categoryId?: string;
-    } = {
+    const whereClause = {
       userId: session.user.id,
-      type: TransactionType.EXPENSE,
       date: { gte: start, lte: end },
+      ...(budget.categoryId
+        ? {
+            type: TransactionType.EXPENSE,
+            categoryId: budget.categoryId,
+          }
+        : {
+            type: { in: BUDGET_SPENDING_TYPES },
+          }),
     };
-
-    // If budget has a category, filter by it
-    if (budget.categoryId) {
-      whereClause.categoryId = budget.categoryId;
-    }
 
     const transactions = await prisma.transaction.findMany({
       where: whereClause,
       select: {
         amount: true,
-        date: true,
+        exchangeRate: true,
       },
     });
 
     // Calculate spent amount
-    const spent = transactions.reduce((sum, t) => sum + t.amount, 0);
+    const spent = transactions.reduce((sum, t) => sum + getNormalizedAmount(t), 0);
     const remaining = budget.amount - spent;
     const percentage = budget.amount > 0 ? (spent / budget.amount) * 100 : 0;
 
@@ -480,22 +549,25 @@ export async function getBudgetsSummary() {
       .map(b => b.categoryId)
       .filter((id): id is string => id !== null);
 
-    // Check if any budget has no category (uncategorized budget)
-    const hasUncategorized = budgets.some(b => b.categoryId === null);
+    // Check if any budget has no category (all-category budget)
+    const hasAllCategoryBudget = budgets.some(b => b.categoryId === null);
 
     // 5. Fetch all relevant transactions in a single query
     const allTransactions = await prisma.transaction.findMany({
       where: {
         userId: session.user.id,
-        type: TransactionType.EXPENSE,
+        type: hasAllCategoryBudget
+          ? { in: BUDGET_SPENDING_TYPES }
+          : TransactionType.EXPENSE,
         date: { gte: minDate, lte: maxDate },
-        // Only filter by categoryId if there are category-specific budgets AND none is uncategorized
-        ...(categoryIds.length > 0 && !hasUncategorized && { categoryId: { in: categoryIds } }),
+        // Only filter by categoryId if there are category-specific budgets AND no all-category budget
+        ...(categoryIds.length > 0 && !hasAllCategoryBudget && { categoryId: { in: categoryIds } }),
       },
       select: {
         amount: true,
         date: true,
         categoryId: true,
+        exchangeRate: true,
       },
     });
 
@@ -524,7 +596,7 @@ export async function getBudgetsSummary() {
         : relevantTransactions;
 
       // Calculate spent amount
-      const spent = budgetTransactions.reduce((sum, t) => sum + t.amount, 0);
+      const spent = budgetTransactions.reduce((sum, t) => sum + getNormalizedAmount(t), 0);
       const remaining = budget.amount - spent;
       const percentage = budget.amount > 0 ? (spent / budget.amount) * 100 : 0;
 
@@ -566,7 +638,7 @@ export async function getBudgetsSummary() {
 }
 
 /**
- * Compare active budgets to actual expenses for the current month by category.
+ * Compare active budgets to actual budget spending for the current month.
  *
  * Returns an object describing success and a data array where each entry represents a category's budget vs actual comparison.
  *
@@ -609,14 +681,19 @@ export async function getBudgetVsActual() {
       },
     });
 
-    // Get all expenses for the current month grouped by category
-    const expenses = await prisma.transaction.findMany({
+    // Get all budget spending for the current month. Category budgets include
+    // regular expenses only; all-category budgets include liability payments too.
+    const budgetSpending = await prisma.transaction.findMany({
       where: {
         userId: session.user.id,
-        type: "EXPENSE",
+        type: { in: BUDGET_SPENDING_TYPES },
         date: { gte: monthStart, lte: monthEnd },
       },
-      include: {
+      select: {
+        amount: true,
+        exchangeRate: true,
+        type: true,
+        categoryId: true,
         category: {
           select: {
             id: true,
@@ -628,19 +705,27 @@ export async function getBudgetVsActual() {
       },
     });
 
-    // Group expenses by category
+    // Group regular expenses by category for category-specific budgets.
     const expensesByCategory = new Map<string, { category: { id: string; name: string; icon: string | null; color: string | null }; amount: number }>();
+    let allCategoryActual = 0;
 
-    for (const expense of expenses) {
+    for (const expense of budgetSpending) {
+      const normalizedAmount = getNormalizedAmount(expense);
+      allCategoryActual += normalizedAmount;
+
+      if (expense.type !== TransactionType.EXPENSE) {
+        continue;
+      }
+
       const categoryId = expense.categoryId || "uncategorized";
       const existing = expensesByCategory.get(categoryId);
       
       if (existing) {
-        existing.amount += expense.amount;
+        existing.amount += normalizedAmount;
       } else {
         expensesByCategory.set(categoryId, {
           category: expense.category || { id: "uncategorized", name: "Uncategorized", icon: null, color: null },
-          amount: expense.amount,
+          amount: normalizedAmount,
         });
       }
     }
@@ -656,15 +741,16 @@ export async function getBudgetVsActual() {
       percentageUsed: number;
       isOverBudget: boolean;
     }[] = budgets.map((budget) => {
-      const categoryId = budget.categoryId || "uncategorized";
-      const expenseData = expensesByCategory.get(categoryId);
-      const actual = expenseData?.amount || 0;
+      const expenseData = budget.categoryId
+        ? expensesByCategory.get(budget.categoryId)
+        : null;
+      const actual = budget.categoryId ? expenseData?.amount || 0 : allCategoryActual;
       const variance = budget.amount - actual;
 
       return {
         budgetId: budget.id,
         budgetName: budget.name,
-        category: budget.category || { id: "uncategorized", name: "Uncategorized", icon: null, color: null },
+        category: budget.category || { id: "all-categories", name: "All Categories", icon: null, color: null },
         budgeted: budget.amount,
         actual,
         variance,
@@ -675,7 +761,8 @@ export async function getBudgetVsActual() {
 
     // Add categories with expenses but no budget
     for (const [categoryId, data] of expensesByCategory) {
-      const hasBudget = budgets.some((b) => (b.categoryId || "uncategorized") === categoryId);
+      const hasAllCategoryBudget = budgets.some((b) => b.categoryId === null);
+      const hasBudget = hasAllCategoryBudget || budgets.some((b) => b.categoryId === categoryId);
       if (!hasBudget) {
         comparison.push({
           budgetId: null,
@@ -698,12 +785,14 @@ export async function getBudgetVsActual() {
 }
 
 /**
- * Fetches expense transactions that fall within a budget's calculated period and, if set, its category.
+ * Fetches transactions that contribute to a budget's calculated period.
  *
  * @param budgetId - The ID of the budget whose transactions should be retrieved
- * @returns `{ success: true, data: Transaction[] }` with transactions (includes category and account summaries) ordered by date descending on success; `{ success: false, error: string, data: [] }` on failure, unauthorized access, or when the budget is not found.
+ * @returns `{ success: true, data: BudgetTransactionListItem[] }` ordered by date descending on success; `{ success: false, error: string, data: [] }` on failure, unauthorized access, or when the budget is not found.
  */
-export async function getBudgetTransactions(budgetId: string) {
+export async function getBudgetTransactions(
+  budgetId: string
+): Promise<{ success: boolean; data: BudgetTransactionListItem[]; error?: string }> {
   try {
     const session = await auth();
     if (!session?.user?.id) {
@@ -720,24 +809,29 @@ export async function getBudgetTransactions(budgetId: string) {
 
     const { start, end } = getBudgetDateRange(budget);
 
-    const whereClause: {
-      userId: string;
-      type: TransactionType;
-      date: { gte: Date; lte: Date };
-      categoryId?: string;
-    } = {
+    const whereClause = {
       userId: session.user.id,
-      type: TransactionType.EXPENSE,
       date: { gte: start, lte: end },
+      ...(budget.categoryId
+        ? {
+            type: TransactionType.EXPENSE,
+            categoryId: budget.categoryId,
+          }
+        : {
+            type: { in: BUDGET_SPENDING_TYPES },
+          }),
     };
-
-    if (budget.categoryId) {
-      whereClause.categoryId = budget.categoryId;
-    }
 
     const transactions = await prisma.transaction.findMany({
       where: whereClause,
-      include: {
+      select: {
+        id: true,
+        amount: true,
+        currency: true,
+        exchangeRate: true,
+        type: true,
+        description: true,
+        date: true,
         category: {
           select: {
             id: true,
