@@ -162,10 +162,10 @@ export function EditGoalDialog({
         if (response.ok) {
           const data = await response.json();
           // Filter to asset accounts (BANK, CASH, INVESTMENT)
-          const assetAccounts = data.filter(
+          const assetAccounts = data?.accounts?.filter(
             (acc: Account) =>
               acc.type === "BANK" || acc.type === "CASH" || acc.type === "INVESTMENT"
-          );
+          ) ?? [];
           setAccounts(assetAccounts);
         }
       } catch (error) {
@@ -209,7 +209,7 @@ export function EditGoalDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-125 max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Savings Goal</DialogTitle>
           <DialogDescription>

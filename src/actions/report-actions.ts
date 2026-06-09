@@ -470,7 +470,7 @@ export async function getNetWorthHistory(params: {
         1
       );
       
-      const isAsset = ["BANK", "CASH", "INVESTMENT"].includes(account.type);
+      const isAsset = ["BANK", "CASH", "INVESTMENT", "LOAN_RECEIVABLE"].includes(account.type);
       const isLiability = ["LOAN", "CREDIT_CARD"].includes(account.type);
       
       if (isAsset) {

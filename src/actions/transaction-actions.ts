@@ -6,6 +6,7 @@ import { Prisma } from "@/generated/prisma/client/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { encryptUserField, decryptUserField } from "@/lib/user-encryption";
+import { isLoanReceivableAccountType } from "@/lib/account-types";
 
 // Define TransactionType enum locally since Prisma client may not be generated yet
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -268,7 +269,7 @@ export async function updateTransaction(
     // Get existing transaction
     const existingTransaction = await prisma.transaction.findFirst({
       where: { id, userId: session.user.id },
-      include: { account: true },
+      include: { account: true, toAccount: true },
     });
 
     if (!existingTransaction) {
@@ -286,6 +287,18 @@ export async function updateTransaction(
       return { 
         success: false, 
         error: "Liability payment transactions cannot be edited here. Please use the Liabilities page to manage payments." 
+      };
+    }
+
+    if (
+      existingTransaction.type === "TRANSFER" &&
+      (isLoanReceivableAccountType(existingTransaction.account.type) ||
+        isLoanReceivableAccountType(existingTransaction.toAccount?.type ?? ""))
+    ) {
+      return {
+        success: false,
+        error:
+          "Loans Receivable transfers cannot be edited here. Please manage them from the Loans Receivable page.",
       };
     }
 
@@ -315,6 +328,42 @@ export async function updateTransaction(
         if (!recurringRule) {
           return { success: false, error: "Recurring rule not found" };
         }
+      }
+    }
+
+    if (newType === "TRANSFER") {
+      const newSourceAccount = accountId
+        ? await prisma.financialAccount.findFirst({
+            where: { id: accountId, userId: session.user.id },
+          })
+        : existingTransaction.account;
+      const newToAccountId = data.toAccountId ?? existingTransaction.toAccountId;
+      const newTargetAccount = newToAccountId
+        ? await prisma.financialAccount.findFirst({
+            where: { id: newToAccountId, userId: session.user.id },
+          })
+        : null;
+
+      if (!newSourceAccount || !newTargetAccount) {
+        return { success: false, error: "Transfer accounts not found" };
+      }
+
+      if (
+        isLoanReceivableAccountType(newSourceAccount.type) ||
+        isLoanReceivableAccountType(newTargetAccount.type)
+      ) {
+        return {
+          success: false,
+          error:
+            "Loans Receivable transfers cannot be edited here. Please manage them from the Loans Receivable page.",
+        };
+      }
+
+      if (
+        !["BANK", "CASH"].includes(newSourceAccount.type) ||
+        !["BANK", "CASH"].includes(newTargetAccount.type)
+      ) {
+        return { success: false, error: "Transfers can only use bank or cash accounts" };
       }
     }
 
@@ -512,6 +561,7 @@ export async function getTransactions(options?: {
         where,
         include: {
           account: true,
+          toAccount: true,
           category: true,
         },
         orderBy: { date: "desc" },

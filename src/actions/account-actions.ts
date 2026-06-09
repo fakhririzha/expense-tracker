@@ -7,21 +7,17 @@ import { z } from "zod";
 import { encryptUserField, decryptUserField } from "@/lib/user-encryption";
 import { getExchangeRate } from "@/lib/finance-service";
 import { getCurrentPortfolioValuation } from "@/lib/investment-valuation-service";
-
-// Define AccountType enum locally
-const AccountTypeEnum = {
-  BANK: "BANK",
-  CASH: "CASH",
-  INVESTMENT: "INVESTMENT",
-  LOAN: "LOAN",
-  CREDIT_CARD: "CREDIT_CARD",
-} as const;
-
-type AccountType = (typeof AccountTypeEnum)[keyof typeof AccountTypeEnum];
+import {
+  ACCOUNT_TYPES,
+  type AccountTypeValue,
+  isAssetAccountType,
+  isLiabilityAccountType,
+  normalizeAccountBalanceForType,
+} from "@/lib/account-types";
 
 const accountSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  type: z.enum(["BANK", "CASH", "INVESTMENT", "LOAN", "CREDIT_CARD"]),
+  type: z.enum(ACCOUNT_TYPES),
   currency: z.string().default("IDR"),
   balance: z.number().default(0),
   description: z.string().optional(),
@@ -57,6 +53,10 @@ export async function createAccount(data: AccountInput) {
     const account = await prisma.financialAccount.create({
       data: {
         ...validatedFields.data,
+        balance: normalizeAccountBalanceForType(
+          validatedFields.data.type,
+          validatedFields.data.balance
+        ),
         // Store encrypted version of name (for security display)
         nameEncrypted: encryptedName,
         // Nullify optional plaintext field after encryption
@@ -103,6 +103,15 @@ export async function updateAccount(id: string, data: Partial<AccountInput>) {
     }
 
     const updateData: Record<string, unknown> = { ...data };
+    const nextType = data.type ?? existingAccount.type;
+    if (data.balance !== undefined) {
+      updateData.balance = normalizeAccountBalanceForType(nextType, data.balance);
+    } else if (data.type !== undefined) {
+      updateData.balance = normalizeAccountBalanceForType(
+        nextType,
+        existingAccount.balance
+      );
+    }
     
     // If name is being updated, also store encrypted version
     if (data.name) {
@@ -168,7 +177,7 @@ export async function deleteAccount(id: string) {
   }
 }
 
-export async function getAccounts(type?: AccountType) {
+export async function getAccounts(type?: AccountTypeValue) {
   try {
     const session = await auth();
     if (!session?.user?.id) {
@@ -316,9 +325,9 @@ export async function getAccountsSummary() {
           : (await getExchangeRate(account.currency, user.mainCurrency)) ?? 1;
       const balance = account.balance * rate;
 
-      if (["BANK", "CASH", "INVESTMENT"].includes(account.type)) {
+      if (isAssetAccountType(account.type)) {
         summary.totalAssets += balance;
-      } else {
+      } else if (isLiabilityAccountType(account.type)) {
         summary.totalLiabilities += Math.abs(balance);
       }
 

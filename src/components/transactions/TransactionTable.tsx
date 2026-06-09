@@ -14,6 +14,7 @@ import {
 import { format } from "date-fns";
 import {
     ArrowDownCircle,
+    ArrowRightLeft,
     ArrowUpCircle,
     ArrowUpDown,
     ExternalLink,
@@ -60,6 +61,11 @@ export interface Transaction {
     name: string;
     type: string;
   };
+  toAccount?: {
+    id: string;
+    name: string;
+    type: string;
+  } | null;
   category: {
     id: string;
     name: string;
@@ -117,11 +123,19 @@ export function TransactionTable({
           <div className="flex items-center gap-2">
             {type === "INCOME" ? (
               <ArrowUpCircle className="h-4 w-4 text-green-500" />
+            ) : type === "TRANSFER" ? (
+              <ArrowRightLeft className="h-4 w-4 text-muted-foreground" />
             ) : (
               <ArrowDownCircle className="h-4 w-4 text-red-500" />
             )}
             <Badge
-              variant={type === "INCOME" ? "default" : "destructive"}
+              variant={
+                type === "INCOME"
+                  ? "default"
+                  : type === "TRANSFER"
+                    ? "secondary"
+                    : "destructive"
+              }
               className="capitalize"
             >
               {type.replace("_", " ")}
@@ -194,6 +208,18 @@ export function TransactionTable({
       header: "Account",
       cell: ({ row }) => {
         const account = row.original.account;
+        const toAccount = row.original.toAccount;
+        if (row.original.type === "TRANSFER" && toAccount) {
+          return (
+            <div>
+              <p>{account.name}</p>
+              <p className="text-xs text-muted-foreground">
+                to {toAccount.name}
+              </p>
+            </div>
+          );
+        }
+
         return account.name;
       },
     },
@@ -220,10 +246,14 @@ export function TransactionTable({
         return (
           <div
             className={`text-right font-medium ${
-              type === "INCOME" ? "text-green-600" : "text-red-600"
+              type === "INCOME"
+                ? "text-green-600"
+                : type === "TRANSFER"
+                  ? "text-muted-foreground"
+                  : "text-red-600"
             }`}
           >
-            {type === "INCOME" ? "+" : "-"}
+            {type === "INCOME" ? "+" : type === "TRANSFER" ? "" : "-"}
             {formatted}
           </div>
         );

@@ -79,6 +79,7 @@ export async function getExecutiveMetrics(): Promise<{
     let totalCash = 0;
     let totalSavings = 0;
     let totalInvestmentCash = 0;
+    let totalLoanReceivables = 0;
     let totalDebt = 0;
 
     for (const account of accounts as AccountData[]) {
@@ -98,6 +99,9 @@ export async function getExecutiveMetrics(): Promise<{
           break;
         case "INVESTMENT":
           totalInvestmentCash += normalizedBalance;
+          break;
+        case "LOAN_RECEIVABLE":
+          totalLoanReceivables += normalizedBalance;
           break;
         case "LOAN":
         case "CREDIT_CARD":
@@ -160,6 +164,7 @@ export async function getExecutiveMetrics(): Promise<{
       ? totalCash +
         totalSavings +
         totalInvestmentCash +
+        totalLoanReceivables +
         portfolioSummary.totalValue +
         totalPersonalAssets
       : null;
@@ -200,6 +205,7 @@ export async function getExecutiveMetrics(): Promise<{
         totalInvestmentCash,
         totalInvestments: portfolioSummary?.totalValue ?? null,
         totalPersonalAssets,
+        totalLoanReceivables,
         totalDebt,
         totalAssets,
         netWorth,

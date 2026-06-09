@@ -32,10 +32,11 @@ import { Plus } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { ACCOUNT_TYPES, normalizeAccountBalanceForType } from "@/lib/account-types";
 
 const accountFormSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  type: z.enum(["BANK", "CASH", "INVESTMENT", "LOAN", "CREDIT_CARD"]),
+  type: z.enum(ACCOUNT_TYPES),
   currency: z.string(),
   balance: z.number(),
   description: z.string().optional(),
@@ -75,12 +76,10 @@ export function AddAccountDialog({ onSuccess }: AddAccountDialogProps) {
 
   const onSubmit = async (data: AccountFormValues) => {
     try {
-      let tempData = data;
-      if (data.type === "LOAN" || data.type === "CREDIT_CARD") {
-        tempData = { ...data, balance: (data.balance * -1) };
-      } else {
-        tempData = data;
-      }
+      const tempData = {
+        ...data,
+        balance: normalizeAccountBalanceForType(data.type, data.balance),
+      };
       await createMutation.mutateAsync(tempData);
       setOpen(false);
       form.reset();
@@ -100,7 +99,7 @@ export function AddAccountDialog({ onSuccess }: AddAccountDialogProps) {
           Add Account
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-125">
         <DialogHeader>
           <DialogTitle>Add Account</DialogTitle>
           <DialogDescription>
@@ -144,6 +143,7 @@ export function AddAccountDialog({ onSuccess }: AddAccountDialogProps) {
                       <SelectItem value="INVESTMENT">Investment</SelectItem>
                       <SelectItem value="LOAN">Loan</SelectItem>
                       <SelectItem value="CREDIT_CARD">Credit Card</SelectItem>
+                      <SelectItem value="LOAN_RECEIVABLE">Loans Receivable</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
