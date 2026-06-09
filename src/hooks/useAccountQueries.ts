@@ -7,6 +7,7 @@ import {
   deleteAccount,
   type AccountInput,
 } from "@/actions/account-actions";
+import { forecastKeys } from "@/hooks/useCashFlowForecast";
 import { type AccountTypeValue } from "@/lib/account-types";
 
 // ---------------------------------------------------------------------------
@@ -61,6 +62,7 @@ export function useCreateAccount() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: accountKeys.all });
+      qc.invalidateQueries({ queryKey: forecastKeys.all });
     },
   });
 }
@@ -75,6 +77,7 @@ export function useUpdateAccount() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: accountKeys.all });
+      qc.invalidateQueries({ queryKey: forecastKeys.all });
     },
   });
 }
@@ -88,6 +91,7 @@ export function useDeleteAccount() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: accountKeys.all });
+      qc.invalidateQueries({ queryKey: forecastKeys.all });
     },
   });
 }

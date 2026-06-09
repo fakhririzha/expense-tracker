@@ -11,6 +11,7 @@ import {
   unlinkSubscriptionFromRecurringRule,
   updateSubscription,
 } from "@/actions/subscription-actions";
+import { forecastKeys } from "@/hooks/useCashFlowForecast";
 import { calendarKeys } from "@/hooks/useCalendarQueries";
 import { recurringKeys } from "@/hooks/useRecurringQueries";
 import { reportKeys } from "@/hooks/useReportQueries";
@@ -74,6 +75,7 @@ function invalidateSubscriptionConsumers(queryClient: ReturnType<typeof useQuery
   queryClient.invalidateQueries({ queryKey: recurringKeys.all });
   queryClient.invalidateQueries({ queryKey: calendarKeys.all });
   queryClient.invalidateQueries({ queryKey: reportKeys.all });
+  queryClient.invalidateQueries({ queryKey: forecastKeys.all });
 }
 
 export function useCreateSubscription() {

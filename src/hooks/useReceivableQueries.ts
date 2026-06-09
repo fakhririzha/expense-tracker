@@ -5,6 +5,7 @@ import {
   recordLoanDisbursement,
   recordReceivableRepayment,
 } from "@/actions/receivable-actions";
+import { forecastKeys } from "@/hooks/useCashFlowForecast";
 import { accountKeys } from "./useAccountQueries";
 import { transactionKeys } from "./useTransactionQueries";
 
@@ -48,6 +49,7 @@ export function useRecordLoanDisbursement() {
       qc.invalidateQueries({ queryKey: receivableKeys.all });
       qc.invalidateQueries({ queryKey: accountKeys.all });
       qc.invalidateQueries({ queryKey: transactionKeys.all });
+      qc.invalidateQueries({ queryKey: forecastKeys.all });
     },
   });
 }
@@ -64,6 +66,7 @@ export function useRecordReceivableRepayment() {
       qc.invalidateQueries({ queryKey: receivableKeys.all });
       qc.invalidateQueries({ queryKey: accountKeys.all });
       qc.invalidateQueries({ queryKey: transactionKeys.all });
+      qc.invalidateQueries({ queryKey: forecastKeys.all });
     },
   });
 }

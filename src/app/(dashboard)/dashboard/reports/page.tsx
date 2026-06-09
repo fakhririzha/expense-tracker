@@ -10,6 +10,7 @@ import { NetWorthSnapshotSummaryCard } from "@/components/reports/NetWorthSnapsh
 import { MonthlySummaryCard } from "@/components/reports/MonthlySummaryCard";
 import { FinancialInsightsCard } from "@/components/insights/FinancialInsightsCard";
 import { FinancialInsightsSkeleton } from "@/components/insights/FinancialInsightsSkeleton";
+import { CashFlowForecastSection } from "@/components/forecast/CashFlowForecastSection";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SubscriptionSummaryCards } from "@/components/subscriptions/SubscriptionSummaryCards";
 import { TrialEndingSoonCard } from "@/components/subscriptions/TrialEndingSoonCard";
@@ -117,13 +118,15 @@ export default function ReportsPage() {
             Analyze your financial data and track your progress
           </p>
         </div>
-        <div className="flex items-center gap-4 max-md:flex-col max-md:gap-y-4 max-md:items-start">
-          <DateRangePicker value={dateRange} onChange={setDateRange} />
-          <Button variant="outline" disabled>
-            <Download className="mr-2 h-4 w-4" />
-            Export
-          </Button>
-        </div>
+        {activeTab !== "forecast" ? (
+          <div className="flex items-center gap-4 max-md:flex-col max-md:gap-y-4 max-md:items-start">
+            <DateRangePicker value={dateRange} onChange={setDateRange} />
+            <Button variant="outline" disabled>
+              <Download className="mr-2 h-4 w-4" />
+              Export
+            </Button>
+          </div>
+        ) : null}
       </div>
 
       {/* Loading State */}
@@ -137,7 +140,7 @@ export default function ReportsPage() {
       {!isLoading && (
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <div className="w-full overflow-x-auto pb-1">
-            <TabsList className="flex w-max min-w-full justify-start md:grid md:w-full md:grid-cols-6">
+            <TabsList className="flex w-max min-w-full justify-start md:grid md:w-full md:grid-cols-7">
               <TabsTrigger value="overview" className="min-w-max md:min-w-0">
                 Overview
               </TabsTrigger>
@@ -155,6 +158,9 @@ export default function ReportsPage() {
               </TabsTrigger>
               <TabsTrigger value="subscriptions" className="min-w-max md:min-w-0">
                 Subscriptions
+              </TabsTrigger>
+              <TabsTrigger value="forecast" className="min-w-max md:min-w-0">
+                Forecast
               </TabsTrigger>
             </TabsList>
           </div>
@@ -391,6 +397,10 @@ export default function ReportsPage() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="forecast" className="space-y-6">
+            <CashFlowForecastSection />
           </TabsContent>
         </Tabs>
       )}

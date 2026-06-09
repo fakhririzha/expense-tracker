@@ -9,6 +9,7 @@ import {
   searchSymbolsAction,
   getAssetPriceWithConversion,
 } from "@/actions/investment-actions";
+import { forecastKeys } from "@/hooks/useCashFlowForecast";
 import { accountKeys } from "./useAccountQueries";
 
 // ---------------------------------------------------------------------------
@@ -123,6 +124,7 @@ export function useCreateInvestmentAsset() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: investmentKeys.all });
       qc.invalidateQueries({ queryKey: accountKeys.all });
+      qc.invalidateQueries({ queryKey: forecastKeys.all });
     },
   });
 }
@@ -138,6 +140,7 @@ export function useRecordTrade() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: investmentKeys.all });
       qc.invalidateQueries({ queryKey: accountKeys.all });
+      qc.invalidateQueries({ queryKey: forecastKeys.all });
     },
   });
 }
@@ -152,6 +155,7 @@ export function useRefreshPortfolioPrices() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: investmentKeys.all });
       qc.invalidateQueries({ queryKey: accountKeys.all });
+      qc.invalidateQueries({ queryKey: forecastKeys.all });
     },
   });
 }
