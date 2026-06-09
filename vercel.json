@@ -1,8 +1,12 @@
 {
     "crons": [
         {
-            "path": "/api/cron/recurring",
+            "path": "/api/cron/monthly-net-worth-snapshots",
             "schedule": "0 0 * * *"
+        },
+        {
+            "path": "/api/cron/recurring",
+            "schedule": "15 0 * * *"
         }
     ]
 }

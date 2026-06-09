@@ -5,6 +5,8 @@ import { SpendingTrendsChart } from "@/components/reports/SpendingTrendsChart";
 import { CategoryBreakdownChart } from "@/components/reports/CategoryBreakdownChart";
 import { IncomeVsExpenseChart } from "@/components/reports/IncomeVsExpenseChart";
 import { NetWorthHistoryChart } from "@/components/reports/NetWorthHistoryChart";
+import { NetWorthSnapshotEmptyState } from "@/components/reports/NetWorthSnapshotEmptyState";
+import { NetWorthSnapshotSummaryCard } from "@/components/reports/NetWorthSnapshotSummaryCard";
 import { MonthlySummaryCard } from "@/components/reports/MonthlySummaryCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SubscriptionSummaryCards } from "@/components/subscriptions/SubscriptionSummaryCards";
@@ -20,9 +22,12 @@ import {
   useSpendingTrends,
   useCategoryBreakdown,
   useIncomeVsExpense,
-  useNetWorthHistory,
   useReportMonthlySummary,
 } from "@/hooks/useReportQueries";
+import {
+  useNetWorthSnapshotSummary,
+  useNetWorthTrend,
+} from "@/hooks/useNetWorthSnapshotQueries";
 import { useSubscriptions, useSubscriptionSummary } from "@/hooks/useSubscriptionQueries";
 import { useCurrency } from "@/contexts/CurrencyContext";
 
@@ -76,10 +81,8 @@ export default function ReportsPage() {
     hasDateRange
   );
 
-  const { data: netWorthHistory = [] } = useNetWorthHistory(
-    Math.min(monthsDiff, 12),
-    hasDateRange
-  );
+  const { data: netWorthSummary } = useNetWorthSnapshotSummary(12);
+  const { data: netWorthHistory = [] } = useNetWorthTrend(12, mainCurrency);
 
   const { data: monthlySummary } = useReportMonthlySummary(
     currentYear,
@@ -95,7 +98,7 @@ export default function ReportsPage() {
   const totalExpenses = expenseCategories.reduce((sum, c) => sum + c.amount, 0);
   const totalIncome = incomeCategories.reduce((sum, c) => sum + c.amount, 0);
   const netFlow = totalIncome - totalExpenses;
-  const currentNetWorth = netWorthHistory[netWorthHistory.length - 1]?.netWorth || 0;
+  const latestSnapshot = netWorthSummary?.latestSnapshot ?? null;
 
   return (
     <div className="container mx-auto py-6 space-y-6">
@@ -205,11 +208,21 @@ export default function ReportsPage() {
                   <Wallet className="h-4 w-4 text-blue-600" />
                 </CardHeader>
                 <CardContent>
-                  <div className={`text-2xl font-bold ${currentNetWorth >= 0 ? "text-blue-600" : "text-destructive"}`}>
-                    {formatCurrency(currentNetWorth, mainCurrency)}
+                  <div
+                    className={`text-2xl font-bold ${
+                      (latestSnapshot?.netWorth ?? 0) >= 0
+                        ? "text-blue-600"
+                        : "text-destructive"
+                    }`}
+                  >
+                    {latestSnapshot
+                      ? formatCurrency(latestSnapshot.netWorth, latestSnapshot.currency)
+                      : "Unavailable"}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Current estimate
+                    {latestSnapshot
+                      ? "Latest month-end snapshot"
+                      : "No month-end snapshot yet"}
                   </p>
                 </CardContent>
               </Card>
@@ -299,12 +312,21 @@ export default function ReportsPage() {
 
           {/* Net Worth Tab */}
           <TabsContent value="net-worth" className="space-y-6">
-            <NetWorthHistoryChart
-              data={netWorthHistory}
-              title="Net Worth History"
-              description="Track your net worth over time"
-              mainCurrency={mainCurrency}
-            />
+            {netWorthSummary?.latestSnapshot ? (
+              <NetWorthSnapshotSummaryCard summary={netWorthSummary} />
+            ) : null}
+            {netWorthHistory.length > 0 ? (
+              <NetWorthHistoryChart
+                data={netWorthHistory}
+                title="Net Worth History"
+                description="Stable month-end snapshots of your assets, liabilities, and net worth"
+                mainCurrency={mainCurrency}
+              />
+            ) : (
+              <NetWorthSnapshotEmptyState
+                hasCurrencyMismatch={netWorthSummary?.hasCurrencyMismatch}
+              />
+            )}
           </TabsContent>
 
           <TabsContent value="subscriptions" className="space-y-6">

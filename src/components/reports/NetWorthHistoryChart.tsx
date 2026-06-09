@@ -18,10 +18,14 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import type { NetWorthPoint } from "@/actions/report-actions";
 
 interface NetWorthHistoryChartProps {
-  data: NetWorthPoint[];
+  data: Array<{
+    date: string;
+    netWorth: number;
+    assets: number;
+    liabilities: number;
+  }>;
   title?: string;
   description?: string;
   mainCurrency: string;
