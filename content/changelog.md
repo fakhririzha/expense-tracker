@@ -1,5 +1,11 @@
 # FinHealth Changelog
 
+## v4.2.0
+
+- Added a permanent account deletion flow in Profile with email and current-password confirmation for safer self-service removal.
+- Added a profile Danger Zone with a reminder to export data first before permanently deleting the account.
+- Updated the login experience to confirm when an account has been deleted successfully.
+
 ## v4.1.0
 
 - Added a new cash flow forecasting view in Reports with 30, 60, and 90 day liquid-cash projections.

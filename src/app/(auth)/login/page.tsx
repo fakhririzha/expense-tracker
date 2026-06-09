@@ -1,6 +1,7 @@
 "use client";
 
 import { login } from "@/actions/auth-actions";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
     Card,
@@ -12,15 +13,18 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, TrendingUp } from "lucide-react";
+import { CheckCircle2, Loader2, TrendingUp } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isRegistered = searchParams.get("registered") === "true";
+  const isAccountDeleted = searchParams.get("accountDeleted") === "true";
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -61,6 +65,22 @@ export default function LoginPage() {
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
+            {isAccountDeleted && (
+              <Alert className="rounded-none border-green-200 bg-green-50 text-green-900">
+                <CheckCircle2 className="h-4 w-4 text-green-700" />
+                <AlertDescription className="font-medium text-green-800">
+                  Your account has been permanently deleted.
+                </AlertDescription>
+              </Alert>
+            )}
+            {isRegistered && !isAccountDeleted && (
+              <Alert className="rounded-none border-green-200 bg-green-50 text-green-900">
+                <CheckCircle2 className="h-4 w-4 text-green-700" />
+                <AlertDescription className="font-medium text-green-800">
+                  Registration successful. You can sign in now.
+                </AlertDescription>
+              </Alert>
+            )}
             {error && (
               <div className="p-3 text-sm text-red-500 bg-red-50 rounded-md">
                 {error}
