@@ -1,5 +1,11 @@
 # FinHealth Changelog
 
+## v4.0.0
+
+- Added a new Financial Insights panel to the dashboard and reports overview with deterministic signals for budget pressure, spending changes, debt load, emergency-fund coverage, goal pacing, and other key health checks.
+- Introduced cross-feature insight logic that compares month-to-date activity, recurring commitments, net worth snapshots, investment concentration, and multi-currency exposure in the user’s main reporting currency.
+- Kept the new guidance rule-based and generated on demand, so it stays explainable without storing extra coaching text or relying on external AI services.
+
 ## v3.7.0
 
 - Added stable month-end net worth snapshots so historical wealth trends no longer shift when live balances, market prices, or exchange rates change later.

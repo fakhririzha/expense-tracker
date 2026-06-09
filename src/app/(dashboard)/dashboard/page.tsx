@@ -1,10 +1,12 @@
 import { getBudgetSpendingSummary } from "@/actions/budget-actions";
+import { getFinancialInsights } from "@/actions/insight-actions";
 import { getSubscriptionSummary } from "@/actions/subscription-actions";
 import { auth } from "@/auth";
 import { MonthlyBudgetStatus } from "@/components/dashboard/MonthlyBudgetStatus";
 import { RetirementProgress } from "@/components/dashboard/RetirementProgress";
 import { WealthHealthCard } from "@/components/dashboard/WealthHealthBadge";
 import { DashboardChangelogDialog } from "@/components/dashboard/DashboardChangelogDialog";
+import { FinancialInsightsCard } from "@/components/insights/FinancialInsightsCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getExecutiveMetrics } from "@/lib/executive-service";
 import { getPeriodLabel } from "@/lib/net-worth-period";
@@ -59,12 +61,20 @@ export default async function DashboardPage() {
   }
 
   const now = new Date();
-  const [metricsResult, currentMonthSummary, subscriptionSummaryResult, changelog, snapshotSummary] = await Promise.all([
+  const [
+    metricsResult,
+    currentMonthSummary,
+    subscriptionSummaryResult,
+    changelog,
+    snapshotSummary,
+    financialInsightsResult,
+  ] = await Promise.all([
     getExecutiveMetrics(),
     getBudgetSpendingSummary(startOfMonth(now), endOfMonth(now)),
     getSubscriptionSummary(),
     getDashboardChangelog(),
     getNetWorthSnapshotSummaryForUser(session.user.id, 12),
+    getFinancialInsights({ scope: "dashboard", limit: 6 }),
   ]);
 
   if (!metricsResult.success || !metricsResult.data) {
@@ -81,6 +91,10 @@ export default async function DashboardPage() {
     currentMonthSummary.success && currentMonthSummary.data
       ? currentMonthSummary.data.totalSpent
       : null;
+  const insights =
+    financialInsightsResult.success && financialInsightsResult.data
+      ? financialInsightsResult.data.insights
+      : [];
 
   return (
     <div className="p-6 space-y-6">
@@ -257,6 +271,8 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      <FinancialInsightsCard insights={insights} />
 
       {/* Health Score and Retirement Progress */}
       <div className="grid gap-6 md:grid-cols-2">
