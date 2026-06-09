@@ -13,14 +13,18 @@ import { transactionKeys } from "./useTransactionQueries";
 
 export const categoryKeys = {
   all: ["categories"] as const,
-  list: (type?: "INCOME" | "EXPENSE") =>
+  list: (type?: "INCOME" | "EXPENSE" | "TRANSFER") =>
     [...categoryKeys.all, "list", { type }] as const,
 };
 
-export function useCategories(type?: "INCOME" | "EXPENSE") {
+export function useCategories(type?: "INCOME" | "EXPENSE" | "TRANSFER") {
   return useQuery({
     queryKey: categoryKeys.list(type),
     queryFn: async () => {
+      if (type === "TRANSFER") {
+        return [];
+      }
+
       const result = await getCategories(type);
       if (!result.success) throw new Error(result.error);
       return result.data;

@@ -30,6 +30,11 @@ interface RecurringRule {
   isActive: boolean;
   description: string | null;
   categoryId: string | null;
+  category: {
+    id: string;
+    name: string;
+    icon: string | null;
+  } | null;
   accountId: string | null;
 }
 
@@ -47,6 +52,19 @@ const TYPE_LABELS: Record<string, string> = {
   EXPENSE: "Expense",
   TRANSFER: "Transfer",
 };
+
+function renderCategory(rule: RecurringRule) {
+  if (!rule.category) {
+    return <span className="text-muted-foreground">No category</span>;
+  }
+
+  return (
+    <span>
+      {rule.category.icon ? `${rule.category.icon} ` : ""}
+      {rule.category.name}
+    </span>
+  );
+}
 
 /**
  * Renders the Recurring Transactions page with lists of active and inactive recurring rules and controls to add, edit, and delete rules.
@@ -122,6 +140,7 @@ export default function RecurringPage() {
                   <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead>Type</TableHead>
+                    <TableHead>Category</TableHead>
                     <TableHead>Interval</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
                     <TableHead>Next Due</TableHead>
@@ -133,7 +152,7 @@ export default function RecurringPage() {
                   {activeRules.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={7}
+                        colSpan={8}
                         className="text-center text-muted-foreground"
                       >
                         No active recurring rules. Create one to automate your
@@ -164,6 +183,7 @@ export default function RecurringPage() {
                             {TYPE_LABELS[rule.type] || rule.type}
                           </span>
                         </TableCell>
+                        <TableCell>{renderCategory(rule)}</TableCell>
                         <TableCell>
                           {INTERVAL_LABELS[rule.interval] || rule.interval}
                         </TableCell>
@@ -224,6 +244,7 @@ export default function RecurringPage() {
                     <TableRow>
                       <TableHead>Name</TableHead>
                       <TableHead>Type</TableHead>
+                      <TableHead>Category</TableHead>
                       <TableHead>Interval</TableHead>
                       <TableHead className="text-right">Amount</TableHead>
                       <TableHead>Last Due</TableHead>
@@ -239,6 +260,7 @@ export default function RecurringPage() {
                         <TableCell>
                           {TYPE_LABELS[rule.type] || rule.type}
                         </TableCell>
+                        <TableCell>{renderCategory(rule)}</TableCell>
                         <TableCell>
                           {INTERVAL_LABELS[rule.interval] || rule.interval}
                         </TableCell>
