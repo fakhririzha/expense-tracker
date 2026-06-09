@@ -1,4 +1,5 @@
 import { auth } from "@/auth";
+import { AccountDeletionDialog } from "@/components/profile/AccountDeletionDialog";
 import { FinancialTargetsForm } from "@/components/profile/FinancialTargetsForm";
 import {
   Card,
@@ -8,7 +9,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import prisma from "@/lib/db";
-import { CircleDollarSign, Mail, Target, UserRound } from "lucide-react";
+import { CircleDollarSign, Mail, ShieldAlert, Target, UserRound } from "lucide-react";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 export default async function ProfilePage() {
@@ -83,29 +85,61 @@ export default async function ProfilePage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <div className="flex h-12 w-12 items-center justify-center neo-border bg-secondary">
-              <Target className="h-6 w-6" />
-            </div>
-            <CardTitle className="text-xl font-black uppercase font-heading">
-              Financial Targets
-            </CardTitle>
-            <CardDescription>
-              Use positive amounts in your base currency. These values can be
-              changed or cleared at any time.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <FinancialTargetsForm
-              defaultValues={{
-                retirementTarget: user.retirementTarget,
-                monthlyBudget: user.monthlyBudget,
-              }}
-              mainCurrency={user.mainCurrency}
-            />
-          </CardContent>
-        </Card>
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <div className="flex h-12 w-12 items-center justify-center neo-border bg-secondary">
+                <Target className="h-6 w-6" />
+              </div>
+              <CardTitle className="text-xl font-black uppercase font-heading">
+                Financial Targets
+              </CardTitle>
+              <CardDescription>
+                Use positive amounts in your base currency. These values can be
+                changed or cleared at any time.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <FinancialTargetsForm
+                defaultValues={{
+                  retirementTarget: user.retirementTarget,
+                  monthlyBudget: user.monthlyBudget,
+                }}
+                mainCurrency={user.mainCurrency}
+              />
+            </CardContent>
+          </Card>
+
+          <Card className="border-destructive/40 bg-destructive/5">
+            <CardHeader>
+              <div className="flex h-12 w-12 items-center justify-center neo-border bg-destructive text-destructive-foreground">
+                <ShieldAlert className="h-6 w-6" />
+              </div>
+              <CardTitle className="text-xl font-black uppercase font-heading">
+                Danger Zone
+              </CardTitle>
+              <CardDescription>
+                Deleting your account permanently removes your login and all
+                owned financial records.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Export your data first if you want a backup before deleting your
+                account.
+              </p>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <Link
+                  href="/dashboard/data"
+                  className="text-sm font-bold text-primary underline-offset-4 hover:underline"
+                >
+                  Go to Data Export
+                </Link>
+                <AccountDeletionDialog email={user.email} />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );
