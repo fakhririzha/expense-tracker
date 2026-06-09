@@ -48,6 +48,7 @@ model User {
   savingsGoals      SavingsGoal[]
   personalAssets    PersonalAsset[]
   personalAssetValuations PersonalAssetValuation[]
+  netWorthSnapshots NetWorthSnapshot[]
 }
 
 model AuthAccount {
@@ -417,6 +418,45 @@ model ExchangeRate {
 
   @@unique([fromCurrency, toCurrency])
   @@index([fetchedAt])
+}
+
+model NetWorthSnapshot {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  periodYear   Int
+  periodMonth  Int
+  snapshotDate DateTime
+
+  currency String
+
+  totalAssets      Decimal @default(0) @db.Decimal(20, 4)
+  totalLiabilities Decimal @default(0) @db.Decimal(20, 4)
+  netWorth         Decimal @default(0) @db.Decimal(20, 4)
+
+  cashTotal              Decimal @default(0) @db.Decimal(20, 4)
+  bankTotal              Decimal @default(0) @db.Decimal(20, 4)
+  investmentCashTotal    Decimal @default(0) @db.Decimal(20, 4)
+  investmentHoldingTotal Decimal @default(0) @db.Decimal(20, 4)
+  investmentTotal        Decimal @default(0) @db.Decimal(20, 4)
+  personalAssetTotal     Decimal @default(0) @db.Decimal(20, 4)
+  receivableTotal        Decimal @default(0) @db.Decimal(20, 4)
+
+  loanLiabilityTotal    Decimal @default(0) @db.Decimal(20, 4)
+  creditCardTotal       Decimal @default(0) @db.Decimal(20, 4)
+  liabilityOverpayTotal Decimal @default(0) @db.Decimal(20, 4)
+
+  sourceBreakdownJson Json?
+  exchangeRateJson    Json?
+  calculationVersion  Int   @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, periodYear, periodMonth])
+  @@index([userId, snapshotDate])
 }
 
 // ==================== LIABILITY PAYMENT AUDIT ====================

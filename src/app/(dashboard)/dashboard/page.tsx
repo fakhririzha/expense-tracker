@@ -7,6 +7,8 @@ import { WealthHealthCard } from "@/components/dashboard/WealthHealthBadge";
 import { DashboardChangelogDialog } from "@/components/dashboard/DashboardChangelogDialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getExecutiveMetrics } from "@/lib/executive-service";
+import { getPeriodLabel } from "@/lib/net-worth-period";
+import { getNetWorthSnapshotSummaryForUser } from "@/lib/net-worth-snapshot-service";
 import { formatCurrency, formatPercentage } from "@/lib/utils";
 import { endOfMonth, startOfMonth } from "date-fns";
 import { createHash } from "node:crypto";
@@ -57,11 +59,12 @@ export default async function DashboardPage() {
   }
 
   const now = new Date();
-  const [metricsResult, currentMonthSummary, subscriptionSummaryResult, changelog] = await Promise.all([
+  const [metricsResult, currentMonthSummary, subscriptionSummaryResult, changelog, snapshotSummary] = await Promise.all([
     getExecutiveMetrics(),
     getBudgetSpendingSummary(startOfMonth(now), endOfMonth(now)),
     getSubscriptionSummary(),
     getDashboardChangelog(),
+    getNetWorthSnapshotSummaryForUser(session.user.id, 12),
   ]);
 
   if (!metricsResult.success || !metricsResult.data) {
@@ -112,6 +115,20 @@ export default async function DashboardPage() {
             <p className="text-sm font-medium opacity-80 mt-1">
               Total assets minus liabilities
             </p>
+            {snapshotSummary.latestSnapshot ? (
+              <p className="text-sm font-medium opacity-80 mt-2">
+                {`Latest month-end snapshot: ${getPeriodLabel({
+                  year: snapshotSummary.latestSnapshot.periodYear,
+                  month: snapshotSummary.latestSnapshot.periodMonth,
+                })}`}
+                {snapshotSummary.previousSnapshot && snapshotSummary.netWorthChange !== null
+                  ? ` • ${snapshotSummary.netWorthChange >= 0 ? "+" : ""}${formatCurrency(
+                      snapshotSummary.netWorthChange,
+                      snapshotSummary.currency ?? currency
+                    )} vs previous`
+                  : ""}
+              </p>
+            ) : null}
           </CardContent>
         </Card>
 

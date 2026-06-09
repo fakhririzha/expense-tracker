@@ -1,5 +1,11 @@
 # FinHealth Changelog
 
+## v3.7.0
+
+- Added stable month-end net worth snapshots so historical wealth trends no longer shift when live balances, market prices, or exchange rates change later.
+- Updated the Reports net worth view to use frozen month-end data with clearer empty states and latest-snapshot summaries.
+- Scheduled a dedicated monthly snapshot job separately from recurring transaction processing to keep period-end reporting more reliable.
+
 ## v3.6.0
 
 - Added a dedicated Subscription Tracker for manually managing memberships, SaaS plans, recurring bills, and free trials in one place.

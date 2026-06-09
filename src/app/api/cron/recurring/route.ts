@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 // {
 //   "crons": [{
 //     "path": "/api/cron/recurring",
-//     "schedule": "0 0 * * *"
+//     "schedule": "15 0 * * *"
 //   }]
 // }
 
