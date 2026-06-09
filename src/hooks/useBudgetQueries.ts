@@ -8,6 +8,7 @@ import {
   deleteBudget,
   type BudgetInput,
 } from "@/actions/budget-actions";
+import { forecastKeys } from "@/hooks/useCashFlowForecast";
 
 // ---------------------------------------------------------------------------
 // Query Key Factory
@@ -72,6 +73,7 @@ export function useCreateBudget() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: budgetKeys.all });
+      qc.invalidateQueries({ queryKey: forecastKeys.all });
     },
   });
 }
@@ -86,6 +88,7 @@ export function useUpdateBudget() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: budgetKeys.all });
+      qc.invalidateQueries({ queryKey: forecastKeys.all });
     },
   });
 }
@@ -99,6 +102,7 @@ export function useDeleteBudget() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: budgetKeys.all });
+      qc.invalidateQueries({ queryKey: forecastKeys.all });
     },
   });
 }

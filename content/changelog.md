@@ -1,5 +1,11 @@
 # FinHealth Changelog
 
+## v4.1.0
+
+- Added a new cash flow forecasting view in Reports with 30, 60, and 90 day liquid-cash projections.
+- Combined future-dated transactions, recurring rules, subscription renewals, and optional spending estimates into one forward-looking balance chart and event timeline.
+- Added forecast assumptions and risk signals so low buffers, missing exchange rates, and estimate-driven projections are easier to spot before cash gets tight.
+
 ## v4.0.0
 
 - Added a new Financial Insights panel to the dashboard and reports overview with deterministic signals for budget pressure, spending changes, debt load, emergency-fund coverage, goal pacing, and other key health checks.
