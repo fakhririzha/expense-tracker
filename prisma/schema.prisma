@@ -43,6 +43,7 @@ model User {
   investmentAssets  InvestmentAsset[]
   tradeHistory      TradeHistory[]
   recurringRules    RecurringRule[]
+  subscriptions     Subscription[]
   budgets           Budget[]
   savingsGoals      SavingsGoal[]
   personalAssets    PersonalAsset[]
@@ -127,6 +128,7 @@ model FinancialAccount {
   investmentAssets InvestmentAsset[]
   tradeHistories   TradeHistory[]
   transactions     Transaction[]
+  subscriptions    Subscription[]
   savingsGoals     SavingsGoal[]
 
   @@index([userId])
@@ -160,6 +162,7 @@ model Category {
 
   transactions Transaction[]
   budgets      Budget[]
+  subscriptions Subscription[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -337,12 +340,70 @@ model RecurringRule {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   transactions Transaction[]
+  subscription Subscription?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([userId])
   @@index([nextDueDate])
+}
+
+enum SubscriptionBillingCycle {
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  TRIAL
+  PAUSED
+  CANCELLED
+  EXPIRED
+}
+
+model Subscription {
+  id                       String                    @id @default(cuid())
+  name                     String
+  nameEncrypted            String?                   @db.Text
+  provider                 String?
+  providerEncrypted        String?                   @db.Text
+  description              String?
+  descriptionEncrypted     String?                   @db.Text
+  amount                   Float
+  currency                 String                    @default("IDR")
+  billingCycle             SubscriptionBillingCycle
+  nextBillingDate          DateTime
+  startDate                DateTime?
+  trialEndDate             DateTime?
+  cancellationDate         DateTime?
+  status                   SubscriptionStatus
+  cancellationUrl          String?                   @db.Text
+  cancellationUrlEncrypted String?                   @db.Text
+  notes                    String?
+  notesEncrypted           String?                   @db.Text
+
+  categoryId      String?
+  category        Category?         @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  accountId       String?
+  account         FinancialAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  recurringRuleId String?           @unique
+  recurringRule   RecurringRule?    @relation(fields: [recurringRuleId], references: [id], onDelete: SetNull)
+
+  userId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([userId, status])
+  @@index([userId, nextBillingDate])
+  @@index([userId, trialEndDate])
+  @@index([accountId])
+  @@index([categoryId])
 }
 
 // ==================== EXCHANGE RATES CACHE ====================

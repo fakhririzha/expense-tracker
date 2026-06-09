@@ -7,6 +7,9 @@ import { IncomeVsExpenseChart } from "@/components/reports/IncomeVsExpenseChart"
 import { NetWorthHistoryChart } from "@/components/reports/NetWorthHistoryChart";
 import { MonthlySummaryCard } from "@/components/reports/MonthlySummaryCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SubscriptionSummaryCards } from "@/components/subscriptions/SubscriptionSummaryCards";
+import { TrialEndingSoonCard } from "@/components/subscriptions/TrialEndingSoonCard";
+import { UpcomingRenewalsCard } from "@/components/subscriptions/UpcomingRenewalsCard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
@@ -20,6 +23,7 @@ import {
   useNetWorthHistory,
   useReportMonthlySummary,
 } from "@/hooks/useReportQueries";
+import { useSubscriptions, useSubscriptionSummary } from "@/hooks/useSubscriptionQueries";
 import { useCurrency } from "@/contexts/CurrencyContext";
 
 /**
@@ -82,6 +86,8 @@ export default function ReportsPage() {
     currentMonth,
     hasDateRange
   );
+  const { data: subscriptionSummary } = useSubscriptionSummary();
+  const { data: activeSubscriptions = [] } = useSubscriptions({ status: "ACTIVE" });
 
   const isLoading = trendsLoading || expCatLoading;
 
@@ -121,7 +127,7 @@ export default function ReportsPage() {
       {!isLoading && (
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <div className="w-full overflow-x-auto pb-1">
-            <TabsList className="flex w-max min-w-full justify-start md:grid md:w-full md:grid-cols-5">
+            <TabsList className="flex w-max min-w-full justify-start md:grid md:w-full md:grid-cols-6">
               <TabsTrigger value="overview" className="min-w-max md:min-w-0">
                 Overview
               </TabsTrigger>
@@ -136,6 +142,9 @@ export default function ReportsPage() {
               </TabsTrigger>
               <TabsTrigger value="net-worth" className="min-w-max md:min-w-0">
                 Net Worth
+              </TabsTrigger>
+              <TabsTrigger value="subscriptions" className="min-w-max md:min-w-0">
+                Subscriptions
               </TabsTrigger>
             </TabsList>
           </div>
@@ -296,6 +305,54 @@ export default function ReportsPage() {
               description="Track your net worth over time"
               mainCurrency={mainCurrency}
             />
+          </TabsContent>
+
+          <TabsContent value="subscriptions" className="space-y-6">
+            <SubscriptionSummaryCards summary={subscriptionSummary} />
+
+            <div className="grid gap-6 lg:grid-cols-2">
+              <UpcomingRenewalsCard items={subscriptionSummary?.upcomingRenewals ?? []} />
+              <TrialEndingSoonCard items={subscriptionSummary?.trialEndingSoon ?? []} />
+            </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Top Active Subscriptions</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {activeSubscriptions.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No active subscriptions tracked yet.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {activeSubscriptions
+                      .slice()
+                      .sort((left, right) => right.monthlyEquivalent - left.monthlyEquivalent)
+                      .slice(0, 8)
+                      .map((subscription) => (
+                        <div
+                          key={subscription.id}
+                          className="flex items-center justify-between gap-4 rounded-lg border p-3"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate font-medium">{subscription.name}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {subscription.provider || "No provider"}
+                            </p>
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <p className="font-semibold">
+                              {formatCurrency(subscription.monthlyEquivalent, subscription.currency)}
+                            </p>
+                            <p className="text-xs text-muted-foreground">monthly equivalent</p>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       )}

@@ -1,5 +1,11 @@
 # FinHealth Changelog
 
+## v3.6.0
+
+- Added a dedicated Subscription Tracker for manually managing memberships, SaaS plans, recurring bills, and free trials in one place.
+- Introduced subscription summaries for monthly and yearly planned costs, upcoming renewals, and trials ending soon, with existing currency conversion support.
+- Connected subscriptions to recurring rules so billing automation can stay in sync without creating duplicate transaction logic.
+
 ## v3.5.3
 
 - Added category selection to recurring income and expense rules so scheduled transactions can now stay mapped to the right personal category.

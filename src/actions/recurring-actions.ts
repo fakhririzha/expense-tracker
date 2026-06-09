@@ -100,10 +100,22 @@ export async function updateRecurringRule(
 
     const existingRule = await prisma.recurringRule.findFirst({
       where: { id, userId: session.user.id },
+      include: {
+        subscription: {
+          select: { id: true },
+        },
+      },
     });
 
     if (!existingRule) {
       return { success: false, error: "Recurring rule not found" };
+    }
+
+    if (existingRule.subscription) {
+      return {
+        success: false,
+        error: "This recurring rule is managed by a subscription. Update it from the Subscriptions page.",
+      };
     }
 
     const nextType = data.type ?? existingRule.type;
@@ -179,10 +191,22 @@ export async function deleteRecurringRule(id: string) {
 
     const rule = await prisma.recurringRule.findFirst({
       where: { id, userId: session.user.id },
+      include: {
+        subscription: {
+          select: { id: true },
+        },
+      },
     });
 
     if (!rule) {
       return { success: false, error: "Recurring rule not found" };
+    }
+
+    if (rule.subscription) {
+      return {
+        success: false,
+        error: "This recurring rule is managed by a subscription. Unlink it from the Subscriptions page first.",
+      };
     }
 
     await prisma.recurringRule.delete({ where: { id } });
@@ -206,6 +230,11 @@ export async function getRecurringRules() {
 
     const rules = await prisma.recurringRule.findMany({
       where: { userId: session.user.id },
+      include: {
+        subscription: {
+          select: { id: true },
+        },
+      },
       orderBy: { nextDueDate: "asc" },
     });
     const categoryIds = Array.from(
@@ -262,6 +291,7 @@ export async function getRecurringRules() {
           name: finalName,
           description: finalDescription,
           category: rule.categoryId ? categoryMap.get(rule.categoryId) ?? null : null,
+          subscriptionId: rule.subscription?.id ?? null,
         };
       })
     );
@@ -350,6 +380,13 @@ export async function processRecurringTransactions() {
             data: {
               nextDueDate,
               isActive: !shouldDeactivate,
+            },
+          });
+
+          await tx.subscription.updateMany({
+            where: { recurringRuleId: rule.id },
+            data: {
+              nextBillingDate: nextDueDate,
             },
           });
         });

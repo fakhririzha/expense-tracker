@@ -36,6 +36,7 @@ interface RecurringRule {
     icon: string | null;
   } | null;
   accountId: string | null;
+  subscriptionId: string | null;
 }
 
 const INTERVAL_LABELS: Record<string, string> = {
@@ -164,6 +165,11 @@ export default function RecurringPage() {
                       <TableRow key={rule.id}>
                         <TableCell className="font-medium">
                           {rule.name}
+                          {rule.subscriptionId && (
+                            <p className="text-xs font-medium text-primary">
+                              Managed by subscription
+                            </p>
+                          )}
                           {rule.description && (
                             <p className="text-sm text-muted-foreground">
                               {rule.description}
@@ -211,6 +217,7 @@ export default function RecurringPage() {
                             <Button
                               variant="ghost"
                               size="sm"
+                              disabled={!!rule.subscriptionId}
                               onClick={() => handleEdit(rule)}
                             >
                               <Pencil className="h-4 w-4" />
@@ -218,6 +225,7 @@ export default function RecurringPage() {
                             <Button
                               variant="ghost"
                               size="sm"
+                              disabled={!!rule.subscriptionId}
                               onClick={() => handleDelete(rule.id, rule.name)}
                             >
                               <Trash2 className="h-4 w-4 text-red-600" />
@@ -256,6 +264,11 @@ export default function RecurringPage() {
                       <TableRow key={rule.id} className="opacity-60">
                         <TableCell className="font-medium">
                           {rule.name}
+                          {rule.subscriptionId && (
+                            <p className="text-xs font-medium text-primary">
+                              Managed by subscription
+                            </p>
+                          )}
                         </TableCell>
                         <TableCell>
                           {TYPE_LABELS[rule.type] || rule.type}
@@ -274,6 +287,7 @@ export default function RecurringPage() {
                           <Button
                             variant="ghost"
                             size="sm"
+                            disabled={!!rule.subscriptionId}
                             onClick={() => handleDelete(rule.id, rule.name)}
                           >
                             <Trash2 className="h-4 w-4 text-red-600" />
