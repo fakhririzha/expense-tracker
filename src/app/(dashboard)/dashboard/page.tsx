@@ -15,6 +15,7 @@ import {
     BarChart3,
     Boxes,
     CreditCard,
+    HandCoins,
     PiggyBank,
     TrendingDown,
     TrendingUp,
@@ -172,6 +173,23 @@ export default async function DashboardPage() {
             </div>
             <p className="text-sm font-medium opacity-80 mt-1">
               Owned items at current value
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xl font-bold font-heading">
+              Loans Receivable
+            </CardTitle>
+            <HandCoins className="h-6 w-6 text-foreground opacity-80" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-black tracking-tight">
+              {formatCurrency(metrics.totalLoanReceivables, currency)}
+            </div>
+            <p className="text-sm font-medium text-muted-foreground mt-1">
+              Principal owed to you
             </p>
           </CardContent>
         </Card>

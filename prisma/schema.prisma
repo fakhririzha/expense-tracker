@@ -99,6 +99,7 @@ enum AccountType {
   INVESTMENT
   LOAN
   CREDIT_CARD
+  LOAN_RECEIVABLE
 }
 
 model FinancialAccount {

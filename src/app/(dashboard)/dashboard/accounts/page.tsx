@@ -13,6 +13,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { formatCurrency } from "@/lib/utils";
+import { ACCOUNT_TYPE_LABELS } from "@/lib/account-types";
 import { Pencil, Trash2, Wallet } from "lucide-react";
 import { useState } from "react";
 import { useAccounts, useAccountsSummary, useDeleteAccount } from "@/hooks/useAccountQueries";
@@ -26,14 +27,6 @@ interface Account {
   description: string | null;
   isActive: boolean;
 }
-
-const ACCOUNT_TYPE_LABELS: Record<string, string> = {
-  BANK: "Bank Account",
-  CASH: "Cash",
-  INVESTMENT: "Investment",
-  LOAN: "Loan",
-  CREDIT_CARD: "Credit Card",
-};
 
 /**
  * Renders the Accounts page with summary cards, an accounts table, and dialogs for adding, editing, and deleting accounts.
@@ -96,7 +89,7 @@ export default function AccountsPage() {
               <p className="text-xs text-muted-foreground">
                 {summary.valuationError
                   ? "Live investment valuation unavailable"
-                  : "Bank, Cash, Investments, Personal Assets"}
+                  : "Bank, Cash, Investments, Receivables, Personal Assets"}
               </p>
             </CardContent>
           </Card>
@@ -180,7 +173,9 @@ export default function AccountsPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        {ACCOUNT_TYPE_LABELS[account.type] || account.type}
+                        {ACCOUNT_TYPE_LABELS[
+                          account.type as keyof typeof ACCOUNT_TYPE_LABELS
+                        ] || account.type}
                       </TableCell>
                       <TableCell>{account.currency}</TableCell>
                       <TableCell className="text-right">

@@ -62,10 +62,14 @@ export function AccountBalanceCard({
     switch (type) {
       case "BANK":
         return "Bank Account";
+      case "CASH":
+        return "Cash";
       case "LOAN":
         return "Loan Account";
       case "CREDIT_CARD":
         return "Credit Card";
+      case "LOAN_RECEIVABLE":
+        return "Loans Receivable";
       default:
         return type;
     }

@@ -135,10 +135,10 @@ export function AddGoalDialog({ onSuccess }: AddGoalDialogProps) {
         if (response.ok) {
           const data = await response.json();
           // Filter to asset accounts (BANK, CASH, INVESTMENT)
-          const assetAccounts = data?.bankAccounts?.filter(
+          const assetAccounts = data?.accounts?.filter(
             (acc: Account) =>
               acc.type === "BANK" || acc.type === "CASH" || acc.type === "INVESTMENT"
-          );
+          ) ?? [];
           setAccounts(assetAccounts);
         }
       } catch (error) {

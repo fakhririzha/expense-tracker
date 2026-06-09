@@ -1,5 +1,11 @@
 # FinHealth Changelog
 
+## v3.5.0
+
+- Added Loans Receivable for tracking principal owed to you from loans you funded.
+- Added lending and repayment flows that move funds between cash accounts and receivable balances without counting principal as income or expense.
+- Updated account, dashboard, and net-worth calculations so Loans Receivable is treated as an asset.
+
 ## v3.4.3
 
 - Monthly budget tracking now includes liability payments alongside regular expenses in the dashboard and sidebar budget snapshot.

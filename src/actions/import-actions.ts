@@ -4,6 +4,11 @@ import { auth } from "@/auth";
 import prisma from "@/lib/db";
 import { Prisma } from "@/generated/prisma/client/client";
 import { revalidatePath } from "next/cache";
+import {
+  ACCOUNT_TYPES,
+  type AccountTypeValue,
+  normalizeAccountBalanceForType,
+} from "@/lib/account-types";
 
 // Column mapping types
 export type ColumnMapping = {
@@ -584,11 +589,11 @@ export async function importTransactions(
 /**
  * Import multiple account records, validating each row and creating accounts for the authenticated user.
  *
- * Validates required `name` and allowed `type` (BANK, CASH, INVESTMENT, LOAN, CREDIT_CARD), skips rows with errors or duplicate names, creates new accounts with optional `currency`, `balance`, and `description`, and triggers dashboard accounts revalidation.
+ * Validates required `name` and allowed account `type`, skips rows with errors or duplicate names, creates new accounts with optional `currency`, `balance`, and `description`, and triggers dashboard accounts revalidation.
  *
  * @param accounts - Array of account objects to import. Each object should include:
  *   - `name`: account display name (required)
- *   - `type`: account type (required; one of BANK, CASH, INVESTMENT, LOAN, CREDIT_CARD)
+ *   - `type`: account type (required; one of the supported financial account types)
  *   - `currency`: optional ISO currency code (defaults to "IDR")
  *   - `balance`: optional starting balance (defaults to 0)
  *   - `description`: optional description text
@@ -621,7 +626,7 @@ export async function importAccounts(
       errors: [],
     };
 
-    const validTypes = ["BANK", "CASH", "INVESTMENT", "LOAN", "CREDIT_CARD"];
+    const validTypes = ACCOUNT_TYPES as readonly string[];
 
     for (let i = 0; i < accounts.length; i++) {
       const acc = accounts[i];
@@ -661,17 +666,14 @@ export async function importAccounts(
           continue;
         }
 
+        const accountType = acc.type.toUpperCase() as AccountTypeValue;
+
         await prisma.financialAccount.create({
           data: {
             name: acc.name,
-            type: acc.type.toUpperCase() as
-              | "BANK"
-              | "CASH"
-              | "INVESTMENT"
-              | "LOAN"
-              | "CREDIT_CARD",
+            type: accountType,
             currency: acc.currency || "IDR",
-            balance: acc.balance || 0,
+            balance: normalizeAccountBalanceForType(accountType, acc.balance || 0),
             description: acc.description,
             userId: session.user.id,
           },

@@ -30,10 +30,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { ACCOUNT_TYPES, normalizeAccountBalanceForType } from "@/lib/account-types";
 
 const editAccountFormSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  type: z.enum(["BANK", "CASH", "INVESTMENT", "LOAN", "CREDIT_CARD"]),
+  type: z.enum(ACCOUNT_TYPES),
   currency: z.string(),
   balance: z.number(),
   description: z.string().optional(),
@@ -97,7 +98,9 @@ export function EditAccountDialog({
     if (account && open) {
       // For liability accounts (LOAN, CREDIT_CARD), convert balance to positive for display
       const displayBalance =
-        account.type === "LOAN" || account.type === "CREDIT_CARD"
+        account.type === "LOAN" ||
+        account.type === "CREDIT_CARD" ||
+        account.type === "LOAN_RECEIVABLE"
           ? Math.abs(account.balance)
           : account.balance;
 
@@ -116,12 +119,10 @@ export function EditAccountDialog({
     if (!account) return;
 
     try {
-      let submitData = data;
-
-      // For liability accounts, convert balance to negative
-      if (data.type === "LOAN" || data.type === "CREDIT_CARD") {
-        submitData = { ...data, balance: Math.abs(data.balance) * -1 };
-      }
+      const submitData = {
+        ...data,
+        balance: normalizeAccountBalanceForType(data.type, data.balance),
+      };
 
       await updateMutation.mutateAsync({ id: account.id, data: submitData });
       onOpenChange(false);
@@ -135,7 +136,7 @@ export function EditAccountDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-125">
         <DialogHeader>
           <DialogTitle>Edit Account</DialogTitle>
           <DialogDescription>
@@ -179,6 +180,7 @@ export function EditAccountDialog({
                       <SelectItem value="INVESTMENT">Investment</SelectItem>
                       <SelectItem value="LOAN">Loan</SelectItem>
                       <SelectItem value="CREDIT_CARD">Credit Card</SelectItem>
+                      <SelectItem value="LOAN_RECEIVABLE">Loans Receivable</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />

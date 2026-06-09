@@ -7,6 +7,7 @@ import {
   deleteAccount,
   type AccountInput,
 } from "@/actions/account-actions";
+import { type AccountTypeValue } from "@/lib/account-types";
 
 // ---------------------------------------------------------------------------
 // Query Key Factory
@@ -27,7 +28,7 @@ export function useAccounts(type?: string) {
     queryKey: accountKeys.list(type),
     queryFn: async () => {
       const result = await getAccounts(
-        type as "BANK" | "CASH" | "INVESTMENT" | "LOAN" | "CREDIT_CARD" | undefined
+        type as AccountTypeValue | undefined
       );
       if (!result.success) throw new Error(result.error);
       return result.data;
