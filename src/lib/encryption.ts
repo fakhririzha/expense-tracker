@@ -95,6 +95,13 @@ export const FIELD_CLASSIFICATIONS: Record<string, FieldClassification> = {
   // RecurringRule model
   "recurringRule.name": FieldClassification.MEDIUM,
   "recurringRule.description": FieldClassification.HIGH,
+
+  // Subscription model
+  "subscription.name": FieldClassification.MEDIUM,
+  "subscription.provider": FieldClassification.MEDIUM,
+  "subscription.description": FieldClassification.HIGH,
+  "subscription.cancellationUrl": FieldClassification.HIGH,
+  "subscription.notes": FieldClassification.HIGH,
   
   // SavingsGoal model
   "savingsGoal.name": FieldClassification.MEDIUM,

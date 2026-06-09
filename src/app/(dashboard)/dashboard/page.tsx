@@ -1,4 +1,5 @@
 import { getBudgetSpendingSummary } from "@/actions/budget-actions";
+import { getSubscriptionSummary } from "@/actions/subscription-actions";
 import { auth } from "@/auth";
 import { MonthlyBudgetStatus } from "@/components/dashboard/MonthlyBudgetStatus";
 import { RetirementProgress } from "@/components/dashboard/RetirementProgress";
@@ -17,6 +18,7 @@ import {
     CreditCard,
     HandCoins,
     PiggyBank,
+    Repeat2,
     TrendingDown,
     TrendingUp,
     Wallet,
@@ -55,9 +57,10 @@ export default async function DashboardPage() {
   }
 
   const now = new Date();
-  const [metricsResult, currentMonthSummary, changelog] = await Promise.all([
+  const [metricsResult, currentMonthSummary, subscriptionSummaryResult, changelog] = await Promise.all([
     getExecutiveMetrics(),
     getBudgetSpendingSummary(startOfMonth(now), endOfMonth(now)),
+    getSubscriptionSummary(),
     getDashboardChangelog(),
   ]);
 
@@ -190,6 +193,32 @@ export default async function DashboardPage() {
             </div>
             <p className="text-sm font-medium text-muted-foreground mt-1">
               Principal owed to you
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xl font-bold font-heading">
+              Subscriptions
+            </CardTitle>
+            <Repeat2 className="h-6 w-6 text-foreground opacity-80" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-black tracking-tight">
+              {formatCurrency(
+                subscriptionSummaryResult.success && subscriptionSummaryResult.data
+                  ? subscriptionSummaryResult.data.totalMonthlyCost
+                  : 0,
+                subscriptionSummaryResult.success && subscriptionSummaryResult.data
+                  ? subscriptionSummaryResult.data.displayCurrency
+                  : currency
+              )}
+            </div>
+            <p className="text-sm font-medium text-muted-foreground mt-1">
+              {subscriptionSummaryResult.success && subscriptionSummaryResult.data
+                ? `${subscriptionSummaryResult.data.activeCount} active • ${subscriptionSummaryResult.data.trialEndingSoonCount} trial(s) ending soon`
+                : "Subscription snapshot unavailable"}
             </p>
           </CardContent>
         </Card>
