@@ -1,6 +1,6 @@
 # Contributing to Expense Tracker
 
-Thank you for your interest in contributing to Expense Tracker! This document provides guidelines and instructions for contributing to this project.
+Thank you for contributing to Expense Tracker, branded in the app as **FinHealth**. This guide describes the current development workflow, project conventions, and verification expectations.
 
 ## Table of Contents
 
@@ -8,6 +8,7 @@ Thank you for your interest in contributing to Expense Tracker! This document pr
 - [Getting Started](#getting-started)
 - [Development Workflow](#development-workflow)
 - [Coding Standards](#coding-standards)
+- [Domain Rules](#domain-rules)
 - [Commit Message Guidelines](#commit-message-guidelines)
 - [Pull Request Process](#pull-request-process)
 - [Project Structure Guidelines](#project-structure-guidelines)
@@ -17,427 +18,462 @@ Thank you for your interest in contributing to Expense Tracker! This document pr
 
 ## Code of Conduct
 
-This project and everyone participating in it is governed by our commitment to:
+This project and everyone participating in it is governed by a commitment to:
 
-- Be respectful and inclusive in all interactions
-- Welcome newcomers and help them get started
-- Focus on constructive feedback
-- Respect different viewpoints and experiences
+- Be respectful and constructive.
+- Welcome newcomers and help them get oriented.
+- Focus feedback on the code, behavior, and user impact.
+- Respect different viewpoints and experiences.
 
 ## Getting Started
 
 ### Prerequisites
 
-Before you begin, ensure you have the following installed:
+- Node.js 20.x or higher
+- pnpm 9.x or higher
+- MySQL or MariaDB 8.0+
+- Git
 
-- **Node.js**: Version 20.x (LTS) or higher
-- **pnpm**: Version 9.x or higher
-- **MySQL**: Version 8.0 or higher
-- **Git**: For version control
+### Local Setup
 
-### Setting Up Your Development Environment
+1. Fork and clone the repository:
 
-1. **Fork the repository** on GitHub
-2. **Clone your fork** locally:
    ```bash
    git clone https://github.com/YOUR_USERNAME/expense-tracker.git
    cd expense-tracker
    ```
 
-3. **Install dependencies**:
+2. Install dependencies:
+
    ```bash
    pnpm install
    ```
 
-4. **Set up environment variables**:
-   ```bash
-   cp .env.example .env
-   ```
-   Edit `.env` with your local configuration (database credentials, auth secrets, etc.)
+3. Create `.env` in the project root:
 
-5. **Set up the database**:
    ```bash
-   pnpm prisma migrate dev
+   DATABASE_URL="mysql://USER:PASSWORD@HOST:PORT/expense_tracker"
+   AUTH_SECRET="replace-with-openssl-output"
+   AUTH_URL="http://localhost:3000"
+   CRON_SECRET="replace-for-production-cron"
+   ENCRYPTION_MASTER_KEY="replace-with-openssl-output"
+   ```
+
+   Generate secrets with:
+
+   ```bash
+   openssl rand -base64 32
+   ```
+
+4. Create the local database:
+
+   ```sql
+   CREATE DATABASE expense_tracker;
+   ```
+
+5. Run migrations and generate the Prisma client:
+
+   ```bash
+   pnpm db:migrate:dev
    pnpm prisma generate
    ```
 
-6. **Start the development server**:
+6. Start the development server:
+
    ```bash
    pnpm dev
    ```
 
-The application should now be running at `http://localhost:3000`.
+The app runs at `http://localhost:3000` by default.
 
 ## Development Workflow
 
-### Branching Strategy
+### Branching
 
-We follow a simplified Git Flow approach:
+- Use focused feature or fix branches, for example `feature/loans-receivable-summary` or `fix/transaction-balance-update`.
+- Keep PRs scoped to one user-visible feature, bug fix, or maintenance concern.
+- Rebase or merge from the target branch before opening a PR if your branch is stale.
 
-- **`main`**: Production-ready code
-- **`develop`**: Integration branch for features
-- **Feature branches**: `feature/description-of-feature`
-- **Bug fix branches**: `fix/description-of-bug`
-- **Hotfix branches**: `hotfix/description` (for urgent production fixes)
+### Available Commands
 
-### Creating a New Feature
+```bash
+pnpm dev              # Start Next.js dev server
+pnpm build            # prisma generate && next build
+pnpm start            # Start production server
+pnpm lint             # Run ESLint
+pnpm db:migrate:dev   # npx prisma@^7.4.1 migrate dev
+pnpm db:migrate:prod  # npx prisma@^7.4.1 migrate deploy
+pnpm prisma generate  # Generate Prisma client
+pnpm prisma db push   # Push schema changes in development when appropriate
+```
 
-1. Create a new branch from `develop`:
-   ```bash
-   git checkout develop
-   git pull origin develop
-   git checkout -b feature/your-feature-name
-   ```
-
-2. Make your changes following our [coding standards](#coding-standards)
-
-3. Commit your changes following our [commit message guidelines](#commit-message-guidelines)
-
-4. Push your branch to your fork:
-   ```bash
-   git push origin feature/your-feature-name
-   ```
-
-5. Open a Pull Request against the `develop` branch
+There is no dedicated `pnpm type-check` script in the current `package.json`. Use `pnpm build` when you need build-level TypeScript validation.
 
 ## Coding Standards
 
 ### TypeScript
 
-- Use **strict TypeScript** configuration
-- Define explicit types for function parameters and return values
-- Avoid using `any` - use `unknown` with type guards when necessary
-- Use interfaces for object shapes, types for unions/intersections
+- Use strict TypeScript.
+- Avoid `any`; prefer `unknown` with type guards when necessary.
+- Define explicit types where they improve clarity or protect public/action interfaces.
+- Use interfaces for object shapes and types for unions/intersections.
 
 ```typescript
-// Good
-interface User {
+interface AccountSummary {
   id: string;
   name: string;
-  email: string;
+  currency: string;
+  balance: number;
 }
 
-function getUserById(id: string): Promise<User | null> {
-  // implementation
-}
-
-// Bad
-function getUserById(id: any): any {
-  // implementation
+function normalizeBalance(summary: AccountSummary): number {
+  return summary.balance;
 }
 ```
 
 ### React Components
 
-- Use **functional components** with hooks
-- Follow the **Next.js App Router** patterns
-- Use Server Components by default, Client Components only when necessary
-- Keep components focused and single-responsibility
-
-```typescript
-// Server Component (default)
-export default async function DashboardPage() {
-  const data = await fetchDashboardData();
-  return <Dashboard data={data} />;
-}
-
-// Client Component (when needed)
-'use client';
-
-import { useState } from 'react';
-
-export function InteractiveButton() {
-  const [count, setCount] = useState(0);
-  return <button onClick={() => setCount(c => c + 1)}>{count}</button>;
-}
-```
-
-### Styling with Tailwind CSS
-
-- Use **Tailwind CSS** utility classes
-- Follow the existing design system (colors, spacing, typography)
-- Use the `cn()` utility for conditional class merging
-- Avoid arbitrary values when possible
+- Use functional components.
+- Use Server Components by default.
+- Add `'use client'` only for state, effects, event handlers, browser APIs, or TanStack Query hooks.
+- Keep components focused and aligned with existing feature folders.
+- Use shadcn/ui primitives and existing UI patterns before adding new primitives.
 
 ```tsx
-// Good
-import { cn } from '@/lib/utils';
+"use client";
 
-<button className={cn(
-  'px-4 py-2 rounded-md',
-  'bg-primary text-primary-foreground',
-  'hover:bg-primary/90',
-  isLoading && 'opacity-50 cursor-not-allowed'
-)}>
-  Click me
-</button>
+import { useState } from "react";
+
+export function ExampleToggle() {
+  const [enabled, setEnabled] = useState(false);
+  return (
+    <button type="button" onClick={() => setEnabled((value) => !value)}>
+      {enabled ? "Enabled" : "Disabled"}
+    </button>
+  );
+}
 ```
 
-### File Naming Conventions
+### Styling
 
-- **Components**: PascalCase (e.g., `AddTransactionDialog.tsx`)
-- **Utilities/Hooks**: camelCase (e.g., `useExchangeRate.ts`)
-- **Actions**: kebab-case with `-actions` suffix (e.g., `transaction-actions.ts`)
-- **Types**: kebab-case (e.g., `trade-history.ts`)
+- Use Tailwind CSS 4 utilities and semantic CSS variables from `src/app/globals.css`.
+- Use `cn()` from `@/lib/utils` for conditional class merging.
+- Follow `components.json`: shadcn/ui New York style, CSS variables, and Lucide icons.
+- Keep responsive layouts readable across mobile and desktop.
 
-### Import Organization
+```tsx
+import { cn } from "@/lib/utils";
 
-Organize imports in this order:
+<button
+  className={cn(
+    "rounded-md px-4 py-2",
+    "bg-primary text-primary-foreground",
+    isLoading && "cursor-not-allowed opacity-50"
+  )}
+>
+  Save
+</button>;
+```
+
+### File Naming
+
+- Components: PascalCase, e.g. `AddTransactionDialog.tsx`.
+- Hooks/utilities: camelCase, e.g. `useReceivableQueries.ts`.
+- Actions: kebab-case with `-actions` suffix, e.g. `receivable-actions.ts`.
+- Types: kebab-case, e.g. `trade-history.ts`.
+
+### Import Order
 
 1. React/Next.js imports
-2. Third-party library imports
-3. Absolute imports (`@/` aliases)
+2. Third-party imports
+3. Absolute imports using `@/`
 4. Relative imports
 5. Type imports
 
-```typescript
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+## Domain Rules
 
-import { format } from 'date-fns';
-import { zodResolver } from '@hookform/resolvers/zod';
+### Server Actions
 
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { useToast } from '@/hooks/useToast';
+- Put mutations and authenticated server-side reads in `src/actions`.
+- Start Server Action files with `"use server"`.
+- Call `auth()` and require `session.user.id` for user-owned operations.
+- Validate inputs with Zod before database work.
+- Return `{ success: boolean, data?: T, error?: string }`.
+- Revalidate affected dashboard routes after mutations.
+- Handle useful Prisma errors such as `P2002` and `P2025` with specific messages.
 
-import { LocalComponent } from './LocalComponent';
+### User Isolation
 
-import type { Transaction } from '@/types/transaction';
-```
+- Every query for user-owned models must include `userId`.
+- Do not add `userId` filters to global tables such as `ExchangeRate`.
+- For workflows involving multiple records, validate ownership of every involved account, transaction, asset, goal, category, or rule.
+
+### Balance Integrity
+
+- Balance-changing workflows must use Prisma transactions.
+- This applies to regular transactions, transfers, liability payments, investment trades, and Loans Receivable disbursement/repayment.
+- Use `src/lib/account-types.ts` for account classification and balance normalization.
+- `LOAN_RECEIVABLE` is an asset account type; `LOAN` and `CREDIT_CARD` are liability account types.
+
+### Encryption
+
+- Use `src/lib/user-encryption.ts` helpers for sensitive text fields.
+- Prefer encrypted companion fields such as `descriptionEncrypted`, `notesEncrypted`, and `nameEncrypted` where implemented.
+- Keep `ENCRYPTION_MASTER_KEY` stable for environments that use encrypted data.
+- Back up the database before running `src/scripts/migrate-encryption.ts`.
+
+### Financial Data
+
+- Yahoo Finance requests should retain caching, batching/rate-limit awareness, and graceful error handling.
+- Never assume quote or exchange-rate data is available.
+- Preserve fallback values and usable UI states when market data is missing.
+- Use `src/lib/unit-conversion.ts` for precious-metal unit conversion.
+
+### TanStack Query
+
+- Define query key factories per feature.
+- Throw `new Error(result.error)` from query/mutation wrappers when Server Actions return `success: false`.
+- Invalidate all related feature keys after mutations, especially accounts and transactions after balance-moving changes.
 
 ## Commit Message Guidelines
 
-We follow **Conventional Commits** specification:
+Use Conventional Commits:
 
-```
+```text
 <type>(<scope>): <description>
 
 [optional body]
 
-[optional footer(s)]
+[optional footer]
 ```
 
-### Types
+Common types:
 
-- **`feat`**: New feature
-- **`fix`**: Bug fix
-- **`docs`**: Documentation changes
-- **`style`**: Code style changes (formatting, semicolons, etc.)
-- **`refactor`**: Code refactoring
-- **`perf`**: Performance improvements
-- **`test`**: Adding or updating tests
-- **`chore`**: Build process or auxiliary tool changes
+- `feat` - New feature
+- `fix` - Bug fix
+- `docs` - Documentation changes
+- `style` - Formatting-only changes
+- `refactor` - Refactoring without behavior change
+- `perf` - Performance improvement
+- `test` - Test additions or updates
+- `chore` - Tooling, dependency, or maintenance work
 
-### Scopes
+Common scopes:
 
-Common scopes for this project:
+- `accounts`
+- `auth`
+- `budgets`
+- `categories`
+- `dashboard`
+- `db`
+- `goals`
+- `investments`
+- `liabilities`
+- `receivables`
+- `reports`
+- `transactions`
+- `ui`
 
-- **`auth`**: Authentication related
-- **`api`**: API routes
-- **`ui`**: UI components
-- **`db`**: Database/Prisma changes
-- **`investments`**: Investment features
-- **`transactions`**: Transaction features
-- **`accounts`**: Account features
+Examples:
 
-### Examples
-
-```
-feat(investments): add trade history table
-
-fix(auth): resolve session expiration issue
-docs(readme): update installation instructions
-refactor(ui): simplify dialog component structure
-chore(deps): update prisma to v6
+```text
+feat(receivables): add repayment history summary
+fix(transactions): preserve account ownership checks on transfer edit
+docs(readme): refresh setup commands
+chore(deps): update prisma to v7.4.1
 ```
 
 ## Pull Request Process
 
 ### Before Submitting
 
-1. **Sync with upstream**:
-   ```bash
-   git fetch upstream
-   git rebase upstream/develop
-   ```
+1. Review your diff and remove unrelated changes.
+2. Run linting:
 
-2. **Run linting**:
    ```bash
    pnpm lint
    ```
 
-3. **Run type checking**:
+3. Run a build when your change touches TypeScript, Next.js routing, Prisma, auth, or shared domain logic:
+
    ```bash
-   pnpm type-check
+   pnpm build
    ```
 
-4. **Test your changes** manually
+4. Manually test the affected feature and adjacent financial summaries.
+5. Update documentation or `content/changelog.md` when the change is user-facing.
 
 ### PR Description Template
 
 ```markdown
 ## Description
-Brief description of the changes
+Brief description of the change.
 
 ## Type of Change
 - [ ] Bug fix
 - [ ] New feature
-- [ ] Breaking change
 - [ ] Documentation update
+- [ ] Maintenance/refactor
 
-## How Has This Been Tested?
-Describe the tests you ran
+## Testing
+Describe commands and manual flows tested.
 
 ## Checklist
-- [ ] My code follows the style guidelines
-- [ ] I have performed a self-review
-- [ ] I have commented my code where necessary
-- [ ] My changes generate no new warnings
-- [ ] I have updated the documentation accordingly
+- [ ] I validated user ownership and auth requirements
+- [ ] I preserved balance integrity for financial workflows
+- [ ] I handled loading, empty, and error states
+- [ ] I updated docs/changelog where appropriate
 ```
 
-### Review Process
+### Review Expectations
 
-1. All PRs require at least **one review** before merging
-2. Address review comments promptly
-3. Keep PRs focused and reasonably sized
-4. Be open to feedback and suggestions
+- Keep PRs focused and reasonably sized.
+- Prefer behavior-level explanations over implementation trivia.
+- Call out schema, auth, encryption, or balance-affecting changes explicitly.
+- Address review comments with either code changes or a concrete explanation.
 
 ## Project Structure Guidelines
 
-When adding new features, follow the existing structure:
+When adding a feature, follow the existing route/action/hook/component split:
 
-### Adding a New Feature
-
-```
+```text
 src/
 ├── app/
 │   └── (dashboard)/
 │       └── dashboard/
 │           └── your-feature/
-│               └── page.tsx          # Route page
+│               └── page.tsx
 ├── components/
 │   └── your-feature/
-│       ├── FeatureComponent.tsx      # Main component
-│       └── FeatureDialog.tsx         # Dialog/Modal
+│       ├── FeatureManager.tsx
+│       └── FeatureDialog.tsx
 ├── actions/
-│   └── your-feature-actions.ts       # Server actions
+│   └── your-feature-actions.ts
 ├── hooks/
-│   └── useYourFeature.ts             # Custom hook
+│   └── useYourFeatureQueries.ts
 ├── lib/
-│   └── your-feature-service.ts       # Business logic
+│   └── your-feature-service.ts
 └── types/
-    └── your-feature.ts               # TypeScript types
+    └── your-feature.ts
 ```
+
+Only add each layer when the feature needs it. Small changes should stay close to the existing module they affect.
 
 ### Database Changes
 
-When modifying the database schema:
-
-1. Update `prisma/schema.prisma`
+1. Update `prisma/schema.prisma`.
 2. Create a migration:
+
    ```bash
-   pnpm prisma migrate dev --name description_of_changes
+   pnpm db:migrate:dev
    ```
-3. Update the Prisma client:
+
+3. Generate the Prisma client:
+
    ```bash
    pnpm prisma generate
    ```
-4. Update related types and services
+
+4. Update related actions, hooks, services, types, and manual test coverage.
+5. For production, deploy migrations with:
+
+   ```bash
+   pnpm db:migrate:prod
+   ```
 
 ### API Routes
 
 For new API endpoints:
 
-- Place in `src/app/api/<resource>/route.ts`
-- Follow RESTful conventions
-- Include proper error handling
-- Validate inputs with Zod
+- Place routes under `src/app/api/<resource>/route.ts`.
+- Use API routes for Auth.js handlers, cron/scheduled jobs, or client-friendly reads that need route semantics.
+- Prefer Server Actions for app mutations.
+- Validate inputs and filters before Prisma queries.
+- Return clear status codes and JSON errors.
 
 ## Testing Guidelines
 
-### Manual Testing
+### Current Test Setup
 
-Before submitting, test:
+The project currently uses linting plus manual testing. There is no committed automated test runner script at this time.
 
-- [ ] Feature works as expected
-- [ ] Error states are handled gracefully
-- [ ] Loading states are implemented
-- [ ] Responsive design on different screen sizes
-- [ ] Authentication flows (if applicable)
+```bash
+pnpm lint
+```
 
-### Test Checklist for UI Changes
+Use `pnpm build` for broader validation when appropriate.
 
-- [ ] Light and dark mode (if supported)
-- [ ] Different browser viewports
-- [ ] Keyboard navigation
-- [ ] Screen reader compatibility (where applicable)
+### Manual Testing Checklist
+
+- Authentication and protected-route behavior.
+- Account CRUD, account type grouping, and balance normalization.
+- Transaction creation/editing, transfers, location metadata, and balance updates.
+- Liability payments, overpayments, audit trails, and rollback behavior.
+- Loans Receivable disbursement and repayment flows.
+- Investment buy/sell trades, realized/unrealized PnL, unit conversions, Yahoo Finance fallbacks, and valuation calculations.
+- Currency conversion and exchange-rate caching.
+- Personal asset valuation and disposal history.
+- Recurring transaction processing.
+- Budgets, goals, profile targets, dashboard metrics, reports, calendar, and sidebar summaries.
+- Import/export and category management.
+- Responsive behavior and keyboard accessibility for UI changes.
 
 ## Documentation
 
-### Code Comments
-
-- Use JSDoc for public functions and complex logic
-- Explain the "why" not just the "what"
-- Keep comments up-to-date with code changes
-
-```typescript
-/**
- * Calculates the wealth health score based on debt-to-wealth ratio
- * @param totalAssets - Sum of all asset values
- * @param totalLiabilities - Sum of all liability values
- * @returns Health score tier (S, A, B, C, F)
- */
-function calculateWealthHealth(
-  totalAssets: number,
-  totalLiabilities: number
-): HealthTier {
-  // Implementation
-}
-```
-
 ### README Updates
 
-Update README.md when:
+Update `README.md` when changing:
 
-- Adding new major features
-- Changing installation steps
-- Modifying environment variables
-- Updating API endpoints
+- Setup steps or commands
+- Environment variables
+- Major features or workflows
+- API routes or Server Action areas
+- Deployment behavior
+
+### Changelog Updates
+
+Update `content/changelog.md` when a change is user-facing enough to matter in release notes.
+
+- Use product language.
+- Keep entries concise, usually two to four bullets.
+- Place the newest version at the top.
+- Describe outcomes such as clearer navigation, smoother forms, better mobile layout, or more accurate balances.
+- Do not overstate internal cleanup; call it maintenance when appropriate.
+
+### Code Comments
+
+- Comment the reason for non-obvious decisions.
+- Avoid comments that only repeat what the code says.
+- Use JSDoc for public helpers or complex financial calculations when it improves maintainability.
 
 ## Questions and Support
 
 ### Getting Help
 
-- Check existing [documentation](./README.md)
-- Search [existing issues](https://github.com/fakhririzha/expense-tracker/issues)
-- Ask in discussions for general questions
+- Check [README.md](./README.md).
+- Search existing issues.
+- Review feature-specific files under `src/actions`, `src/hooks`, `src/lib`, and `src/components`.
 
 ### Reporting Bugs
 
-When reporting bugs, please include:
+Include:
 
-1. **Description**: Clear description of the bug
-2. **Steps to Reproduce**: Numbered steps
-3. **Expected Behavior**: What should happen
-4. **Actual Behavior**: What actually happens
-5. **Screenshots**: If applicable
-6. **Environment**: OS, browser, Node version
+1. Clear description of the bug.
+2. Steps to reproduce.
+3. Expected behavior.
+4. Actual behavior.
+5. Screenshots if useful.
+6. Environment details such as OS, browser, Node version, and database.
 
 ### Requesting Features
 
-For feature requests:
+Include:
 
-1. Check if it already exists in issues
-2. Describe the use case
-3. Explain why it would be valuable
-4. Suggest implementation approach if you have one
+1. The user workflow or financial scenario.
+2. Why the change is valuable.
+3. Which existing feature area it affects.
+4. Any schema, balance, auth, or reporting implications you can identify.
 
 ---
 
-## Recognition
-
-Contributors will be recognized in our README.md file and release notes.
-
-Thank you for contributing to Expense Tracker!
+Thank you for contributing to Expense Tracker.
