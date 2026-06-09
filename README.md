@@ -1,6 +1,6 @@
 # Expense Tracker
 
-A comprehensive personal finance management application built with Next.js, featuring expense tracking, investment portfolio management, multi-currency support, and real-time financial insights.
+Expense Tracker, branded in the app as **FinHealth**, is a personal finance dashboard built with Next.js 16 and React 19. It tracks accounts, transactions, investments, liabilities, loans receivable, personal assets, budgets, goals, recurring transactions, multi-currency reporting, and financial health metrics.
 
 ## Table of Contents
 
@@ -12,9 +12,8 @@ A comprehensive personal finance management application built with Next.js, feat
 - [Configuration](#configuration)
 - [Architecture](#architecture)
 - [Usage](#usage)
-- [API Endpoints](#api-endpoints)
+- [API and Server Actions](#api-and-server-actions)
 - [Project Structure](#project-structure)
-- [Contributing](#contributing)
 - [Testing](#testing)
 - [Deployment](#deployment)
 - [Troubleshooting](#troubleshooting)
@@ -23,83 +22,61 @@ A comprehensive personal finance management application built with Next.js, feat
 
 ## Overview
 
-Expense Tracker is a modern web application designed to help users manage their personal finances effectively. It provides a unified platform for tracking expenses, managing multiple financial accounts, monitoring investment portfolios, and automating recurring transactions. The application offers real-time financial metrics including net worth calculations, wealth health scoring, and retirement progress tracking.
+FinHealth is an all-in-one financial workspace for personal money management. It combines day-to-day expense tracking with portfolio valuation, debt tracking, loans receivable, personal asset valuations, and dashboard-level metrics such as net worth, monthly budget status, wealth health, and retirement progress.
 
 ### Value Proposition
 
-- **All-in-One Financial Hub**: Manage accounts, transactions, and investments in one place
-- **Multi-Currency Support**: Track finances across different currencies with automatic exchange rate conversion
-- **Investment Tracking**: Monitor stock portfolios with real-time price data from Yahoo Finance
-- **Personal Asset Tracking**: Maintain dated valuations for owned items such as electronics, vehicles, and property
-- **Automated Recurring Transactions**: Set up and automatically process recurring income and expenses
-- **Financial Health Insights**: Get personalized wealth health scores and retirement progress indicators
-- **Secure Authentication**: Enterprise-grade authentication powered by Auth.js with JWT sessions
+- **Unified Financial View**: Manage cash, bank, investment, liability, credit-card, and receivable accounts in one place.
+- **Transaction Context**: Record income, expenses, transfers, liability payments, categories, recurring rules, and optional location metadata.
+- **Portfolio Tracking**: Track holdings, buy/sell trades, realized and unrealized PnL, account linkage, and precious-metal unit conversions.
+- **Multi-Currency Reporting**: Convert account, investment, and asset values into the user's main currency.
+- **Manual Asset Valuations**: Maintain dated valuation history for owned items such as electronics, vehicles, property, collectibles, and equipment.
+- **Financial Planning**: Monitor budgets, savings goals, retirement targets, and monthly budget targets.
+- **Secure Data Handling**: Use Auth.js sessions, Prisma user isolation, and optional field-level encryption for sensitive text fields.
 
 ## Features
 
-### Core Features
-
 | Feature | Description |
 |---------|-------------|
-| **Account Management** | Create and manage multiple financial accounts (Bank, Cash, Investment, Loan, Credit Card) |
-| **Transaction Tracking** | Record income, expenses, and transfers with category classification |
-| **Investment Portfolio** | Track stocks and investments with real-time price updates via Yahoo Finance |
-| **Personal Assets** | Track durable owned items with manual valuation history and disposal dates |
-| **Recurring Transactions** | Automate regular transactions with flexible scheduling (daily, weekly, monthly, etc.) |
-| **Multi-Currency** | Support for multiple currencies with automatic exchange rate conversion |
-| **Financial Dashboard** | Executive overview with net worth, cash flow, and health metrics |
-
-### Financial Metrics
-
-- **Net Worth Calculation**: Real-time computation of financial accounts, investments, and personal assets minus liabilities
-- **Wealth Health Score**: Tier-based health rating (S, A, B, C, F) based on debt-to-wealth ratio
-- **Retirement Progress**: Visual tracking towards retirement savings goals
-- **Portfolio Performance**: Realized and unrealized gains/losses on investments
-- **Expense Analysis**: Monthly spending patterns and category breakdowns
+| **Account Management** | Bank, Cash, Investment, Loan, Credit Card, and Loans Receivable accounts |
+| **Transactions** | Income, expenses, transfers, liability payments, categories, dates, and optional location metadata |
+| **Categories** | User-owned category management with transaction-type filters |
+| **Investments** | Holdings, trades, account linkage, realized/unrealized PnL, Yahoo Finance pricing, and unit conversion |
+| **Personal Assets** | Durable item tracking with manual valuation history and disposal dates |
+| **Liabilities** | Liability payments with overpayment handling, audit trails, and rollback support |
+| **Loans Receivable** | Disbursement and repayment flows for principal owed to the user |
+| **Recurring Transactions** | Daily, weekly, biweekly, monthly, quarterly, and yearly transaction automation |
+| **Budgets and Goals** | Budget monitoring, savings goals, and profile-level financial targets |
+| **Reports and Calendar** | Category breakdowns, trends, net-worth history, monthly summaries, and upcoming events |
+| **Data Tools** | Import/export workflows for financial data |
+| **Dashboard** | Net worth, wealth health score, monthly budget status, retirement progress, sidebar metrics, and changelog dialog |
 
 ## Tech Stack
 
-### Frontend
-- **[Next.js 16](https://nextjs.org/)**: React framework with App Router and Server Components
-- **[React 19](https://react.dev/)**: Latest React with Concurrent Features and React Compiler
-- **[TypeScript](https://www.typescriptlang.org/)**: Type-safe development
-- **[Tailwind CSS 4](https://tailwindcss.com/)**: Utility-first CSS framework
-- **[shadcn/ui](https://ui.shadcn.com/)**: Modern accessible UI components
-- **[Radix UI](https://www.radix-ui.com/)**: Headless UI primitives
-- **[Lucide React](https://lucide.dev/)**: Icon library
-
-### Backend & Data
-- **[NextAuth.js v5](https://authjs.dev/)**: Authentication with JWT strategy
-- **[Prisma ORM](https://www.prisma.io/)**: Type-safe database access
-- **[MySQL](https://www.mysql.com/)**: Relational database
-- **[Zod](https://zod.dev/)**: Schema validation
-
-### State Management & Data Fetching
-- **[TanStack Query](https://tanstack.com/query)**: Server state management and caching
-- **[React Hook Form](https://react-hook-form.com/)**: Form handling with validation
-
-### Financial Data
-- **[Yahoo Finance 2](https://www.npmjs.com/package/yahoo-finance2)**: Real-time stock and market data
-- **[Recharts](https://recharts.org/)**: Data visualization charts
-
-### Development Tools
-- **[ESLint](https://eslint.org/)**: Code linting
-- **[pnpm](https://pnpm.io/)**: Fast, disk space efficient package manager
+| Layer | Technology | Version |
+|-------|------------|---------|
+| Framework | Next.js | 16.1.2 |
+| UI Library | React / React DOM | 19.2.3 |
+| Language | TypeScript | 5.x |
+| Styling | Tailwind CSS | 4.x |
+| Components | shadcn/ui New York style + Radix UI | - |
+| Database | MySQL / MariaDB | 8.0+ |
+| ORM | Prisma | 7.4.1 |
+| Authentication | Auth.js v5 / NextAuth | 5.0.0-beta.30 |
+| Server State | TanStack Query | 5.90+ |
+| Tables | TanStack Table | 8.21+ |
+| Forms | React Hook Form + Zod | 7.71+ / 4.3+ |
+| Charts | Recharts | 3.6+ |
+| Icons | Lucide React | 0.562+ |
+| Market Data | yahoo-finance2 | 3.13+ |
+| Package Manager | pnpm | 9.x |
 
 ## Prerequisites
 
-Before you begin, ensure you have the following installed:
-
-- **Node.js**: Version 20.x (LTS) or higher
-- **pnpm**: Version 9.x or higher
-- **MySQL**: Version 8.0 or higher
-- **Git**: For version control
-
-### System Requirements
-
-- **OS**: macOS, Linux, or Windows (WSL2 recommended for Windows)
-- **RAM**: Minimum 4GB (8GB recommended)
-- **Disk Space**: At least 2GB free space
+- Node.js 20.x or higher
+- pnpm 9.x or higher
+- MySQL or MariaDB 8.0+
+- Git
 
 ## Installation
 
@@ -116,37 +93,39 @@ cd expense-tracker
 pnpm install
 ```
 
-### 3. Set Up Environment Variables
+There is no `postinstall` script in the current project, so installation does not automatically run Prisma commands.
 
-Copy the example environment file and configure it:
+### 3. Create `.env`
+
+Create `.env` in the project root and add the required variables:
 
 ```bash
-cp .env.example .env
+DATABASE_URL="mysql://USER:PASSWORD@HOST:PORT/expense_tracker"
+AUTH_SECRET="replace-with-openssl-output"
+AUTH_URL="http://localhost:3000"
+CRON_SECRET="replace-for-production-cron"
+ENCRYPTION_MASTER_KEY="replace-with-openssl-output"
 ```
 
-Edit the `.env` file with your configuration values (see [Configuration](#configuration) section).
+Generate secrets with:
+
+```bash
+openssl rand -base64 32
+```
 
 ### 4. Set Up the Database
 
-Ensure MySQL is running and create the database:
+Create the database:
 
-```bash
-# Connect to MySQL
-mysql -u root -p
-
-# Create database
+```sql
 CREATE DATABASE expense_tracker;
-EXIT;
 ```
 
-Run Prisma migrations to set up the schema:
+Run migrations and generate the Prisma client:
 
 ```bash
-# Generate Prisma client
+pnpm db:migrate:dev
 pnpm prisma generate
-
-# Run migrations
-pnpm prisma migrate dev
 ```
 
 ### 5. Start the Development Server
@@ -155,387 +134,238 @@ pnpm prisma migrate dev
 pnpm dev
 ```
 
-The application will be available at [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:3000](http://localhost:3000).
 
 ## Configuration
 
 ### Environment Variables
 
-| Variable | Description | Required | Default |
-|----------|-------------|----------|---------|
-| `DATABASE_URL` | MySQL connection string | Yes | - |
-| `AUTH_SECRET` | Secret key for JWT signing | Yes | - |
-| `AUTH_URL` | Base URL for authentication callbacks | Yes | `http://localhost:3000` |
-| `CRON_SECRET` | Secret for securing cron job endpoints | Yes (production) | - |
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `DATABASE_URL` | MySQL/MariaDB connection string | Yes |
+| `SHADOW_DATABASE_URL` | Optional shadow database URL for Prisma migrations | No |
+| `AUTH_SECRET` | JWT/session secret, generated with `openssl rand -base64 32` | Yes |
+| `AUTH_URL` | Base auth callback URL, usually `http://localhost:3000` locally | Yes |
+| `CRON_SECRET` | Bearer token for the recurring transaction cron route in production | Yes in production |
+| `ENCRYPTION_MASTER_KEY` | Base64-encoded 32-byte key for field-level encryption | Required for encrypted field support |
 
-#### Database URL Format
+Database URL format:
 
-```
+```text
 mysql://USER:PASSWORD@HOST:PORT/DATABASE
 ```
 
-Example:
-```
-mysql://root:password@localhost:3306/expense_tracker
-```
+### Important Config Files
 
-#### Generating AUTH_SECRET
-
-Generate a secure random string:
-
-```bash
-openssl rand -base64 32
-```
-
-Copy the output and use it as your `AUTH_SECRET`.
-
-### Database Configuration
-
-The application uses Prisma ORM. Key configuration files:
-
-- **`prisma/schema.prisma`**: Database schema definition
-- **`src/lib/db.ts`**: Prisma client initialization
-
-### Authentication Configuration
-
-Authentication is configured in:
-
-- **`src/auth.ts`**: Main Auth.js configuration
-- **`src/auth.config.ts`**: Authentication providers and callbacks
-- **`src/middleware.ts`**: Route protection middleware
+- `prisma/schema.prisma` - Database schema and generated-client output path.
+- `prisma.config.ts` - Prisma 7 datasource configuration.
+- `src/lib/db.ts` - Prisma client using the MariaDB adapter.
+- `src/auth.ts` and `src/auth.config.ts` - Auth.js credentials provider, Prisma adapter, JWT callbacks, and auth pages.
+- `src/middleware.ts` - Protected dashboard routing.
+- `next.config.ts` - Next.js config with React Compiler enabled.
+- `components.json` - shadcn/ui New York style, aliases, Tailwind CSS variables, and Lucide icons.
+- `vercel.json` - Daily recurring transaction cron schedule.
 
 ## Architecture
 
-### System Design
-
 ```mermaid
 graph TB
-    subgraph Client["Client Layer"]
-        Browser["Browser"]
-        UI["React Components"]
-        Hooks["Custom Hooks"]
-        Context["Currency Context"]
+    subgraph Client["Client"]
+        Pages["App Router Pages"]
+        Components["React Components"]
+        Hooks["TanStack Query Hooks"]
+        Currency["Currency Context"]
     end
 
-    subgraph NextJS["Next.js Application"]
-        AppRouter["App Router"]
-        ServerActions["Server Actions"]
-        APIRoutes["API Routes"]
-        Auth["NextAuth.js"]
-    end
-
-    subgraph DataLayer["Data Layer"]
-        Prisma["Prisma ORM"]
-        MySQL[("MySQL Database")]
+    subgraph Server["Next.js Server"]
+        Actions["Server Actions"]
+        Routes["API Routes"]
+        Auth["Auth.js"]
         Cache["Next.js Cache"]
     end
 
-    subgraph External["External Services"]
-        YahooFinance["Yahoo Finance API"]
-        ExchangeRate["Exchange Rate API"]
+    subgraph Data["Data Layer"]
+        Prisma["Prisma ORM"]
+        MySQL[("MySQL / MariaDB")]
     end
 
-    Browser --> UI
-    UI --> Hooks
-    Hooks --> Context
-    UI --> ServerActions
-    UI --> APIRoutes
-    AppRouter --> ServerActions
-    ServerActions --> Prisma
-    ServerActions --> Cache
-    ServerActions --> YahooFinance
-    ServerActions --> ExchangeRate
-    APIRoutes --> Prisma
-    Auth --> Prisma
+    subgraph External["External Data"]
+        Yahoo["Yahoo Finance"]
+    end
+
+    Pages --> Components
+    Components --> Hooks
+    Components --> Currency
+    Hooks --> Actions
+    Components --> Routes
+    Actions --> Auth
+    Actions --> Prisma
+    Routes --> Auth
+    Routes --> Prisma
+    Actions --> Cache
+    Actions --> Yahoo
     Prisma --> MySQL
 ```
 
 ### Data Flow
 
-1. **User Authentication**: JWT-based auth with Prisma adapter
-2. **Server Actions**: Type-safe server functions for data mutations
-3. **TanStack Query**: Client-side caching and state synchronization
-4. **Real-time Data**: Yahoo Finance integration for live stock prices
+1. Auth.js stores user identity in JWT sessions and exposes `session.user.id`.
+2. Server Actions validate inputs with Zod and read/write user-owned data through Prisma.
+3. Client components use TanStack Query hooks to call Server Actions and invalidate related cache keys after mutations.
+4. Yahoo Finance quote and historical data calls are cached and handled defensively for rate limits or unavailable data.
+5. Sensitive text fields can be encrypted with per-user keys derived from `ENCRYPTION_MASTER_KEY`.
 
-### Security Considerations
+### Security Model
 
-- **CSRF Protection**: Built into NextAuth.js
-- **Input Validation**: Zod schemas for all user inputs
-- **SQL Injection Prevention**: Prisma ORM parameterized queries
-- **XSS Protection**: React's built-in escaping
-- **Route Protection**: Middleware for authentication checks
+- Dashboard routes require authentication.
+- User-owned queries must include `userId` filters.
+- Global tables such as `ExchangeRate` are not user-owned.
+- Prisma prevents SQL injection for normal ORM queries.
+- Zod schemas validate user input before database work.
+- Balance-changing workflows should use Prisma transactions.
+- Sensitive text fields use encrypted companion columns where implemented.
+- The production cron endpoint checks `CRON_SECRET` bearer auth.
 
 ## Usage
 
-### First-Time Setup
+### First-Time Flow
 
-1. **Register an Account**: Navigate to `/register` and create your account
-2. **Set Main Currency**: Configure your preferred reporting currency in settings
-3. **Add Financial Accounts**: Create accounts for banks, cash, investments, etc.
-4. **Set Financial Goals**: Configure retirement target and monthly budget
+1. Register an account at `/register`.
+2. Sign in at `/login`.
+3. Set your main currency and financial targets in the profile area.
+4. Create financial accounts for bank, cash, investments, liabilities, credit cards, or loans receivable.
+5. Add categories, transactions, recurring rules, budgets, goals, investments, liabilities, receivable transfers, and personal assets as needed.
+6. Review the dashboard, calendar, reports, and data import/export pages.
 
-### Managing Accounts
+### Account Types
 
-```typescript
-// Example: Creating a new account via Server Action
-import { createAccount } from "@/actions/account-actions";
+| Type | Meaning |
+|------|---------|
+| `BANK` | Bank account asset |
+| `CASH` | Cash asset |
+| `INVESTMENT` | Investment account asset |
+| `LOAN` | Liability account |
+| `CREDIT_CARD` | Liability account |
+| `LOAN_RECEIVABLE` | Asset account for principal owed to the user |
 
-const result = await createAccount({
-  name: "Main Savings",
-  type: "BANK",
-  currency: "IDR",
-  balance: 10000000,
-  description: "Primary savings account"
-});
-```
+Account classification and balance normalization live in `src/lib/account-types.ts`.
 
-### Recording Transactions
+### Financial Data Notes
 
-```typescript
-// Example: Adding a transaction
-import { createTransaction } from "@/actions/transaction-actions";
+- Live market and FX data comes from Yahoo Finance through `src/lib/finance-service.ts`.
+- Quote fetches are cached and should keep fallback/error behavior so the UI remains usable when Yahoo Finance is unavailable.
+- Precious-metal holdings may use `TROY_OUNCE` or `GRAM` units through `src/lib/unit-conversion.ts`.
 
-const result = await createTransaction({
-  amount: 500000,
-  currency: "IDR",
-  type: "EXPENSE",
-  description: "Groceries",
-  accountId: "account-id-here",
-  categoryId: "category-id-here",
-  date: new Date()
-});
-```
+## API and Server Actions
 
-### Adding Investments
+Most data changes are implemented as Server Actions in `src/actions`. API routes are used for Auth.js, selected client-friendly reads, and scheduled work.
 
-```typescript
-// Example: Adding an investment asset
-import { createInvestmentAsset } from "@/actions/investment-actions";
-
-const result = await createInvestmentAsset({
-  symbol: "AAPL",
-  quantity: 10,
-  avgBuyPrice: 150.00,
-  accountId: "investment-account-id"
-});
-```
-
-### Recording Trades
-
-```typescript
-// Example: Recording a buy trade
-import { addTrade } from "@/actions/investment-actions";
-
-const result = await addTrade({
-  assetId: "asset-id-here",
-  type: "BUY",
-  quantity: 5,
-  pricePerUnit: 155.00,
-  fees: 5.00,
-  date: new Date()
-});
-```
-
-### Setting Up Recurring Transactions
-
-```typescript
-// Example: Creating a recurring rule
-import { createRecurringRule } from "@/actions/recurring-actions";
-
-const result = await createRecurringRule({
-  name: "Monthly Rent",
-  amount: 5000000,
-  currency: "IDR",
-  type: "EXPENSE",
-  interval: "MONTHLY",
-  nextDueDate: new Date("2024-02-01"),
-  description: "Apartment rent",
-  accountId: "account-id-here",
-  categoryId: "category-id-here"
-});
-```
-
-## API Endpoints
-
-### Authentication Endpoints
+### API Routes
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET/POST` | `/api/auth/[...nextauth]` | NextAuth.js authentication handlers |
+| `GET/POST` | `/api/auth/[...nextauth]` | Auth.js handlers |
+| `GET` | `/api/accounts/by-type` | Authenticated active accounts grouped by account role |
+| `GET` | `/api/categories?type=...` | Authenticated categories filtered by transaction type |
+| `GET` | `/api/investments/[id]/trades` | Authenticated trade history for an owned investment asset |
+| `GET` | `/api/cron/recurring` | Processes due recurring transactions; protected by `CRON_SECRET` in production |
 
-### REST API Endpoints
+### Server Action Areas
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/categories` | List all categories |
-| `POST` | `/api/categories` | Create new category |
-| `GET` | `/api/investments/[id]/trades` | Get trades for an investment |
-| `POST` | `/api/investments/[id]/trades` | Add trade to investment |
-| `GET` | `/api/cron/recurring` | Process recurring transactions (cron job) |
-| `GET` | `/api/exchange-rate` | Get current exchange rates |
-
-### Server Actions
-
-All data mutations are handled through Server Actions located in `src/actions/`:
-
-- **`account-actions.ts`**: Account CRUD operations
-- **`transaction-actions.ts`**: Transaction management
-- **`investment-actions.ts`**: Investment and trade operations
-- **`recurring-actions.ts`**: Recurring transaction rules
-- **`exchange-rate-actions.ts`**: Exchange rate operations
-- **`auth-actions.ts`**: Authentication helpers
+- `account-actions.ts` - Accounts and account summaries.
+- `auth-actions.ts` - Registration and auth helpers.
+- `budget-actions.ts` - Budget CRUD and budget calculations.
+- `calendar-actions.ts` - Calendar and upcoming event data.
+- `category-actions.ts` - Category CRUD.
+- `exchange-rate-actions.ts` - Exchange-rate reads and cache persistence.
+- `export-actions.ts` and `import-actions.ts` - Data export/import.
+- `goal-actions.ts` - Savings goals and progress.
+- `investment-actions.ts` - Investment assets, trades, valuation, and searches.
+- `liability-payment-actions.ts` - Liability payment flows and audit history.
+- `personal-asset-actions.ts` - Personal asset inventory and valuations.
+- `profile-actions.ts` - User currency and financial target settings.
+- `receivable-actions.ts` - Loans Receivable disbursement, repayment, summary, and history.
+- `recurring-actions.ts` - Recurring rules and scheduled transaction processing.
+- `report-actions.ts` - Report metrics and chart data.
+- `transaction-actions.ts` - Transaction CRUD, transfers, filters, and balance updates.
 
 ## Project Structure
 
-```
+```text
 expense-tracker/
-├── prisma/                     # Database schema and migrations
-│   ├── schema.prisma          # Prisma schema definition
-│   └── migrations/            # Database migrations
-├── public/                     # Static assets
+├── content/                   # Changelog content rendered in the dashboard
+├── plans/                     # Architecture and implementation notes
+├── prisma/
+│   ├── schema.prisma
+│   └── migrations/
+├── public/
 ├── src/
-│   ├── actions/               # Server Actions for data mutations
-│   │   ├── account-actions.ts
-│   │   ├── auth-actions.ts
-│   │   ├── exchange-rate-actions.ts
-│   │   ├── investment-actions.ts
-│   │   ├── recurring-actions.ts
-│   │   └── transaction-actions.ts
-│   ├── app/                   # Next.js App Router
-│   │   ├── (auth)/            # Auth route group
-│   │   │   ├── login/
-│   │   │   └── register/
-│   │   ├── (dashboard)/       # Dashboard route group
-│   │   │   └── dashboard/
-│   │   │       ├── accounts/
-│   │   │       ├── investments/
-│   │   │       ├── recurring/
-│   │   │       └── transactions/
-│   │   ├── api/               # API routes
-│   │   ├── globals.css
-│   │   ├── layout.tsx
-│   │   └── page.tsx
-│   ├── components/            # React components
-│   │   ├── accounts/
-│   │   ├── dashboard/
-│   │   ├── investments/
-│   │   ├── providers/
-│   │   ├── recurring/
-│   │   ├── transactions/
-│   │   └── ui/               # shadcn/ui components
-│   ├── contexts/             # React contexts
-│   │   └── CurrencyContext.tsx
-│   ├── hooks/                # Custom React hooks
-│   │   ├── useExchangeRateQuery.ts
-│   │   └── useTradeHistory.ts
-│   ├── lib/                  # Utility libraries
-│   │   ├── db.ts            # Prisma client
-│   │   ├── executive-service.ts
-│   │   ├── executive-types.ts
-│   │   ├── finance-service.ts
-│   │   └── utils.ts
-│   ├── types/                # TypeScript type definitions
-│   │   ├── next-auth.d.ts
-│   │   └── trade-history.ts
+│   ├── actions/               # Server Actions by feature area
+│   ├── app/                   # Next.js App Router pages, layouts, and API routes
+│   ├── components/            # Feature components plus shadcn/ui primitives
+│   ├── contexts/              # React contexts
+│   ├── hooks/                 # TanStack Query hooks
+│   ├── lib/                   # Domain services, Prisma client, encryption, utils
+│   ├── scripts/               # One-off operational scripts
+│   ├── types/                 # Shared TypeScript declarations
 │   ├── auth.config.ts
 │   ├── auth.ts
 │   └── middleware.ts
-├── .env                       # Environment variables
-├── components.json            # shadcn/ui configuration
+├── components.json
 ├── next.config.ts
 ├── package.json
 ├── postcss.config.mjs
-├── tailwind.config.ts
+├── prisma.config.ts
+├── pnpm-workspace.yaml
 ├── tsconfig.json
-└── vercel.json               # Vercel deployment configuration
+└── vercel.json
 ```
 
-## Contributing
-
-We welcome contributions! Please follow these guidelines:
-
-### Development Workflow
-
-1. **Fork the Repository**: Create your own fork of the project
-2. **Create a Branch**: `git checkout -b feature/your-feature-name`
-3. **Make Changes**: Implement your feature or bug fix
-4. **Test**: Ensure your changes work as expected
-5. **Commit**: Use conventional commits (`feat:`, `fix:`, `docs:`, etc.)
-6. **Push**: `git push origin feature/your-feature-name`
-7. **Pull Request**: Submit a PR with a clear description
-
-### Code Standards
-
-- **TypeScript**: All code must be type-safe
-- **ESLint**: Follow the configured linting rules
-- **Formatting**: Use consistent formatting (2 spaces indentation)
-- **Component Structure**: Follow existing component patterns
-- **Naming**: Use descriptive names for variables, functions, and components
-
-### Commit Message Format
-
-```
-<type>(<scope>): <subject>
-
-<body>
-
-<footer>
-```
-
-Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
-
-Example:
-```
-feat(accounts): add support for investment account type
-
-- Add INVESTMENT to AccountType enum
-- Update account creation form
-- Add portfolio tracking for investment accounts
-```
+Dashboard pages currently include accounts, assets, budgets, calendar, categories, data, goals, investments, liabilities, profile, receivables, recurring, reports, and transactions.
 
 ## Testing
 
-### Running Tests
-
-Currently, the project uses manual testing. To add automated tests:
+The project currently relies on linting plus manual verification.
 
 ```bash
-# Install testing dependencies
-pnpm add -D vitest @testing-library/react @testing-library/jest-dom
-
-# Run tests (when implemented)
-pnpm test
+pnpm lint
 ```
 
-### Manual Testing Checklist
+For broader validation, run:
 
-Before submitting changes, verify:
+```bash
+pnpm build
+```
 
-- [ ] Authentication flows work correctly
-- [ ] Account creation and updates function properly
-- [ ] Transactions are recorded accurately
-- [ ] Investment calculations are correct
-- [ ] Currency conversions work as expected
-- [ ] Recurring transactions process correctly
-- [ ] Dashboard metrics display accurately
+Manual verification should cover the affected feature area. For financial changes, also check related balances, dashboard metrics, reports, and cross-feature invalidation.
+
+### Manual Checklist
+
+- Authentication and protected dashboard routes.
+- Account CRUD, account type grouping, and balance normalization.
+- Transaction creation/editing, transfers, liability payments, and location metadata.
+- Loans Receivable disbursement and repayment.
+- Investment trades, valuation, realized/unrealized PnL, Yahoo Finance fallback handling, and unit conversion.
+- Personal asset valuation and disposal history.
+- Budgets, savings goals, profile targets, dashboard metrics, reports, and calendar.
+- Import/export and category management.
+- Recurring transaction processing through the cron action/route.
 
 ## Deployment
 
-### Deploying to Vercel
+### Vercel
 
-1. **Connect Repository**: Link your GitHub repository to Vercel
-2. **Configure Environment Variables**: Add all required env vars in Vercel dashboard
-3. **Database Setup**: Ensure your MySQL database is accessible from Vercel
-4. **Deploy**: Vercel will automatically deploy on pushes to main branch
+1. Connect the repository to Vercel.
+2. Configure `DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL`, `CRON_SECRET`, and `ENCRYPTION_MASTER_KEY`.
+3. Ensure the MySQL/MariaDB database is reachable from the deployment environment.
+4. Run production migrations before or during deployment:
 
-### Vercel Configuration
+```bash
+pnpm db:migrate:prod
+```
 
-The `vercel.json` file configures:
+`vercel.json` schedules `/api/cron/recurring` daily at midnight UTC:
 
-- **Cron Jobs**: Daily recurring transaction processing
-- **Build Settings**: Node.js runtime configuration
-
-Example `vercel.json`:
 ```json
 {
   "crons": [
@@ -547,103 +377,61 @@ Example `vercel.json`:
 }
 ```
 
-### Database Migration on Production
-
-Before deploying:
-
-```bash
-# Run migrations on production database
-pnpm prisma migrate deploy
-```
-
 ### Self-Hosting
 
-For self-hosted deployments:
+```bash
+pnpm build
+pnpm start
+```
 
-1. **Build the Application**:
-   ```bash
-   pnpm build
-   ```
-
-2. **Start Production Server**:
-   ```bash
-   pnpm start
-   ```
-
-3. **Configure Reverse Proxy**: Use Nginx or similar for SSL and routing
+Use a reverse proxy such as Nginx or Caddy for HTTPS and routing when self-hosting.
 
 ## Troubleshooting
 
-### Common Issues
+### Database Connection Errors
 
-#### Database Connection Errors
+- Verify MySQL/MariaDB is running.
+- Confirm `DATABASE_URL` points to an existing database.
+- Increase connection and pool timeouts if the local database is slow to accept connections.
+- Run `pnpm prisma generate` after dependency or schema changes.
 
-**Problem**: `Can't reach database server`
+### Authentication Issues
 
-**Solution**:
-- Verify MySQL is running: `sudo systemctl status mysql`
-- Check connection string format in `.env`
-- Ensure database exists: `CREATE DATABASE expense_tracker;`
+- Confirm `AUTH_SECRET` is set and stable between restarts.
+- Confirm `AUTH_URL` matches the app URL.
+- Clear browser cookies if session state is stale.
 
-#### Authentication Issues
+### Encryption Issues
 
-**Problem**: `JWT must be provided` or session errors
+- Set `ENCRYPTION_MASTER_KEY` to a base64-encoded 32-byte value.
+- Generate it with `openssl rand -base64 32`.
+- Back up the database before running `src/scripts/migrate-encryption.ts`.
 
-**Solution**:
-- Verify `AUTH_SECRET` is set and properly formatted
-- Clear browser cookies and local storage
-- Check `AUTH_URL` matches your actual URL
+### Build Errors
 
-#### Build Errors
+- Regenerate Prisma client with `pnpm prisma generate`.
+- Remove `.next` and rebuild with `pnpm build` if cached build artifacts are stale.
+- Reinstall dependencies with `pnpm install` if modules are missing.
 
-**Problem**: `Module not found` or TypeScript errors
+### Yahoo Finance or Exchange-Rate Issues
 
-**Solution**:
-- Delete `.next` folder and rebuild: `rm -rf .next && pnpm build`
-- Regenerate Prisma client: `pnpm prisma generate`
-- Reinstall dependencies: `rm -rf node_modules && pnpm install`
-
-#### Exchange Rate Fetching Issues
-
-**Problem**: Exchange rates not updating
-
-**Solution**:
-- Check internet connectivity
-- Verify no firewall blocking API calls
-- Clear cache: The app caches exchange rates for performance
-
-### Getting Help
-
-If you encounter issues not covered here:
-
-1. Check the [GitHub Issues](https://github.com/fakhririzha/expense-tracker/issues)
-2. Review the [Next.js Documentation](https://nextjs.org/docs)
-3. Consult the [Prisma Documentation](https://www.prisma.io/docs)
+- Check internet connectivity.
+- Expect temporary rate limits or unavailable quotes.
+- Keep fallback/error states in valuation UI so financial pages remain usable.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+No license file is currently included in this repository.
 
 ## Acknowledgments
 
-### Technologies & Libraries
+- [Next.js](https://nextjs.org/)
+- [React](https://react.dev/)
+- [Auth.js](https://authjs.dev/)
+- [Prisma](https://www.prisma.io/)
+- [shadcn/ui](https://ui.shadcn.com/)
+- [Radix UI](https://www.radix-ui.com/)
+- [TanStack Query](https://tanstack.com/query)
+- [Yahoo Finance](https://finance.yahoo.com/)
 
-- **[Next.js](https://nextjs.org/)**: The React Framework for the Web
-- **[Auth.js](https://authjs.dev/)**: Authentication for the Web
-- **[Prisma](https://www.prisma.io/)**: Next-generation ORM
-- **[shadcn/ui](https://ui.shadcn.com/)**: Beautifully designed components
-- **[Radix UI](https://www.radix-ui.com/)**: Unstyled, accessible components
-- **[TanStack Query](https://tanstack.com/query)**: Powerful asynchronous state management
-- **[Yahoo Finance](https://finance.yahoo.com/)**: Financial data provider
-
-### Contributors
-
-Thank you to all contributors who have helped make this project better!
-
-### Inspiration
-
-This project was inspired by the need for a simple yet powerful personal finance tool that combines expense tracking with investment management in a single, intuitive interface.
-
----
-
-Built with ❤️ using Next.js and modern web technologies.
+Built with Next.js and modern TypeScript tooling.
