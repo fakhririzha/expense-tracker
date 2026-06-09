@@ -433,6 +433,14 @@ import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 - Always check `session?.user?.id` before database operations
 - Use try/catch blocks and return user-friendly error messages
 
+## Changelog Updates
+
+- Update `content/changelog.md` whenever a change is user-facing enough to matter in release notes.
+- Write changelog entries in product language, focusing on features, user-visible improvements, and outcomes rather than implementation details, component names, CSS utilities, or refactors.
+- Keep each version entry concise, usually 2 to 4 bullets, and place the newest version at the top.
+- If a release is mostly internal cleanup with little user impact, say that plainly as a maintenance release instead of overstating it.
+- When summarizing UI work, describe the experience improvement such as better mobile layout, clearer navigation, smoother forms, or more consistent styling.
+
 ## Security Considerations
 
 - **CSRF Protection**: Built into NextAuth.js

@@ -1,5 +1,11 @@
 # FinHealth Changelog
 
+## v3.5.2
+
+- Improved the overall feel of forms, filters, menus, and data views with cleaner spacing and more consistent UI styling across the app.
+- Made dropdowns and command menus easier to use by giving them more balanced sizing and layout behavior.
+- Polished small interface details like checkbox styling, table selection alignment, and tooltip presentation for a smoother experience.
+
 ## v3.5.1
 
 - Improved responsive layouts across dashboard, accounts, budgets, calendar, categories, liabilities, goals, data export, and reports pages so summary cards adapt better on medium and large screens.
