@@ -1,5 +1,11 @@
 # FinHealth Changelog
 
+## v3.5.1
+
+- Improved responsive layouts across dashboard, accounts, budgets, calendar, categories, liabilities, goals, data export, and reports pages so summary cards adapt better on medium and large screens.
+- Made the reports tabs horizontally scrollable on smaller screens so every analytics section stays accessible without squeezing the tab labels.
+- Refined loading states and select widths in the calendar and goals screens, plus summary widgets for goals, loans receivable, and monthly reports, for cleaner spacing and alignment.
+
 ## v3.5.0
 
 - Added Loans Receivable for tracking principal owed to you from loans you funded.
