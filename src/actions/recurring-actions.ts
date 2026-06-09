@@ -39,12 +39,15 @@ export async function createRecurringRule(data: RecurringRuleInput) {
       };
     }
 
-    // Validate category belongs to the current user (IDOR prevention)
     const { categoryId, ...restData } = validatedFields.data;
-    if (categoryId) {
+    const normalizedCategoryId =
+      restData.type === "TRANSFER" ? null : categoryId?.trim() || null;
+
+    // Validate category belongs to the current user (IDOR prevention)
+    if (normalizedCategoryId) {
       const category = await prisma.category.findFirst({
         where: {
-          id: categoryId,
+          id: normalizedCategoryId,
           userId: session.user.id,
         },
       });
@@ -70,7 +73,7 @@ export async function createRecurringRule(data: RecurringRuleInput) {
         // Nullify optional plaintext after encryption
         description: restData.description ? null : undefined,
         descriptionEncrypted: encryptedDescription,
-        categoryId: categoryId?.trim() || null,
+        categoryId: normalizedCategoryId,
         userId: session.user.id,
       },
     });
@@ -103,19 +106,24 @@ export async function updateRecurringRule(
       return { success: false, error: "Recurring rule not found" };
     }
 
+    const nextType = data.type ?? existingRule.type;
+    const normalizedCategoryId =
+      nextType === "TRANSFER"
+        ? null
+        : data.categoryId !== undefined
+          ? data.categoryId?.trim() || null
+          : undefined;
+
     // Validate category belongs to the current user (IDOR prevention)
-    if (data.categoryId !== undefined) {
-      const sanitizedCategoryId = data.categoryId?.trim() || null;
-      if (sanitizedCategoryId) {
-        const category = await prisma.category.findFirst({
-          where: {
-            id: sanitizedCategoryId,
-            userId: session.user.id,
-          },
-        });
-        if (!category) {
-          return { success: false, error: "Category not found" };
-        }
+    if (normalizedCategoryId) {
+      const category = await prisma.category.findFirst({
+        where: {
+          id: normalizedCategoryId,
+          userId: session.user.id,
+        },
+      });
+      if (!category) {
+        return { success: false, error: "Category not found" };
       }
     }
 
@@ -134,7 +142,7 @@ export async function updateRecurringRule(
 
     const updateData: Record<string, unknown> = {
       ...data,
-      categoryId: data.categoryId !== undefined ? (data.categoryId?.trim() || null) : undefined,
+      categoryId: normalizedCategoryId,
     };
     
     // If name is being updated, also store encrypted version
@@ -200,6 +208,23 @@ export async function getRecurringRules() {
       where: { userId: session.user.id },
       orderBy: { nextDueDate: "asc" },
     });
+    const categoryIds = Array.from(
+      new Set(rules.map((rule) => rule.categoryId).filter(Boolean) as string[])
+    );
+    const categories = categoryIds.length
+      ? await prisma.category.findMany({
+          where: {
+            id: { in: categoryIds },
+            userId: session.user.id,
+          },
+          select: {
+            id: true,
+            name: true,
+            icon: true,
+          },
+        })
+      : [];
+    const categoryMap = new Map(categories.map((category) => [category.id, category]));
 
     // Decrypt sensitive fields
     const decryptedRules = await Promise.all(
@@ -236,6 +261,7 @@ export async function getRecurringRules() {
           ...rule,
           name: finalName,
           description: finalDescription,
+          category: rule.categoryId ? categoryMap.get(rule.categoryId) ?? null : null,
         };
       })
     );

@@ -1,5 +1,11 @@
 # FinHealth Changelog
 
+## v3.5.3
+
+- Added category selection to recurring income and expense rules so scheduled transactions can now stay mapped to the right personal category.
+- Updated recurring rule editing and list views to show the saved category more clearly, making recurring setups easier to review at a glance.
+- Kept recurring transfer rules uncategorized by design so category choices stay aligned with the current income-and-expense category model.
+
 ## v3.5.2
 
 - Improved the overall feel of forms, filters, menus, and data views with cleaner spacing and more consistent UI styling across the app.

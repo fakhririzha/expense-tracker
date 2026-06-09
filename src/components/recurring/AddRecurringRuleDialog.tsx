@@ -1,6 +1,7 @@
 "use client";
 
 import { useAccounts } from "@/hooks/useAccountQueries";
+import { useCategories } from "@/hooks/useCategoryQueries";
 import { useCreateRecurringRule } from "@/hooks/useRecurringQueries";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -38,8 +39,8 @@ import { cn } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
 import { CalendarIcon, Plus } from "lucide-react";
-import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useEffect, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 
 const recurringRuleFormSchema = z.object({
@@ -51,12 +52,17 @@ const recurringRuleFormSchema = z.object({
   nextDueDate: z.date(),
   endDate: z.date().optional(),
   description: z.string().optional(),
+  categoryId: z.string().optional(),
   accountId: z.string().optional(),
 });
 
 type RecurringRuleFormValues = z.infer<typeof recurringRuleFormSchema>;
 
-
+interface CategoryOption {
+  id: string;
+  name: string;
+  icon: string | null;
+}
 
 interface AddRecurringRuleDialogProps {
   onSuccess?: () => void;
@@ -77,12 +83,6 @@ export function AddRecurringRuleDialog({ onSuccess }: AddRecurringRuleDialogProp
   const [open, setOpen] = useState(false);
   const { data: accountsData = [] } = useAccounts();
   const createMutation = useCreateRecurringRule();
-
-  const accounts = accountsData.map((a: { id: string; name: string }) => ({
-    id: a.id,
-    name: a.name,
-  }));
-
   const form = useForm<RecurringRuleFormValues>({
     resolver: zodResolver(recurringRuleFormSchema),
     defaultValues: {
@@ -93,14 +93,49 @@ export function AddRecurringRuleDialog({ onSuccess }: AddRecurringRuleDialogProp
       interval: "MONTHLY",
       nextDueDate: new Date(),
       description: "",
+      categoryId: "",
       accountId: "",
     },
   });
+  const selectedType = useWatch({
+    control: form.control,
+    name: "type",
+    defaultValue: "EXPENSE",
+  });
+  const { data: categoriesData = [], isLoading: isLoadingCategories } = useCategories(selectedType);
 
+  const accounts = accountsData.map((a: { id: string; name: string }) => ({
+    id: a.id,
+    name: a.name,
+  }));
+  const categories = categoriesData.map((category: CategoryOption) => ({
+    id: category.id,
+    name: category.name,
+    icon: category.icon,
+  }));
+
+  useEffect(() => {
+    const currentCategoryId = form.getValues("categoryId");
+    if (!currentCategoryId) {
+      return;
+    }
+
+    if (selectedType === "TRANSFER") {
+      form.setValue("categoryId", "", { shouldDirty: true, shouldValidate: true });
+      return;
+    }
+
+    if (!isLoadingCategories && !categories.some((category) => category.id === currentCategoryId)) {
+      form.setValue("categoryId", "", { shouldDirty: true, shouldValidate: true });
+    }
+  }, [categories, form, isLoadingCategories, selectedType]);
 
   const onSubmit = async (data: RecurringRuleFormValues) => {
     try {
-      await createMutation.mutateAsync(data);
+      await createMutation.mutateAsync({
+        ...data,
+        categoryId: data.type === "TRANSFER" ? "" : data.categoryId,
+      });
       setOpen(false);
       form.reset();
       onSuccess?.();
@@ -220,6 +255,38 @@ export function AddRecurringRuleDialog({ onSuccess }: AddRecurringRuleDialogProp
                 </FormItem>
               )}
             />
+
+            {selectedType !== "TRANSFER" && (
+              <FormField
+                control={form.control}
+                name="categoryId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Category (Optional)</FormLabel>
+                    <Select
+                      onValueChange={(value) => field.onChange(value === "none" ? "" : value)}
+                      value={field.value || "none"}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select category" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        {categories.map((category) => (
+                          <SelectItem key={category.id} value={category.id}>
+                            {category.icon ? `${category.icon} ` : ""}
+                            {category.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <FormField
               control={form.control}
