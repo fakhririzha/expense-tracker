@@ -1,5 +1,10 @@
 # FinHealth Changelog
 
+## v4.2.1
+
+- Improved the login page rendering flow so sign-in stays more reliable during production builds and static generation.
+- Kept registration-success and account-deletion confirmation messages working on the login screen without forcing the whole page into a heavier client-rendered path.
+
 ## v4.2.0
 
 - Added a permanent account deletion flow in Profile with email and current-password confirmation for safer self-service removal.
