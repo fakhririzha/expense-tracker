@@ -298,7 +298,7 @@ export default async function DashboardPage() {
             <CardTitle className="text-xl font-bold font-heading">Investment Performance</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-4 md:grid-cols-4">
+            <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
               <div>
                 <p className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Portfolio Value</p>
                 <p className="text-2xl font-black">

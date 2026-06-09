@@ -73,7 +73,7 @@ export default function GoalsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
+      <div className="flex items-center justify-center min-h-100">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
@@ -107,7 +107,7 @@ export default function GoalsPage() {
             value={filterBy}
             onValueChange={(value) => setFilterBy(value as FilterOption)}
           >
-            <SelectTrigger className="w-[150px]">
+            <SelectTrigger className="w-37.5">
               <SelectValue placeholder="Filter goals" />
             </SelectTrigger>
             <SelectContent>
@@ -122,7 +122,7 @@ export default function GoalsPage() {
           value={sortBy}
           onValueChange={(value) => setSortBy(value as SortOption)}
         >
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-45">
             <SelectValue placeholder="Sort by" />
           </SelectTrigger>
           <SelectContent>

@@ -120,18 +120,30 @@ export default function ReportsPage() {
       {/* Content */}
       {!isLoading && (
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="spending">Spending</TabsTrigger>
-            <TabsTrigger value="categories">Categories</TabsTrigger>
-            <TabsTrigger value="income-expense">Income vs Expense</TabsTrigger>
-            <TabsTrigger value="net-worth">Net Worth</TabsTrigger>
-          </TabsList>
+          <div className="w-full overflow-x-auto pb-1">
+            <TabsList className="flex w-max min-w-full justify-start md:grid md:w-full md:grid-cols-5">
+              <TabsTrigger value="overview" className="min-w-max md:min-w-0">
+                Overview
+              </TabsTrigger>
+              <TabsTrigger value="spending" className="min-w-max md:min-w-0">
+                Spending
+              </TabsTrigger>
+              <TabsTrigger value="categories" className="min-w-max md:min-w-0">
+                Categories
+              </TabsTrigger>
+              <TabsTrigger value="income-expense" className="min-w-max md:min-w-0">
+                Income vs Expense
+              </TabsTrigger>
+              <TabsTrigger value="net-worth" className="min-w-max md:min-w-0">
+                Net Worth
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           {/* Overview Tab */}
           <TabsContent value="overview" className="space-y-6">
             {/* Quick Stats */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Total Income</CardTitle>

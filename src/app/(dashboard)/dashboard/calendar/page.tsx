@@ -72,7 +72,7 @@ export default function CalendarPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
         {isLoading ? (
           <>
             <Skeleton className="h-28" />
@@ -151,7 +151,7 @@ export default function CalendarPage() {
               value={filterType}
               onValueChange={(value) => setFilterType(value as TransactionType | "ALL")}
             >
-              <SelectTrigger className="w-[150px]">
+              <SelectTrigger className="w-37.5">
                 <SelectValue placeholder="Filter by type" />
               </SelectTrigger>
               <SelectContent>
@@ -191,7 +191,7 @@ export default function CalendarPage() {
         <div className="space-y-6">
           {/* Upcoming Bills Widget */}
           {isLoading ? (
-            <Skeleton className="h-[400px]" />
+            <Skeleton className="h-100" />
           ) : (
             <UpcomingBillsWidget
               events={upcomingBills as CalendarEvent[]}

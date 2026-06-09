@@ -85,7 +85,7 @@ export function MonthlySummaryCard({
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Main Stats */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <div className="text-center">
             <p className="text-sm text-muted-foreground">Income</p>
             <p className="text-xl font-bold text-green-600">
