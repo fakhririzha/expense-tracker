@@ -111,20 +111,18 @@ async function decryptName(
   }
 }
 
-export async function getUpcomingBankPressure(days: number = DEFAULT_WINDOW_DAYS) {
+export async function getUpcomingBankPressureForUser(
+  userId: string,
+  days: number = DEFAULT_WINDOW_DAYS
+) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
-
     const safeDays = Number.isFinite(days) && days > 0 ? Math.floor(days) : DEFAULT_WINDOW_DAYS;
     const rangeStart = startOfDay(new Date());
     const rangeEnd = endOfDay(addDays(rangeStart, safeDays - 1));
 
     const bankAccounts = await prisma.financialAccount.findMany({
       where: {
-        userId: session.user.id,
+        userId,
         isActive: true,
         type: "BANK",
       },
@@ -146,7 +144,7 @@ export async function getUpcomingBankPressure(days: number = DEFAULT_WINDOW_DAYS
     const [recurringRules, subscriptions] = await Promise.all([
       prisma.recurringRule.findMany({
         where: {
-          userId: session.user.id,
+          userId,
           isActive: true,
           accountId: { in: bankAccountIds },
           type: { in: [TransactionType.EXPENSE, TransactionType.TRANSFER] },
@@ -171,7 +169,7 @@ export async function getUpcomingBankPressure(days: number = DEFAULT_WINDOW_DAYS
       }),
       prisma.subscription.findMany({
         where: {
-          userId: session.user.id,
+          userId,
           recurringRuleId: null,
           accountId: { in: bankAccountIds },
           status: { in: [SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIAL] },
@@ -197,7 +195,7 @@ export async function getUpcomingBankPressure(days: number = DEFAULT_WINDOW_DAYS
         {
           ...account,
           name: await decryptName(
-            session.user.id,
+            userId,
             "account.name",
             account.nameEncrypted,
             account.name
@@ -213,7 +211,7 @@ export async function getUpcomingBankPressure(days: number = DEFAULT_WINDOW_DAYS
         {
           ...rule,
           name: await decryptName(
-            session.user.id,
+            userId,
             "recurringRule.name",
             rule.nameEncrypted,
             rule.name
@@ -229,7 +227,7 @@ export async function getUpcomingBankPressure(days: number = DEFAULT_WINDOW_DAYS
         {
           ...subscription,
           name: await decryptName(
-            session.user.id,
+            userId,
             "subscription.name",
             subscription.nameEncrypted,
             subscription.name
@@ -447,6 +445,19 @@ export async function getUpcomingBankPressure(days: number = DEFAULT_WINDOW_DAYS
     return { success: true, data: alerts };
   } catch (error) {
     console.error("Get upcoming bank pressure error:", error);
+    return { success: false, error: "Failed to fetch upcoming bank pressure" };
+  }
+}
+
+export async function getUpcomingBankPressure(days: number = DEFAULT_WINDOW_DAYS) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return { success: false, error: "Unauthorized" };
+    }
+    return getUpcomingBankPressureForUser(session.user.id, days);
+  } catch (error) {
+    console.error("Get upcoming bank pressure action error:", error);
     return { success: false, error: "Failed to fetch upcoming bank pressure" };
   }
 }

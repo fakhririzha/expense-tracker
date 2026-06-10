@@ -13,6 +13,14 @@ const PRECACHE_URLS = [
   "/favicon.ico",
 ];
 
+const DEFAULT_NOTIFICATION = {
+  title: "FinHealth",
+  body: "You have a FinHealth update.",
+  url: "/dashboard",
+  icon: "/icons/icon-192x192.png",
+  badge: "/icons/maskable-icon-192x192.png",
+};
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches
@@ -85,6 +93,77 @@ async function cacheFirst(request) {
   }
   return response;
 }
+
+function normalizeNotificationUrl(url) {
+  if (typeof url !== "string" || url.length === 0) {
+    return DEFAULT_NOTIFICATION.url;
+  }
+
+  if (!url.startsWith("/dashboard") || url.includes("://")) {
+    return DEFAULT_NOTIFICATION.url;
+  }
+
+  return url;
+}
+
+self.addEventListener("push", (event) => {
+  const payload = (() => {
+    if (!event.data) {
+      return DEFAULT_NOTIFICATION;
+    }
+
+    try {
+      const parsed = event.data.json();
+      return {
+        title: parsed.title || DEFAULT_NOTIFICATION.title,
+        body: parsed.body || DEFAULT_NOTIFICATION.body,
+        url: normalizeNotificationUrl(parsed.url),
+        icon: DEFAULT_NOTIFICATION.icon,
+        badge: DEFAULT_NOTIFICATION.badge,
+        tag: parsed.tag || undefined,
+      };
+    } catch {
+      return DEFAULT_NOTIFICATION;
+    }
+  })();
+
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      icon: payload.icon,
+      badge: payload.badge,
+      tag: payload.tag,
+      data: {
+        url: normalizeNotificationUrl(payload.url),
+      },
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  const targetUrl = normalizeNotificationUrl(event.notification.data?.url);
+  event.notification.close();
+
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) {
+        const clientUrl = new URL(client.url);
+        if (clientUrl.origin === self.location.origin && clientUrl.pathname.startsWith("/dashboard")) {
+          if ("focus" in client) {
+            return client.focus().then(() => {
+              if ("navigate" in client && clientUrl.pathname !== targetUrl) {
+                return client.navigate(targetUrl);
+              }
+              return undefined;
+            });
+          }
+        }
+      }
+
+      return self.clients.openWindow(targetUrl);
+    })
+  );
+});
 
 self.addEventListener("fetch", (event) => {
   const { request } = event;

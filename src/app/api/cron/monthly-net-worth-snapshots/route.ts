@@ -3,6 +3,7 @@ import {
   getPreviousMonthPeriod,
   shouldRunMonthlySnapshot,
 } from "@/lib/net-worth-period";
+import { sendMonthlySnapshotReadyNotification } from "@/lib/notification-service";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -38,6 +39,20 @@ export async function GET(request: Request) {
 
     const targetPeriod = getPreviousMonthPeriod(nowUtc);
     const result = await createMissingMonthlyNetWorthSnapshots(targetPeriod);
+
+    for (const userId of result.createdUserIds) {
+      try {
+        await sendMonthlySnapshotReadyNotification(
+          userId,
+          `${targetPeriod.year}-${String(targetPeriod.month).padStart(2, "0")}`
+        );
+      } catch (error) {
+        console.error(
+          `Monthly snapshot notification error for user ${userId}:`,
+          error
+        );
+      }
+    }
 
     return NextResponse.json(result, { status: 200 });
   } catch (error) {

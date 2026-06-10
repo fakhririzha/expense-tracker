@@ -196,6 +196,7 @@ export async function createMissingMonthlyNetWorthSnapshots(
   period: string;
   attempted: number;
   created: number;
+  createdUserIds: string[];
   skippedExisting: number;
   failed: number;
   errors: Array<{ userId: string; error: string }>;
@@ -203,6 +204,7 @@ export async function createMissingMonthlyNetWorthSnapshots(
 }> {
   const startedAt = Date.now();
   const errors: Array<{ userId: string; error: string }> = [];
+  const createdUserIds: string[] = [];
   let attempted = 0;
   let created = 0;
   let skippedExisting = 0;
@@ -230,6 +232,7 @@ export async function createMissingMonthlyNetWorthSnapshots(
 
         if (result.created) {
           created += 1;
+          createdUserIds.push(user.id);
         } else if (result.skippedExisting) {
           skippedExisting += 1;
         }
@@ -247,6 +250,7 @@ export async function createMissingMonthlyNetWorthSnapshots(
     period: getPeriodKey(period),
     attempted,
     created,
+    createdUserIds,
     skippedExisting,
     failed,
     errors,

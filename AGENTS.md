@@ -227,6 +227,9 @@ There is no `postinstall` script in the current `package.json`. Do not assume de
 | `AUTH_URL` | Base URL for auth callbacks, usually `http://localhost:3000` locally | Yes |
 | `CRON_SECRET` | Bearer token for securing cron endpoints in production | Yes in production |
 | `ENCRYPTION_MASTER_KEY` | Base64-encoded 32-byte key for field-level encryption and encryption migration | Required for encrypted field support |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Public VAPID key used by the browser when creating push subscriptions | Required for web push |
+| `VAPID_PRIVATE_KEY` | Private VAPID key used only on the server for Web Push authentication | Required for web push |
+| `VAPID_SUBJECT` | Contact subject for VAPID, usually `mailto:...` or the deployed app URL | Required for web push |
 
 Generate an encryption key with:
 
@@ -615,7 +618,7 @@ import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 - **SQL Injection Prevention**: Use Prisma ORM queries; do not build raw SQL from user input.
 - **XSS Protection**: React escapes rendered values by default; avoid unsafe HTML unless explicitly sanitized.
 - **Route Protection**: Middleware checks authentication for dashboard routes.
-- **Cron Endpoints**: `/api/cron/recurring` and `/api/cron/monthly-net-worth-snapshots` require `CRON_SECRET` bearer auth in production.
+- **Cron Endpoints**: `/api/cron/recurring`, `/api/cron/monthly-net-worth-snapshots`, and `/api/cron/notifications` require `CRON_SECRET` bearer auth in production.
 - **User Isolation**: All queries for user-owned models must include `userId`. Do not apply this to global tables like `ExchangeRate`.
 - **Encryption**: Use encrypted companion fields and user encryption helpers for sensitive text and request metadata.
 - **Balance Integrity**: Balance-changing flows must use Prisma transactions and validate ownership of every involved account.
@@ -646,8 +649,8 @@ For doc-only changes, `git diff --check` is usually sufficient unless the change
 
 ### Vercel Deployment
 
-- `vercel.json` configures `/api/cron/monthly-net-worth-snapshots` at `0 0 * * *` and `/api/cron/recurring` at `15 0 * * *`.
-- Ensure `CRON_SECRET`, `DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL`, and any production encryption key are set in the deployment environment.
+- `vercel.json` configures `/api/cron/monthly-net-worth-snapshots` at `0 0 * * *`, `/api/cron/recurring` at `15 0 * * *`, and `/api/cron/notifications` at `30 0 * * *`.
+- Ensure `CRON_SECRET`, `DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL`, `ENCRYPTION_MASTER_KEY`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and `VAPID_SUBJECT` are set in the deployment environment.
 
 ### Database Migration on Production
 
