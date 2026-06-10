@@ -1,5 +1,10 @@
 # FinHealth Changelog
 
+## v4.4.1
+
+- Fixed the dashboard install prompt so the header renders more reliably on first load without hydration errors in supported browsers.
+- Kept the install experience intact after page load, including browser-specific install guidance and dismiss timing behavior.
+
 ## v4.4.0
 
 - Added browser push notifications with opt-in controls in Profile so you can enable or disable reminders per device and choose which finance events can reach you.
