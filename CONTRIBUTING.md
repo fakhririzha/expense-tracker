@@ -57,6 +57,9 @@ This project and everyone participating in it is governed by a commitment to:
    AUTH_URL="http://localhost:3000"
    CRON_SECRET="replace-for-production-cron"
    ENCRYPTION_MASTER_KEY="replace-with-openssl-output"
+   NEXT_PUBLIC_VAPID_PUBLIC_KEY="replace-with-web-push-public-key"
+   VAPID_PRIVATE_KEY="replace-with-web-push-private-key"
+   VAPID_SUBJECT="mailto:you@example.com"
    ```
 
    Generate secrets with:

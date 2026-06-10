@@ -49,6 +49,9 @@ model User {
   personalAssets    PersonalAsset[]
   personalAssetValuations PersonalAssetValuation[]
   netWorthSnapshots NetWorthSnapshot[]
+  pushSubscriptions PushSubscription[]
+  notificationPreference NotificationPreference?
+  notificationEvents NotificationEvent[]
 }
 
 model AuthAccount {
@@ -615,4 +618,95 @@ model PersonalAssetValuation {
 
   @@index([assetId, valuedAt])
   @@index([userId])
+}
+
+enum NotificationType {
+  TEST
+  SUBSCRIPTION_RENEWAL
+  RECURRING_TRANSACTION_DUE
+  BUDGET_THRESHOLD
+  LOW_CASH_FORECAST
+  MONTHLY_NET_WORTH_SNAPSHOT
+  GOAL_PROGRESS
+  IMPORT_EXPORT_COMPLETION
+}
+
+enum NotificationDeliveryStatus {
+  PENDING
+  SENT
+  PARTIAL_FAILURE
+  FAILED
+  SKIPPED
+}
+
+model PushSubscription {
+  id                 String   @id @default(cuid())
+  endpointHash       String   @unique
+  endpointEncrypted  String   @db.Text
+  p256dhEncrypted    String   @db.Text
+  authEncrypted      String   @db.Text
+  userAgentEncrypted String?  @db.Text
+  expirationTime     DateTime?
+  lastSeenAt         DateTime @default(now())
+  lastSuccessAt      DateTime?
+  lastFailureAt      DateTime?
+  failureCount       Int      @default(0)
+  disabledAt         DateTime?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([userId, disabledAt])
+  @@index([expirationTime])
+  @@index([lastFailureAt])
+}
+
+model NotificationPreference {
+  id                           String  @id @default(cuid())
+  pushEnabled                  Boolean @default(false)
+  subscriptionRenewalEnabled   Boolean @default(true)
+  recurringTransactionEnabled  Boolean @default(true)
+  budgetThresholdEnabled       Boolean @default(true)
+  lowCashForecastEnabled       Boolean @default(true)
+  monthlySnapshotEnabled       Boolean @default(true)
+  goalProgressEnabled          Boolean @default(true)
+  importExportCompletionEnabled Boolean @default(false)
+  subscriptionReminderLeadDays Int     @default(3)
+  recurringReminderLeadDays    Int     @default(1)
+  budgetThresholdPercent       Int     @default(80)
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model NotificationEvent {
+  id           String                     @id @default(cuid())
+  type         NotificationType
+  dedupeKey    String
+  title        String
+  body         String
+  targetPath   String
+  status       NotificationDeliveryStatus @default(PENDING)
+  successCount Int                        @default(0)
+  failureCount Int                        @default(0)
+  skippedReason String?
+  metadataJson Json?
+  sentAt       DateTime?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, type, dedupeKey])
+  @@index([userId, createdAt])
+  @@index([type, createdAt])
 }

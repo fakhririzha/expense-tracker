@@ -108,6 +108,9 @@ AUTH_SECRET="replace-with-openssl-output"
 AUTH_URL="http://localhost:3000"
 CRON_SECRET="replace-for-production-cron"
 ENCRYPTION_MASTER_KEY="replace-with-openssl-output"
+NEXT_PUBLIC_VAPID_PUBLIC_KEY="replace-with-web-push-public-key"
+VAPID_PRIVATE_KEY="replace-with-web-push-private-key"
+VAPID_SUBJECT="mailto:you@example.com"
 ```
 
 Generate secrets with:
@@ -151,6 +154,9 @@ Open [http://localhost:3000](http://localhost:3000).
 | `AUTH_URL` | Base auth callback URL, usually `http://localhost:3000` locally | Yes |
 | `CRON_SECRET` | Bearer token for the recurring transaction cron route in production | Yes in production |
 | `ENCRYPTION_MASTER_KEY` | Base64-encoded 32-byte key for field-level encryption | Required for encrypted field support |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Public VAPID key used by the browser when creating push subscriptions | Required for web push |
+| `VAPID_PRIVATE_KEY` | Private VAPID key used only on the server for Web Push authentication | Required for web push |
+| `VAPID_SUBJECT` | Contact subject for VAPID, usually `mailto:...` or the app URL | Required for web push |
 
 Database URL format:
 
@@ -272,6 +278,7 @@ Most data changes are implemented as Server Actions in `src/actions`. API routes
 | `GET` | `/api/categories?type=...` | Authenticated categories filtered by transaction type |
 | `GET` | `/api/investments/[id]/trades` | Authenticated trade history for an owned investment asset |
 | `GET` | `/api/cron/monthly-net-worth-snapshots` | Creates missing month-end net-worth snapshots when the first-day cron runs |
+| `GET` | `/api/cron/notifications` | Sends daily push-notification reminders for enabled users; protected by `CRON_SECRET` in production |
 | `GET` | `/api/cron/recurring` | Processes due recurring transactions; protected by `CRON_SECRET` in production |
 
 ### Server Action Areas
@@ -367,7 +374,7 @@ Manual verification should cover the affected feature area. For financial change
 ### Vercel
 
 1. Connect the repository to Vercel.
-2. Configure `DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL`, `CRON_SECRET`, and `ENCRYPTION_MASTER_KEY`.
+2. Configure `DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL`, `CRON_SECRET`, `ENCRYPTION_MASTER_KEY`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and `VAPID_SUBJECT`.
 3. Ensure the MySQL/MariaDB database is reachable from the deployment environment.
 4. Run production migrations before or during deployment:
 
@@ -375,7 +382,7 @@ Manual verification should cover the affected feature area. For financial change
 pnpm db:migrate:prod
 ```
 
-`vercel.json` currently schedules two cron jobs:
+`vercel.json` currently schedules three cron jobs:
 
 ```json
 {
@@ -383,6 +390,10 @@ pnpm db:migrate:prod
     {
       "path": "/api/cron/monthly-net-worth-snapshots",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/notifications",
+      "schedule": "30 0 * * *"
     },
     {
       "path": "/api/cron/recurring",

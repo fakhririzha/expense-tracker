@@ -1,5 +1,11 @@
 # FinHealth Changelog
 
+## v4.4.0
+
+- Added browser push notifications with opt-in controls in Profile so you can enable or disable reminders per device and choose which finance events can reach you.
+- Added privacy-safe notification delivery for subscription renewals, recurring due reminders, budget warnings, goal reminders, monthly snapshot updates, and upcoming cash-pressure alerts.
+- Added a test notification flow plus background notification scheduling so reminder delivery can be verified without exposing sensitive financial details in the push message.
+
 ## v4.3.0
 
 - Added installable PWA support so FinHealth can be added to the home screen on supported desktop and mobile browsers.

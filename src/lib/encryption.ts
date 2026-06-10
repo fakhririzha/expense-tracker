@@ -114,6 +114,12 @@ export const FIELD_CLASSIFICATIONS: Record<string, FieldClassification> = {
   // LiabilityPaymentAudit model (Critical - security related)
   "liabilityPaymentAudit.ipAddress": FieldClassification.CRITICAL,
   "liabilityPaymentAudit.userAgent": FieldClassification.CRITICAL,
+
+  // PushSubscription model
+  "pushSubscription.endpoint": FieldClassification.CRITICAL,
+  "pushSubscription.p256dh": FieldClassification.CRITICAL,
+  "pushSubscription.auth": FieldClassification.CRITICAL,
+  "pushSubscription.userAgent": FieldClassification.MEDIUM,
 };
 
 // ==================== Master Key Management ====================
