@@ -11,6 +11,7 @@
     "db:migrate:prod": "npx prisma@^7.4.1 migrate deploy",
     "build": "prisma generate && next build",
     "start": "next start",
+    "start:https": "next start --experimental-https",
     "lint": "eslint"
   },
   "dependencies": {

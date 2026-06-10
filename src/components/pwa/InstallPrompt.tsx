@@ -75,36 +75,60 @@ function isDismissedRecently() {
 export function InstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
-  const [isStandalone, setIsStandalone] = useState(() =>
-    isStandaloneDisplayMode()
-  );
-  const [isIos] = useState(() => isIosDevice());
-  const [supportsManualGuide] = useState(
-    () => isIosDevice() || isChromiumInstallBrowser()
-  );
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isVisible, setIsVisible] = useState(
-    () => !isStandaloneDisplayMode() && !isDismissedRecently()
-  );
+  const [browserState, setBrowserState] = useState<{
+    hasHydrated: boolean;
+    isStandalone: boolean;
+    isIos: boolean;
+    supportsManualGuide: boolean;
+    isVisible: boolean;
+  }>({
+    hasHydrated: false,
+    isStandalone: false,
+    isIos: false,
+    supportsManualGuide: false,
+    isVisible: false,
+  });
 
   useEffect(() => {
+    const frameId = window.requestAnimationFrame(() => {
+      const standalone = isStandaloneDisplayMode();
+      const iosDevice = isIosDevice();
+      const supportsGuide = iosDevice || isChromiumInstallBrowser();
+
+      setBrowserState({
+        hasHydrated: true,
+        isStandalone: standalone,
+        isIos: iosDevice,
+        supportsManualGuide: supportsGuide,
+        isVisible: !standalone && !isDismissedRecently(),
+      });
+    });
+
     const handleBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
       setDeferredPrompt(event as BeforeInstallPromptEvent);
-      setIsVisible(!isDismissedRecently());
+      setBrowserState((current) => ({
+        ...current,
+        isVisible: !isDismissedRecently(),
+      }));
     };
 
     const handleInstalled = () => {
       window.localStorage.removeItem(INSTALL_DISMISS_KEY);
       setDeferredPrompt(null);
-      setIsVisible(false);
-      setIsStandalone(true);
+      setBrowserState((current) => ({
+        ...current,
+        isVisible: false,
+        isStandalone: true,
+      }));
     };
 
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
     window.addEventListener("appinstalled", handleInstalled);
 
     return () => {
+      window.cancelAnimationFrame(frameId);
       window.removeEventListener(
         "beforeinstallprompt",
         handleBeforeInstallPrompt
@@ -113,16 +137,26 @@ export function InstallPrompt() {
     };
   }, []);
 
+  const { hasHydrated, isStandalone, isIos, supportsManualGuide, isVisible } =
+    browserState;
   const canPrompt = !!deferredPrompt;
   const canShowGuide = supportsManualGuide && !isStandalone;
 
-  if (!isVisible || (!canPrompt && !canShowGuide) || isStandalone) {
+  if (
+    !hasHydrated ||
+    !isVisible ||
+    (!canPrompt && !canShowGuide) ||
+    isStandalone
+  ) {
     return null;
   }
 
   const dismissPrompt = () => {
     window.localStorage.setItem(INSTALL_DISMISS_KEY, String(Date.now()));
-    setIsVisible(false);
+    setBrowserState((current) => ({
+      ...current,
+      isVisible: false,
+    }));
     setIsDialogOpen(false);
   };
 
@@ -145,7 +179,10 @@ export function InstallPrompt() {
       return;
     }
 
-    setIsVisible(false);
+    setBrowserState((current) => ({
+      ...current,
+      isVisible: false,
+    }));
   };
 
   return (
