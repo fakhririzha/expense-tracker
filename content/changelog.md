@@ -1,5 +1,11 @@
 # FinHealth Changelog
 
+## v4.3.0
+
+- Added installable PWA support so FinHealth can be added to the home screen on supported desktop and mobile browsers.
+- Added safer offline handling with a dedicated fallback screen while keeping private financial data and balance-changing actions out of the offline cache.
+- Added in-app install guidance so supported browsers can surface setup more clearly without interrupting day-to-day dashboard use.
+
 ## v4.2.3
 
 - Refined the upcoming bank pressure warning on Subscriptions and Recurring so it now matches the app’s card-based visual style instead of appearing as a flatter system alert.
