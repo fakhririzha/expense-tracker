@@ -3,7 +3,7 @@
 import { AlertTriangle, CalendarClock } from "lucide-react";
 
 import type { UpcomingBankPressureAlert as UpcomingBankPressureAlertData } from "@/actions/schedule-pressure-actions";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
 interface UpcomingBankPressureAlertProps {
@@ -18,14 +18,19 @@ export function UpcomingBankPressureAlert({
   }
 
   return (
-    <Alert
-      className="border-amber-300 text-amber-950 [&>svg]:text-amber-600"
-    >
-      <AlertTriangle className="h-4 w-4" />
-      <AlertTitle>Upcoming bank outflows exceed current balance</AlertTitle>
-      <AlertDescription className="space-y-4">
+    <Card className="border-amber-400 bg-amber-50 text-amber-950">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base font-medium">
+          <AlertTriangle className="h-4 w-4 text-amber-600" />
+          Upcoming bank outflows exceed current balance
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
         {alerts.map((alert) => (
-          <div key={alert.accountId} className="rounded-md border border-amber-200/80 bg-amber-50/60 p-3">
+          <div
+            key={alert.accountId}
+            className="rounded-md border border-amber-300/80 bg-amber-100/50 p-3"
+          >
             <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="font-medium">{alert.accountName}</p>
@@ -73,7 +78,7 @@ export function UpcomingBankPressureAlert({
             </div>
           </div>
         ))}
-      </AlertDescription>
-    </Alert>
+      </CardContent>
+    </Card>
   );
 }

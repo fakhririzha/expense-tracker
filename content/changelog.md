@@ -1,5 +1,10 @@
 # FinHealth Changelog
 
+## v4.2.3
+
+- Refined the upcoming bank pressure warning on Subscriptions and Recurring so it now matches the app’s card-based visual style instead of appearing as a flatter system alert.
+- Kept the warning emphasis with clearer amber highlighting while making the affected account details feel more consistent with the surrounding dashboard cards.
+
 ## v4.2.2
 
 - Added schedule pressure alerts on the Subscriptions and Recurring pages when the next 30 days of bank-linked renewals and recurring outflows are higher than the current balance in a Bank Account.
