@@ -1,5 +1,6 @@
 "use client";
 
+import { UpcomingBankPressureAlert } from "@/components/alerts/UpcomingBankPressureAlert";
 import { AddRecurringRuleDialog } from "@/components/recurring/AddRecurringRuleDialog";
 import { EditRecurringRuleDialog } from "@/components/recurring/EditRecurringRuleDialog";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ import { format } from "date-fns";
 import { Calendar, Pencil, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useRecurringRules, useDeleteRecurringRule } from "@/hooks/useRecurringQueries";
+import { useUpcomingBankPressure } from "@/hooks/useUpcomingBankPressure";
 
 interface RecurringRule {
   id: string;
@@ -77,6 +79,7 @@ export default function RecurringPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   const { data: rules = [], isLoading } = useRecurringRules();
+  const { data: bankPressureAlerts = [] } = useUpcomingBankPressure();
   const deleteMutation = useDeleteRecurringRule();
 
   const handleDelete = async (id: string, name: string) => {
@@ -123,6 +126,8 @@ export default function RecurringPage() {
           </p>
         </CardContent>
       </Card>
+
+      <UpcomingBankPressureAlert alerts={bankPressureAlerts} />
 
       {/* Active Rules Table */}
       {isLoading ? (

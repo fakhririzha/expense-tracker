@@ -4,6 +4,7 @@ import { Loader2 } from "lucide-react";
 import { useState } from "react";
 
 import type { SubscriptionListItem } from "@/actions/subscription-actions";
+import { UpcomingBankPressureAlert } from "@/components/alerts/UpcomingBankPressureAlert";
 import { SubscriptionDetailDrawer } from "@/components/subscriptions/SubscriptionDetailDrawer";
 import { SubscriptionFormDialog } from "@/components/subscriptions/SubscriptionFormDialog";
 import { SubscriptionPageHeader } from "@/components/subscriptions/SubscriptionPageHeader";
@@ -13,6 +14,7 @@ import { TrialEndingSoonCard } from "@/components/subscriptions/TrialEndingSoonC
 import { UpcomingRenewalsCard } from "@/components/subscriptions/UpcomingRenewalsCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useDeleteSubscription, useSubscriptions, useSubscriptionSummary } from "@/hooks/useSubscriptionQueries";
+import { useUpcomingBankPressure } from "@/hooks/useUpcomingBankPressure";
 import { type SubscriptionStatusFilter } from "@/lib/subscription-constants";
 
 export function SubscriptionManager() {
@@ -26,6 +28,7 @@ export function SubscriptionManager() {
     status: statusFilter,
   });
   const { data: summary } = useSubscriptionSummary();
+  const { data: bankPressureAlerts = [] } = useUpcomingBankPressure();
   const deleteMutation = useDeleteSubscription();
 
   const handleSelect = (subscriptionId: string) => {
@@ -66,6 +69,8 @@ export function SubscriptionManager() {
         />
 
         <SubscriptionSummaryCards summary={summary} />
+
+        <UpcomingBankPressureAlert alerts={bankPressureAlerts} />
 
         <div className="grid gap-6 lg:grid-cols-2">
           <UpcomingRenewalsCard items={summary?.upcomingRenewals ?? []} />
