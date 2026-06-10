@@ -1,5 +1,10 @@
 # FinHealth Changelog
 
+## v4.2.2
+
+- Added schedule pressure alerts on the Subscriptions and Recurring pages when the next 30 days of bank-linked renewals and recurring outflows are higher than the current balance in a Bank Account.
+- Made subscription-managed recurring rules show up in the warning details without double-counting the same upcoming charge twice.
+
 ## v4.2.1
 
 - Improved the login page rendering flow so sign-in stays more reliable during production builds and static generation.

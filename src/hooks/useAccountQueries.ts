@@ -8,6 +8,7 @@ import {
   type AccountInput,
 } from "@/actions/account-actions";
 import { forecastKeys } from "@/hooks/useCashFlowForecast";
+import { upcomingBankPressureKeys } from "@/hooks/useUpcomingBankPressure";
 import { type AccountTypeValue } from "@/lib/account-types";
 
 // ---------------------------------------------------------------------------
@@ -63,6 +64,7 @@ export function useCreateAccount() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: accountKeys.all });
       qc.invalidateQueries({ queryKey: forecastKeys.all });
+      qc.invalidateQueries({ queryKey: upcomingBankPressureKeys.all });
     },
   });
 }
@@ -78,6 +80,7 @@ export function useUpdateAccount() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: accountKeys.all });
       qc.invalidateQueries({ queryKey: forecastKeys.all });
+      qc.invalidateQueries({ queryKey: upcomingBankPressureKeys.all });
     },
   });
 }
@@ -92,6 +95,7 @@ export function useDeleteAccount() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: accountKeys.all });
       qc.invalidateQueries({ queryKey: forecastKeys.all });
+      qc.invalidateQueries({ queryKey: upcomingBankPressureKeys.all });
     },
   });
 }

@@ -15,6 +15,7 @@ import { forecastKeys } from "@/hooks/useCashFlowForecast";
 import { calendarKeys } from "@/hooks/useCalendarQueries";
 import { recurringKeys } from "@/hooks/useRecurringQueries";
 import { reportKeys } from "@/hooks/useReportQueries";
+import { upcomingBankPressureKeys } from "@/hooks/useUpcomingBankPressure";
 import { type SubscriptionStatusFilter } from "@/lib/subscription-constants";
 
 export const subscriptionKeys = {
@@ -76,6 +77,7 @@ function invalidateSubscriptionConsumers(queryClient: ReturnType<typeof useQuery
   queryClient.invalidateQueries({ queryKey: calendarKeys.all });
   queryClient.invalidateQueries({ queryKey: reportKeys.all });
   queryClient.invalidateQueries({ queryKey: forecastKeys.all });
+  queryClient.invalidateQueries({ queryKey: upcomingBankPressureKeys.all });
 }
 
 export function useCreateSubscription() {

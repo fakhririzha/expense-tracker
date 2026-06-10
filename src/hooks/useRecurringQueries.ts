@@ -6,6 +6,7 @@ import {
   deleteRecurringRule,
 } from "@/actions/recurring-actions";
 import { forecastKeys } from "@/hooks/useCashFlowForecast";
+import { upcomingBankPressureKeys } from "@/hooks/useUpcomingBankPressure";
 
 // ---------------------------------------------------------------------------
 // Query Key Factory
@@ -45,6 +46,7 @@ export function useCreateRecurringRule() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: recurringKeys.all });
       qc.invalidateQueries({ queryKey: forecastKeys.all });
+      qc.invalidateQueries({ queryKey: upcomingBankPressureKeys.all });
     },
   });
 }
@@ -66,6 +68,7 @@ export function useUpdateRecurringRule() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: recurringKeys.all });
       qc.invalidateQueries({ queryKey: forecastKeys.all });
+      qc.invalidateQueries({ queryKey: upcomingBankPressureKeys.all });
     },
   });
 }
@@ -80,6 +83,7 @@ export function useDeleteRecurringRule() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: recurringKeys.all });
       qc.invalidateQueries({ queryKey: forecastKeys.all });
+      qc.invalidateQueries({ queryKey: upcomingBankPressureKeys.all });
     },
   });
 }
