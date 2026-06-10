@@ -4,7 +4,7 @@ This file contains essential information for AI coding agents working on the Exp
 
 ## Project Overview
 
-**Expense Tracker** (branded as "FinHealth") is a personal finance management application built with Next.js 16 and React 19. It provides account and transaction tracking, investment portfolio valuation, liabilities, loans receivable, personal assets, multi-currency reporting, and financial dashboard insights.
+**Expense Tracker** (branded as "FinHealth") is a personal finance management application built with Next.js 16 and React 19. It provides account and transaction tracking, investment portfolio valuation, liabilities, loans receivable, personal assets, subscriptions, forecasting, multi-currency reporting, and financial dashboard insights.
 
 ### Key Features
 
@@ -17,11 +17,14 @@ This file contains essential information for AI coding agents working on the Exp
 - **Liabilities**: Record loan and credit-card payments with audit trails, overpayment handling, and rollback support.
 - **Loans Receivable**: Track principal owed to the user and move funds through disbursement and repayment flows without treating principal as income or expense.
 - **Recurring Transactions**: Automate regular transactions with daily, weekly, biweekly, monthly, quarterly, and yearly schedules.
+- **Subscriptions**: Track recurring subscriptions, billing cycles, trial end dates, renewals, and optional recurring-rule linkage.
 - **Multi-Currency Support**: Track finances across currencies with exchange-rate conversion.
 - **Budgeting**: Create and monitor monthly, quarterly, and yearly budgets.
 - **Savings Goals and Profile Targets**: Track savings goals plus user-level retirement and monthly budget targets.
-- **Reports, Calendar, and Data Tools**: View financial reports, upcoming calendar events, and import/export data.
+- **Forecasting and Insights**: Analyze projected liquid-cash balances plus cross-feature financial insights in dashboard and reports.
+- **Reports, Calendar, and Data Tools**: View financial reports, upcoming calendar events, month-end net-worth snapshots, and import/export data.
 - **Financial Dashboard**: Executive overview with net worth, wealth health score, monthly budget status, retirement progress, sidebar metrics, and changelog visibility.
+- **Profile Security**: Support self-service account deletion from the profile page.
 
 ## Technology Stack
 
@@ -63,15 +66,19 @@ expense-tracker/
 │   │   ├── category-actions.ts
 │   │   ├── exchange-rate-actions.ts
 │   │   ├── export-actions.ts
+│   │   ├── forecast-actions.ts
 │   │   ├── goal-actions.ts
 │   │   ├── import-actions.ts
+│   │   ├── insight-actions.ts
 │   │   ├── investment-actions.ts
 │   │   ├── liability-payment-actions.ts
+│   │   ├── net-worth-snapshot-actions.ts
 │   │   ├── personal-asset-actions.ts
 │   │   ├── profile-actions.ts
 │   │   ├── receivable-actions.ts
 │   │   ├── recurring-actions.ts
 │   │   ├── report-actions.ts
+│   │   ├── subscription-actions.ts
 │   │   └── transaction-actions.ts
 │   ├── app/                   # Next.js App Router
 │   │   ├── (auth)/            # Login/register route group
@@ -90,12 +97,14 @@ expense-tracker/
 │   │   │       ├── receivables/
 │   │   │       ├── recurring/
 │   │   │       ├── reports/
+│   │   │       ├── subscriptions/
 │   │   │       ├── transactions/
 │   │   │       └── page.tsx   # Main dashboard
 │   │   ├── api/               # API routes
 │   │   │   ├── accounts/by-type/route.ts
 │   │   │   ├── auth/[...nextauth]/route.ts
 │   │   │   ├── categories/route.ts
+│   │   │   ├── cron/monthly-net-worth-snapshots/route.ts
 │   │   │   ├── cron/recurring/route.ts
 │   │   │   └── investments/[id]/trades/route.ts
 │   │   ├── globals.css        # Tailwind 4 globals and semantic CSS variables
@@ -109,7 +118,9 @@ expense-tracker/
 │   │   ├── categories/
 │   │   ├── dashboard/
 │   │   ├── export/
+│   │   ├── forecast/
 │   │   ├── goals/
+│   │   ├── insights/
 │   │   ├── investments/
 │   │   ├── liability/
 │   │   ├── profile/
@@ -117,24 +128,30 @@ expense-tracker/
 │   │   ├── receivables/
 │   │   ├── recurring/
 │   │   ├── reports/
+│   │   ├── subscriptions/
 │   │   ├── transactions/
 │   │   └── ui/                # shadcn/ui components
+│   ├── generated/             # Prisma generated client output
 │   ├── contexts/
 │   │   └── CurrencyContext.tsx
 │   ├── hooks/                 # TanStack Query custom hooks
 │   │   ├── useAccountQueries.ts
 │   │   ├── useBudgetQueries.ts
 │   │   ├── useCalendarQueries.ts
+│   │   ├── useCashFlowForecast.ts
 │   │   ├── useCategoryQueries.ts
 │   │   ├── useExchangeRateQuery.ts
+│   │   ├── useFinancialInsightQueries.ts
 │   │   ├── useGoalQueries.ts
 │   │   ├── useInvestmentQueries.ts
 │   │   ├── useLiabilityQueries.ts
+│   │   ├── useNetWorthSnapshotQueries.ts
 │   │   ├── usePersonalAssetQueries.ts
 │   │   ├── useReceivableQueries.ts
 │   │   ├── useRecurringQueries.ts
 │   │   ├── useReportQueries.ts
 │   │   ├── useSidebarMetrics.ts
+│   │   ├── useSubscriptionQueries.ts
 │   │   ├── useTradeHistory.ts
 │   │   └── useTransactionQueries.ts
 │   ├── lib/                   # Utility libraries and domain services
@@ -144,13 +161,17 @@ expense-tracker/
 │   │   ├── executive-service.ts
 │   │   ├── executive-types.ts
 │   │   ├── finance-service.ts
+│   │   ├── financial-insights/
+│   │   ├── forecasting/
 │   │   ├── investment-valuation-service.ts
 │   │   ├── investment-validation.ts
 │   │   ├── liability-payment-validation.ts
+│   │   ├── net-worth-calculation.ts
 │   │   ├── unit-conversion.ts
 │   │   ├── user-encryption.ts
 │   │   └── utils.ts
 │   ├── scripts/
+│   │   ├── backfill-net-worth-snapshots.ts
 │   │   └── migrate-encryption.ts
 │   ├── types/
 │   │   ├── next-auth.d.ts
@@ -231,7 +252,11 @@ openssl rand -base64 32
 
 **RecurringRule**: Automated recurring transaction templates with interval, next due date, optional end date, category/account linkage, and encrypted companion fields.
 
+**Subscription**: User-owned subscription records with billing cycle, status, renewal dates, optional account/category linkage, optional recurring-rule linkage, and encrypted companion fields.
+
 **ExchangeRate**: Global cached exchange rates between currencies. This is not user-owned and should not receive `userId` filters.
+
+**NetWorthSnapshot**: Month-end net-worth snapshots with account-class breakdowns, FX metadata, and calculation versions for historical reporting and trends.
 
 **LiabilityPaymentAudit**: Audit trail for liability payments, including source/target account snapshots, execution metadata, encrypted request metadata, and rollback fields.
 
@@ -291,6 +316,21 @@ enum RecurringInterval {
   MONTHLY,
   QUARTERLY,
   YEARLY
+}
+
+enum SubscriptionBillingCycle {
+  WEEKLY,
+  MONTHLY,
+  QUARTERLY,
+  YEARLY
+}
+
+enum SubscriptionStatus {
+  ACTIVE,
+  TRIAL,
+  PAUSED,
+  CANCELLED,
+  EXPIRED
 }
 
 enum BudgetPeriod {
@@ -516,10 +556,14 @@ Located in `src/lib/utils.ts`:
 
 - `src/lib/account-types.ts` - Account classification and balance normalization.
 - `src/lib/finance-service.ts` - Yahoo Finance quotes, historical data, search, exchange rates, and investment metrics.
+- `src/lib/financial-insights/*` - Insight generation, thresholds, date utilities, and currency normalization.
+- `src/lib/forecasting/*` - Cash-flow forecasting, projected events, risk scoring, and forecast summaries.
 - `src/lib/investment-valuation-service.ts` - Portfolio valuation in display currency.
+- `src/lib/net-worth-calculation.ts`, `src/lib/net-worth-snapshot-service.ts`, and related `src/lib/net-worth-*` files - Month-end net-worth snapshot calculations, persistence, and reporting helpers.
 - `src/lib/unit-conversion.ts` - Unit conversion for precious metals.
 - `src/lib/executive-service.ts` and `src/lib/executive-types.ts` - Dashboard metrics and financial health calculations.
 - `src/lib/liability-payment-validation.ts` and `src/lib/investment-validation.ts` - Domain validation helpers.
+- `src/lib/subscription-utils.ts` and `src/lib/subscription-constants.ts` - Subscription status, billing-cycle, and filter helpers.
 
 ### Prisma Client
 
@@ -554,6 +598,7 @@ import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 - Use batched fetches and small delays where needed to reduce rate-limit pressure.
 - Never assume live quote or FX data is available; handle null/error results and show usable fallback UI.
 - Precious-metal prices may need troy-ounce to gram conversion via `unit-conversion.ts`.
+- Forecasting and insight logic should degrade gracefully when FX conversions are unavailable and should surface warnings rather than failing the whole feature.
 
 ## Changelog Updates
 
@@ -570,7 +615,7 @@ import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 - **SQL Injection Prevention**: Use Prisma ORM queries; do not build raw SQL from user input.
 - **XSS Protection**: React escapes rendered values by default; avoid unsafe HTML unless explicitly sanitized.
 - **Route Protection**: Middleware checks authentication for dashboard routes.
-- **Cron Endpoints**: `/api/cron/recurring` requires `CRON_SECRET` bearer auth in production.
+- **Cron Endpoints**: `/api/cron/recurring` and `/api/cron/monthly-net-worth-snapshots` require `CRON_SECRET` bearer auth in production.
 - **User Isolation**: All queries for user-owned models must include `userId`. Do not apply this to global tables like `ExchangeRate`.
 - **Encryption**: Use encrypted companion fields and user encryption helpers for sensitive text and request metadata.
 - **Balance Integrity**: Balance-changing flows must use Prisma transactions and validate ownership of every involved account.
@@ -587,7 +632,11 @@ The project currently relies on linting plus manual verification. Before submitt
 - Investment buy/sell trades, realized/unrealized PnL, unit conversions, and valuation fallback behavior.
 - Currency conversion and exchange-rate caching.
 - Personal asset valuation and disposal history.
+- Subscription tracking, recurring-rule linkage, renewal/trial summaries, and subscription forecast integration.
 - Recurring transaction processing.
+- Net-worth snapshot creation, trend reporting, and cron behavior.
+- Cash-flow forecasting assumptions, warnings, and projected event timelines.
+- Financial insights, especially cross-feature comparisons and multi-currency edge cases.
 - Budgets, goals, profile targets, dashboard metrics, reports, and sidebar summaries.
 - Import/export and category management.
 
@@ -597,7 +646,7 @@ For doc-only changes, `git diff --check` is usually sufficient unless the change
 
 ### Vercel Deployment
 
-- `vercel.json` configures a daily cron job for `/api/cron/recurring` at `0 0 * * *`.
+- `vercel.json` configures `/api/cron/monthly-net-worth-snapshots` at `0 0 * * *` and `/api/cron/recurring` at `15 0 * * *`.
 - Ensure `CRON_SECRET`, `DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL`, and any production encryption key are set in the deployment environment.
 
 ### Database Migration on Production
