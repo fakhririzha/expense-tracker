@@ -12,6 +12,7 @@ import {
 import { CurrencyProvider } from "@/contexts/CurrencyContext";
 import prisma from "@/lib/db";
 import { getInitials } from "@/lib/utils";
+import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 import { MobileSidebar, Sidebar } from "@/components/dashboard/Sidebar";
 import { LogOut, UserRound } from "lucide-react";
 import Link from "next/link";
@@ -65,7 +66,8 @@ export default async function DashboardLayout({
               <div className="hidden md:block flex-1"></div>
               
               {/* Profile Dropdown */}
-              <div className="flex items-center space-x-4">
+              <div className="flex items-center gap-3">
+                <InstallPrompt />
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button

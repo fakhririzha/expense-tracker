@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FinHealth Offline</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --background: #fcfcfc;
+        --foreground: #000000;
+        --primary: #0f172a;
+        --secondary: #f6cb18;
+        --muted: #f1f5f9;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background: var(--background);
+        color: var(--foreground);
+        font-family: "Nunito", ui-sans-serif, system-ui, sans-serif;
+      }
+
+      .panel {
+        width: min(100%, 520px);
+        border: 4px solid var(--foreground);
+        background: white;
+        box-shadow: 10px 10px 0 0 var(--foreground);
+      }
+
+      .panel-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 20px 24px;
+        border-bottom: 4px solid var(--foreground);
+        background: var(--primary);
+        color: white;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 48px;
+        height: 48px;
+        border: 3px solid var(--foreground);
+        background: var(--secondary);
+        color: var(--foreground);
+        font-size: 24px;
+        font-weight: 900;
+      }
+
+      .content {
+        padding: 24px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 1.5rem;
+        line-height: 1.2;
+      }
+
+      p {
+        margin: 0 0 12px;
+        font-size: 1rem;
+        line-height: 1.6;
+      }
+
+      .note {
+        margin-top: 16px;
+        padding: 14px 16px;
+        border: 3px solid var(--foreground);
+        background: var(--muted);
+        font-weight: 700;
+      }
+
+      .actions {
+        display: flex;
+        gap: 12px;
+        margin-top: 20px;
+        flex-wrap: wrap;
+      }
+
+      a,
+      button {
+        appearance: none;
+        border: 3px solid var(--foreground);
+        background: var(--secondary);
+        color: var(--foreground);
+        font: inherit;
+        font-weight: 900;
+        padding: 12px 18px;
+        cursor: pointer;
+        text-decoration: none;
+      }
+
+      a.secondary {
+        background: white;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="panel">
+      <div class="panel-header">
+        <div class="badge">F</div>
+        <div>
+          <p style="margin: 0; font-size: 0.8rem; font-weight: 900; letter-spacing: 0.08em;">
+            FINHEALTH
+          </p>
+          <h1>You&apos;re offline</h1>
+        </div>
+      </div>
+      <div class="content">
+        <p>
+          FinHealth could not reach the network. Public app assets stay available,
+          but private financial data is not cached for offline use.
+        </p>
+        <p>
+          Reconnect to load your dashboard, accounts, and reports safely.
+        </p>
+        <div class="note">
+          Balance-changing actions are disabled while offline to protect data integrity.
+        </div>
+        <div class="actions">
+          <button type="button" onclick="window.location.reload()">Try again</button>
+          <a class="secondary" href="/">Back to home</a>
+        </div>
+      </div>
+    </main>
+  </body>
+</html>
