@@ -1,6 +1,6 @@
 # Expense Tracker
 
-Expense Tracker, branded in the app as **FinHealth**, is a personal finance dashboard built with Next.js 16 and React 19. It tracks accounts, transactions, investments, liabilities, loans receivable, personal assets, budgets, goals, recurring transactions, multi-currency reporting, and financial health metrics.
+Expense Tracker, branded in the app as **FinHealth**, is a personal finance dashboard built with Next.js 16 and React 19. It tracks accounts, transactions, investments, liabilities, loans receivable, personal assets, subscriptions, budgets, goals, recurring transactions, multi-currency reporting, and financial health metrics.
 
 ## Table of Contents
 
@@ -31,7 +31,7 @@ FinHealth is an all-in-one financial workspace for personal money management. It
 - **Portfolio Tracking**: Track holdings, buy/sell trades, realized and unrealized PnL, account linkage, and precious-metal unit conversions.
 - **Multi-Currency Reporting**: Convert account, investment, and asset values into the user's main currency.
 - **Manual Asset Valuations**: Maintain dated valuation history for owned items such as electronics, vehicles, property, collectibles, and equipment.
-- **Financial Planning**: Monitor budgets, savings goals, retirement targets, and monthly budget targets.
+- **Financial Planning**: Monitor budgets, savings goals, retirement targets, monthly budget targets, subscription renewals, and forward-looking cash pressure.
 - **Secure Data Handling**: Use Auth.js sessions, Prisma user isolation, and optional field-level encryption for sensitive text fields.
 
 ## Features
@@ -46,10 +46,13 @@ FinHealth is an all-in-one financial workspace for personal money management. It
 | **Liabilities** | Liability payments with overpayment handling, audit trails, and rollback support |
 | **Loans Receivable** | Disbursement and repayment flows for principal owed to the user |
 | **Recurring Transactions** | Daily, weekly, biweekly, monthly, quarterly, and yearly transaction automation |
+| **Subscriptions** | Subscription tracking, renewal calendars, trial monitoring, recurring-rule linkage, and cost summaries |
 | **Budgets and Goals** | Budget monitoring, savings goals, and profile-level financial targets |
-| **Reports and Calendar** | Category breakdowns, trends, net-worth history, monthly summaries, and upcoming events |
+| **Reports and Insights** | Category breakdowns, trends, month-end net-worth snapshots, financial insights, and cash-flow forecasting |
+| **Calendar** | Upcoming recurring items, renewals, and financial events |
 | **Data Tools** | Import/export workflows for financial data |
 | **Dashboard** | Net worth, wealth health score, monthly budget status, retirement progress, sidebar metrics, and changelog dialog |
+| **Profile and Security** | Main currency and target settings plus self-service account deletion |
 
 ## Tech Stack
 
@@ -164,7 +167,7 @@ mysql://USER:PASSWORD@HOST:PORT/DATABASE
 - `src/middleware.ts` - Protected dashboard routing.
 - `next.config.ts` - Next.js config with React Compiler enabled.
 - `components.json` - shadcn/ui New York style, aliases, Tailwind CSS variables, and Lucide icons.
-- `vercel.json` - Daily recurring transaction cron schedule.
+- `vercel.json` - Daily recurring processing plus monthly net-worth snapshot cron schedules.
 
 ## Architecture
 
@@ -234,8 +237,8 @@ graph TB
 2. Sign in at `/login`.
 3. Set your main currency and financial targets in the profile area.
 4. Create financial accounts for bank, cash, investments, liabilities, credit cards, or loans receivable.
-5. Add categories, transactions, recurring rules, budgets, goals, investments, liabilities, receivable transfers, and personal assets as needed.
-6. Review the dashboard, calendar, reports, and data import/export pages.
+5. Add categories, transactions, recurring rules, subscriptions, budgets, goals, investments, liabilities, receivable transfers, and personal assets as needed.
+6. Review the dashboard, calendar, reports, forecasting, and data import/export pages.
 
 ### Account Types
 
@@ -268,6 +271,7 @@ Most data changes are implemented as Server Actions in `src/actions`. API routes
 | `GET` | `/api/accounts/by-type` | Authenticated active accounts grouped by account role |
 | `GET` | `/api/categories?type=...` | Authenticated categories filtered by transaction type |
 | `GET` | `/api/investments/[id]/trades` | Authenticated trade history for an owned investment asset |
+| `GET` | `/api/cron/monthly-net-worth-snapshots` | Creates missing month-end net-worth snapshots when the first-day cron runs |
 | `GET` | `/api/cron/recurring` | Processes due recurring transactions; protected by `CRON_SECRET` in production |
 
 ### Server Action Areas
@@ -279,14 +283,18 @@ Most data changes are implemented as Server Actions in `src/actions`. API routes
 - `category-actions.ts` - Category CRUD.
 - `exchange-rate-actions.ts` - Exchange-rate reads and cache persistence.
 - `export-actions.ts` and `import-actions.ts` - Data export/import.
+- `forecast-actions.ts` - Cash-flow forecasting across future transactions, recurring rules, subscriptions, and optional spend estimates.
 - `goal-actions.ts` - Savings goals and progress.
+- `insight-actions.ts` - Cross-feature financial insights for dashboard and reports.
 - `investment-actions.ts` - Investment assets, trades, valuation, and searches.
 - `liability-payment-actions.ts` - Liability payment flows and audit history.
+- `net-worth-snapshot-actions.ts` - Month-end net-worth snapshot creation, summary, and trend reads.
 - `personal-asset-actions.ts` - Personal asset inventory and valuations.
-- `profile-actions.ts` - User currency and financial target settings.
+- `profile-actions.ts` - User currency, financial target settings, and self-service account deletion.
 - `receivable-actions.ts` - Loans Receivable disbursement, repayment, summary, and history.
 - `recurring-actions.ts` - Recurring rules and scheduled transaction processing.
 - `report-actions.ts` - Report metrics and chart data.
+- `subscription-actions.ts` - Subscription CRUD, summaries, and recurring-rule linking.
 - `transaction-actions.ts` - Transaction CRUD, transfers, filters, and balance updates.
 
 ## Project Structure
@@ -300,13 +308,14 @@ expense-tracker/
 │   └── migrations/
 ├── public/
 ├── src/
-│   ├── actions/               # Server Actions by feature area
+│   ├── actions/               # Server Actions by feature area, including forecasts, insights, snapshots, and subscriptions
 │   ├── app/                   # Next.js App Router pages, layouts, and API routes
 │   ├── components/            # Feature components plus shadcn/ui primitives
 │   ├── contexts/              # React contexts
+│   ├── generated/             # Prisma generated client output
 │   ├── hooks/                 # TanStack Query hooks
-│   ├── lib/                   # Domain services, Prisma client, encryption, utils
-│   ├── scripts/               # One-off operational scripts
+│   ├── lib/                   # Domain services, Prisma client, encryption, forecasting, insights, utils
+│   ├── scripts/               # One-off operational scripts such as encryption migration
 │   ├── types/                 # Shared TypeScript declarations
 │   ├── auth.config.ts
 │   ├── auth.ts
@@ -321,7 +330,7 @@ expense-tracker/
 └── vercel.json
 ```
 
-Dashboard pages currently include accounts, assets, budgets, calendar, categories, data, goals, investments, liabilities, profile, receivables, recurring, reports, and transactions.
+Dashboard pages currently include accounts, assets, budgets, calendar, categories, data, goals, investments, liabilities, profile, receivables, recurring, reports, subscriptions, and transactions.
 
 ## Testing
 
@@ -347,9 +356,11 @@ Manual verification should cover the affected feature area. For financial change
 - Loans Receivable disbursement and repayment.
 - Investment trades, valuation, realized/unrealized PnL, Yahoo Finance fallback handling, and unit conversion.
 - Personal asset valuation and disposal history.
-- Budgets, savings goals, profile targets, dashboard metrics, reports, and calendar.
+- Budgets, savings goals, profile targets, dashboard metrics, reports, insights, and calendar.
+- Subscription CRUD, recurring-rule linkage, trial/renewal summaries, and calendar visibility.
+- Net-worth snapshots, monthly snapshot summary/trend reads, and cash-flow forecasting.
 - Import/export and category management.
-- Recurring transaction processing through the cron action/route.
+- Recurring transaction processing plus the month-start net-worth snapshot cron flow.
 
 ## Deployment
 
@@ -364,14 +375,18 @@ Manual verification should cover the affected feature area. For financial change
 pnpm db:migrate:prod
 ```
 
-`vercel.json` schedules `/api/cron/recurring` daily at midnight UTC:
+`vercel.json` currently schedules two cron jobs:
 
 ```json
 {
   "crons": [
     {
-      "path": "/api/cron/recurring",
+      "path": "/api/cron/monthly-net-worth-snapshots",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/recurring",
+      "schedule": "15 0 * * *"
     }
   ]
 }
@@ -421,7 +436,7 @@ Use a reverse proxy such as Nginx or Caddy for HTTPS and routing when self-hosti
 
 ## License
 
-No license file is currently included in this repository.
+This repository includes an Apache-2.0 license in [LICENSE](LICENSE).
 
 ## Acknowledgments
 
