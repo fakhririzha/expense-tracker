@@ -1,6 +1,10 @@
 "use server";
 
 import { auth } from "@/auth";
+import {
+  decryptAccountName,
+  decryptAccountRecords,
+} from "@/lib/account-crypto";
 import prisma from "@/lib/db";
 import { format } from "date-fns";
 import { decryptUserField } from "@/lib/user-encryption";
@@ -96,13 +100,13 @@ export async function exportTransactionsCSV(params?: {
       where,
       include: {
         account: {
-          select: { name: true, currency: true },
+          select: { nameEncrypted: true, currency: true },
         },
         category: {
           select: { name: true },
         },
         toAccount: {
-          select: { name: true },
+          select: { nameEncrypted: true },
         },
       },
       orderBy: { date: "desc" },
@@ -126,21 +130,25 @@ export async function exportTransactionsCSV(params?: {
     ];
 
     // CSV Rows
-    const rows = transactions.map((t) => [
-      format(new Date(t.date), "yyyy-MM-dd"),
-      t.amount.toString(),
-      t.type,
-      t.category?.name || "",
-      t.account.name,
-      t.toAccount?.name || "",
-      t.description || "",
-      t.location || "",
-      t.latitude?.toString() || "",
-      t.longitude?.toString() || "",
-      t.googleMapsLink || "",
-      t.currency,
-      t.exchangeRate.toString(),
-    ]);
+    const rows = await Promise.all(
+      transactions.map(async (t) => [
+        format(new Date(t.date), "yyyy-MM-dd"),
+        t.amount.toString(),
+        t.type,
+        t.category?.name || "",
+        await decryptAccountName(session.user.id, t.account.nameEncrypted),
+        t.toAccount
+          ? await decryptAccountName(session.user.id, t.toAccount.nameEncrypted)
+          : "",
+        t.description || "",
+        t.location || "",
+        t.latitude?.toString() || "",
+        t.longitude?.toString() || "",
+        t.googleMapsLink || "",
+        t.currency,
+        t.exchangeRate.toString(),
+      ])
+    );
 
     // Combine headers and rows
     const csv = [
@@ -192,9 +200,9 @@ export async function exportAllData() {
       prisma.transaction.findMany({
         where: { userId: session.user.id },
         include: {
-          account: { select: { name: true } },
+          account: { select: { nameEncrypted: true } },
           category: { select: { name: true } },
-          toAccount: { select: { name: true } },
+          toAccount: { select: { nameEncrypted: true } },
         },
         orderBy: { date: "desc" },
       }),
@@ -207,6 +215,9 @@ export async function exportAllData() {
       }),
       prisma.investmentAsset.findMany({
         where: { userId: session.user.id },
+        include: {
+          account: { select: { nameEncrypted: true } },
+        },
       }),
       prisma.tradeHistory.findMany({
         where: { userId: session.user.id },
@@ -229,8 +240,27 @@ export async function exportAllData() {
       }),
     ]);
 
-    const decryptedPersonalAssets = await Promise.all(
+    const [decryptedAccounts, decryptedTransactions, decryptedPersonalAssets] =
+      await Promise.all([
+        decryptAccountRecords(session.user.id, accounts),
+        Promise.all(
+          transactions.map(async (t) => ({
+            ...t,
+            accountName: await decryptAccountName(
+              session.user.id,
+              t.account.nameEncrypted
+            ),
+            toAccountName: t.toAccount
+              ? await decryptAccountName(session.user.id, t.toAccount.nameEncrypted)
+              : null,
+          }))
+        ),
+        Promise.all(
       personalAssets.map((asset) => decryptPersonalAssetFields(session.user.id, asset))
+        ),
+      ]);
+    const decryptedAccountMap = new Map(
+      decryptedAccounts.map((account) => [account.id, account.name])
     );
 
     // Create a JSON backup
@@ -238,8 +268,8 @@ export async function exportAllData() {
       exportDate: new Date().toISOString(),
       version: "1.2",
       data: {
-        accounts,
-        transactions: transactions.map((t) => ({
+        accounts: decryptedAccounts,
+        transactions: decryptedTransactions.map((t) => ({
           id: t.id,
           amount: t.amount,
           currency: t.currency,
@@ -251,9 +281,9 @@ export async function exportAllData() {
           longitude: t.longitude,
           googleMapsLink: t.googleMapsLink,
           date: t.date,
-          accountName: t.account.name,
+          accountName: t.accountName,
           categoryName: t.category?.name || null,
-          toAccountName: t.toAccount?.name || null,
+          toAccountName: t.toAccountName,
         })),
         categories,
         budgets: budgets.map((b) => ({
@@ -277,6 +307,7 @@ export async function exportAllData() {
           date: t.date,
           notes: t.notes,
           symbol: t.asset.symbol,
+          accountName: t.accountId ? decryptedAccountMap.get(t.accountId) ?? null : null,
         })),
         recurringRules,
         savingsGoals,
@@ -349,6 +380,7 @@ export async function exportAccountsCSV() {
       where: { userId: session.user.id },
       orderBy: { createdAt: "asc" },
     });
+    const decryptedAccounts = await decryptAccountRecords(session.user.id, accounts);
 
     // CSV Headers
     const headers = [
@@ -362,12 +394,12 @@ export async function exportAccountsCSV() {
     ];
 
     // CSV Rows
-    const rows = accounts.map((a) => [
+    const rows = decryptedAccounts.map((a) => [
       a.name,
       a.type,
       a.currency,
       a.balance.toString(),
-      a.description || "",
+      a.description ?? "",
       a.isActive ? "Yes" : "No",
       format(new Date(a.createdAt), "yyyy-MM-dd"),
     ]);
@@ -382,7 +414,7 @@ export async function exportAccountsCSV() {
       success: true,
       data: csv,
       filename: `accounts-${format(new Date(), "yyyy-MM-dd-HHmmss")}.csv`,
-      count: accounts.length,
+      count: decryptedAccounts.length,
     };
   } catch (error) {
     console.error("Export accounts error:", error);
@@ -518,7 +550,7 @@ export async function exportInvestmentsCSV() {
     const investments = await prisma.investmentAsset.findMany({
       where: { userId: session.user.id },
       include: {
-        account: { select: { name: true } },
+        account: { select: { nameEncrypted: true } },
       },
       orderBy: { createdAt: "asc" },
     });
@@ -535,15 +567,19 @@ export async function exportInvestmentsCSV() {
     ];
 
     // CSV Rows
-    const rows = investments.map((i) => [
-      i.symbol,
-      i.name || "",
-      i.quantity.toString(),
-      i.avgBuyPrice.toString(),
-      i.currency,
-      i.account?.name || "",
-      format(new Date(i.createdAt), "yyyy-MM-dd"),
-    ]);
+    const rows = await Promise.all(
+      investments.map(async (i) => [
+        i.symbol,
+        i.name || "",
+        i.quantity.toString(),
+        i.avgBuyPrice.toString(),
+        i.currency,
+        i.account
+          ? await decryptAccountName(session.user.id, i.account.nameEncrypted)
+          : "",
+        format(new Date(i.createdAt), "yyyy-MM-dd"),
+      ])
+    );
 
     // Combine headers and rows
     const csv = [

@@ -3,6 +3,11 @@
 import { z } from "zod";
 
 import { auth } from "@/auth";
+import {
+  decryptAccountName,
+  decryptAccountRecords,
+  sortAccountsByName,
+} from "@/lib/account-crypto";
 import prisma from "@/lib/db";
 import { isLiquidAccountType } from "@/lib/account-types";
 import { buildBudgetForecastEvents } from "@/lib/forecasting/budget-forecast-events";
@@ -21,7 +26,10 @@ import {
 import { projectCashFlow, sortForecastEvents } from "@/lib/forecasting/project-cash-flow";
 import { buildRecurringForecastEvents } from "@/lib/forecasting/recurring-forecast-events";
 import { getStartingBalanceBeforeFutureTransactions, getTrackedLiquidAccountIds } from "@/lib/forecasting/liquid-balance";
-import { buildSubscriptionForecastEvents } from "@/lib/forecasting/subscription-forecast-events";
+import {
+  buildSubscriptionForecastEvents,
+  type ForecastSubscription,
+} from "@/lib/forecasting/subscription-forecast-events";
 import { summarizeForecast } from "@/lib/forecasting/summarize-forecast";
 import {
   FORECAST_VARIABLE_SPENDING_MODES,
@@ -246,16 +254,21 @@ export async function getCashFlowForecast(
       },
       select: {
         id: true,
-        name: true,
+        nameEncrypted: true,
+        descriptionEncrypted: true,
         type: true,
         currency: true,
         balance: true,
         isActive: true,
       },
-      orderBy: { name: "asc" },
     });
+    const decryptedAccounts = sortAccountsByName(
+      await decryptAccountRecords(session.user.id, accounts)
+    );
 
-    const liquidAccounts = accounts.filter((account) => isLiquidAccountType(account.type));
+    const liquidAccounts = decryptedAccounts.filter((account) =>
+      isLiquidAccountType(account.type)
+    );
     if (args.accountIds?.length) {
       const selectedAccountIdSet = new Set(args.accountIds);
       const selectedLiquidAccounts = liquidAccounts.filter((account) =>
@@ -309,7 +322,9 @@ export async function getCashFlowForecast(
     }
 
     const converter = createForecastCurrencyConverter(user.mainCurrency, addWarning);
-    const accountMap = new Map(accounts.map((account) => [account.id, account]));
+    const accountMap = new Map(
+      decryptedAccounts.map((account) => [account.id, account])
+    );
 
     const [
       futureTransactions,
@@ -346,7 +361,7 @@ export async function getCashFlowForecast(
               account: {
                 select: {
                   id: true,
-                  name: true,
+                  nameEncrypted: true,
                   type: true,
                   currency: true,
                   isActive: true,
@@ -355,7 +370,7 @@ export async function getCashFlowForecast(
               toAccount: {
                 select: {
                   id: true,
-                  name: true,
+                  nameEncrypted: true,
                   type: true,
                   currency: true,
                   isActive: true,
@@ -412,7 +427,7 @@ export async function getCashFlowForecast(
               account: {
                 select: {
                   id: true,
-                  name: true,
+                  nameEncrypted: true,
                   type: true,
                   currency: true,
                   isActive: true,
@@ -443,7 +458,7 @@ export async function getCashFlowForecast(
           account: {
             select: {
               id: true,
-              name: true,
+              nameEncrypted: true,
               type: true,
               currency: true,
               isActive: true,
@@ -452,7 +467,7 @@ export async function getCashFlowForecast(
           toAccount: {
             select: {
               id: true,
-              name: true,
+              nameEncrypted: true,
               type: true,
               currency: true,
               isActive: true,
@@ -479,6 +494,66 @@ export async function getCashFlowForecast(
         : Promise.resolve([]),
     ]);
 
+    const [decryptedFutureTransactions, decryptedSubscriptions, decryptedHistoryTransactions] =
+      await Promise.all([
+        Promise.all(
+          futureTransactions.map(async (transaction) => ({
+            ...transaction,
+            account: {
+              ...transaction.account,
+              name: await decryptAccountName(
+                session.user.id,
+                transaction.account.nameEncrypted
+              ),
+            },
+            toAccount: transaction.toAccount
+              ? {
+                  ...transaction.toAccount,
+                  name: await decryptAccountName(
+                    session.user.id,
+                    transaction.toAccount.nameEncrypted
+                  ),
+                }
+              : null,
+          }))
+        ),
+        Promise.all(
+          subscriptions.map(async (subscription) => ({
+            ...subscription,
+            account: subscription.account
+              ? {
+                  ...subscription.account,
+                  name: await decryptAccountName(
+                    session.user.id,
+                    subscription.account.nameEncrypted
+                  ),
+                }
+              : null,
+          }))
+        ),
+        Promise.all(
+          historyTransactions.map(async (transaction) => ({
+            ...transaction,
+            account: {
+              ...transaction.account,
+              name: await decryptAccountName(
+                session.user.id,
+                transaction.account.nameEncrypted
+              ),
+            },
+            toAccount: transaction.toAccount
+              ? {
+                  ...transaction.toAccount,
+                  name: await decryptAccountName(
+                    session.user.id,
+                    transaction.toAccount.nameEncrypted
+                  ),
+                }
+              : null,
+          }))
+        ),
+      ]);
+
     let currentLiquidBalance = 0;
     for (const account of liquidAccounts) {
       if (!trackedAccountIds.has(account.id)) {
@@ -500,9 +575,9 @@ export async function getCashFlowForecast(
 
     const futureTransactionEvents = (
       await Promise.all(
-        futureTransactions.map((transaction) =>
+        decryptedFutureTransactions.map((transaction) =>
           buildTransactionEvent(
-            transaction as TransactionForecastSource,
+            transaction as unknown as TransactionForecastSource,
             trackedAccountIds,
             converter.convertAmount
           )
@@ -517,7 +592,7 @@ export async function getCashFlowForecast(
       );
 
     const existingRecurringTransactionKeys = new Set(
-      futureTransactions
+      decryptedFutureTransactions
         .filter((transaction) => transaction.recurringRuleId)
         .map(
           (transaction) =>
@@ -541,7 +616,7 @@ export async function getCashFlowForecast(
     });
 
     const subscriptionEvents = await buildSubscriptionForecastEvents({
-      subscriptions,
+      subscriptions: decryptedSubscriptions as ForecastSubscription[],
       startDate,
       endDate,
       trackedAccountIds,
@@ -552,9 +627,9 @@ export async function getCashFlowForecast(
     const historicalForecastCandidates: { amountInMainCurrency: number; date: Date }[] = [];
     let historicalOutflowBasis = 0;
 
-    for (const transaction of historyTransactions) {
+    for (const transaction of decryptedHistoryTransactions) {
       const event = await buildTransactionEvent(
-        transaction as TransactionForecastSource,
+        transaction as unknown as TransactionForecastSource,
         trackedAccountIds,
         async (amount, _currency, options) => ({
           amountInTargetCurrency:

@@ -1,4 +1,5 @@
 import { auth } from "@/auth";
+import { decryptAccountRecords, sortAccountsByName } from "@/lib/account-crypto";
 import prisma from "@/lib/db";
 import {
   isAssetAccountType,
@@ -25,20 +26,28 @@ export async function GET() {
         userId: session.user.id,
         isActive: true,
       },
-      orderBy: { name: "asc" },
     });
+    const decryptedAccounts = sortAccountsByName(
+      await decryptAccountRecords(session.user.id, accounts)
+    );
 
-    const bankAccounts = accounts.filter((account) => account.type === "BANK");
-    const cashAccounts = accounts.filter((account) => account.type === "CASH");
-    const liquidAccounts = accounts.filter((account) => isLiquidAccountType(account.type));
-    const assetAccounts = accounts.filter((account) => isAssetAccountType(account.type));
-    const liabilityAccounts = accounts.filter((account) => isLiabilityAccountType(account.type));
-    const receivableAccounts = accounts.filter((account) =>
+    const bankAccounts = decryptedAccounts.filter((account) => account.type === "BANK");
+    const cashAccounts = decryptedAccounts.filter((account) => account.type === "CASH");
+    const liquidAccounts = decryptedAccounts.filter((account) =>
+      isLiquidAccountType(account.type)
+    );
+    const assetAccounts = decryptedAccounts.filter((account) =>
+      isAssetAccountType(account.type)
+    );
+    const liabilityAccounts = decryptedAccounts.filter((account) =>
+      isLiabilityAccountType(account.type)
+    );
+    const receivableAccounts = decryptedAccounts.filter((account) =>
       isLoanReceivableAccountType(account.type)
     );
 
     return NextResponse.json({
-      accounts,
+      accounts: decryptedAccounts,
       bankAccounts,
       cashAccounts,
       liquidAccounts,

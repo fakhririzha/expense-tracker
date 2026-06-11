@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/auth";
+import { decryptAccountName } from "@/lib/account-crypto";
 import prisma from "@/lib/db";
 import { TransactionType } from "@/generated/prisma/client/client";
 import { startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear } from "date-fns";
@@ -843,15 +844,27 @@ export async function getBudgetTransactions(
         account: {
           select: {
             id: true,
-            name: true,
+            nameEncrypted: true,
             currency: true,
           },
         },
       },
       orderBy: { date: "desc" },
     });
+    const decryptedTransactions = await Promise.all(
+      transactions.map(async (transaction) => ({
+        ...transaction,
+        account: {
+          ...transaction.account,
+          name: await decryptAccountName(
+            session.user.id,
+            transaction.account.nameEncrypted
+          ),
+        },
+      }))
+    );
 
-    return { success: true, data: transactions };
+    return { success: true, data: decryptedTransactions };
   } catch (error) {
     console.error("Get budget transactions error:", error);
     return { success: false, error: "Failed to fetch budget transactions", data: [] };

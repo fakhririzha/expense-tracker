@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/auth";
+import { decryptAccountName } from "@/lib/account-crypto";
 import prisma from "@/lib/db";
 import { Prisma, PaymentStatus, TransactionType } from "@/generated/prisma/client/client";
 import { revalidatePath } from "next/cache";
@@ -618,8 +619,25 @@ export async function getLiabilityPaymentHistory(
           }
         }
 
+        const [accountName, toAccountName] = await Promise.all([
+          decryptAccountName(session.user.id, payment.account.nameEncrypted),
+          payment.toAccount
+            ? decryptAccountName(session.user.id, payment.toAccount.nameEncrypted)
+            : Promise.resolve(null),
+        ]);
+
         return {
           ...payment,
+          account: {
+            ...payment.account,
+            name: accountName,
+          },
+          toAccount: payment.toAccount
+            ? {
+                ...payment.toAccount,
+                name: toAccountName,
+              }
+            : null,
           description: finalDescription,
           referenceNumber: finalReferenceNumber,
           createdBy: finalCreatedBy,
@@ -733,7 +751,6 @@ export async function getLiabilityPaymentSummary(startDate?: Date, endDate?: Dat
         toAccount: {
           select: {
             type: true,
-            name: true,
           },
         },
       },

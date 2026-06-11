@@ -2,6 +2,11 @@
 
 import { auth } from "@/auth";
 import { Prisma, TransactionType } from "@/generated/prisma/client/client";
+import {
+  decryptAccountName,
+  decryptAccountRecords,
+  sortAccountsByName,
+} from "@/lib/account-crypto";
 import prisma from "@/lib/db";
 import { getExchangeRate } from "@/lib/finance-service";
 import { decryptUserField, encryptUserField } from "@/lib/user-encryption";
@@ -23,6 +28,7 @@ type TransferMode = "DISBURSEMENT" | "REPAYMENT";
 interface AccountLike {
   id: string;
   name: string;
+  nameEncrypted?: string;
   type: string;
   currency: string;
   balance: number;
@@ -38,12 +44,12 @@ function isReceivableAccount(account: AccountLike) {
   return account.type === "LOAN_RECEIVABLE";
 }
 
-function validateReceivableTransfer(
+async function validateReceivableTransfer(
   mode: TransferMode,
   sourceAccount: AccountLike,
   targetAccount: AccountLike,
   amount: number
-): string | null {
+): Promise<string | null> {
   if (!sourceAccount.isActive || !targetAccount.isActive) {
     return "Both accounts must be active.";
   }
@@ -114,10 +120,15 @@ async function recordReceivableTransfer(
           throw new Error("Account not found");
         }
 
-        const validationError = validateReceivableTransfer(
+        const [sourceAccountName, targetAccountName] = await Promise.all([
+          decryptAccountName(userId, sourceAccount.nameEncrypted),
+          decryptAccountName(userId, targetAccount.nameEncrypted),
+        ]);
+
+        const validationError = await validateReceivableTransfer(
           mode,
-          sourceAccount,
-          targetAccount,
+          { ...sourceAccount, name: sourceAccountName },
+          { ...targetAccount, name: targetAccountName },
           amount
         );
         if (validationError) {
@@ -213,11 +224,13 @@ export async function getLoansReceivableSummary() {
         type: "LOAN_RECEIVABLE",
         isActive: true,
       },
-      orderBy: { name: "asc" },
     });
+    const decryptedAccounts = sortAccountsByName(
+      await decryptAccountRecords(session.user.id, accounts)
+    );
 
     let totalOutstanding = 0;
-    for (const account of accounts) {
+    for (const account of decryptedAccounts) {
       const rate =
         account.currency === user.mainCurrency
           ? 1
@@ -229,10 +242,10 @@ export async function getLoansReceivableSummary() {
       success: true,
       data: {
         totalOutstanding,
-        activeCount: accounts.length,
-        accountCount: accounts.length,
+        activeCount: decryptedAccounts.length,
+        accountCount: decryptedAccounts.length,
         displayCurrency: user.mainCurrency,
-        accounts,
+        accounts: decryptedAccounts,
       },
     };
   } catch (error) {
@@ -280,22 +293,33 @@ export async function getLoansReceivableHistory(limit: number = 50) {
 
     const decryptedTransactions = await Promise.all(
       transactions.map(async (transaction) => {
-        let finalDescription = transaction.description;
-        if (transaction.descriptionEncrypted) {
-          try {
-            finalDescription = await decryptUserField(
-              session.user.id,
-              "transaction.description",
-              transaction.descriptionEncrypted
-            );
-          } catch {
-            finalDescription = transaction.description;
-          }
-        }
+        const [accountName, toAccountName, finalDescription] = await Promise.all([
+          decryptAccountName(session.user.id, transaction.account.nameEncrypted),
+          transaction.toAccount
+            ? decryptAccountName(session.user.id, transaction.toAccount.nameEncrypted)
+            : Promise.resolve(null),
+          transaction.descriptionEncrypted
+            ? decryptUserField(
+                session.user.id,
+                "transaction.description",
+                transaction.descriptionEncrypted
+              ).catch(() => null)
+            : Promise.resolve(transaction.description),
+        ]);
 
         return {
           ...transaction,
-          description: finalDescription,
+          account: {
+            ...transaction.account,
+            name: accountName,
+          },
+          toAccount: transaction.toAccount
+            ? {
+                ...transaction.toAccount,
+                name: toAccountName,
+              }
+            : null,
+          description: finalDescription ?? null,
         };
       })
     );

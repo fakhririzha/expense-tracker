@@ -3,6 +3,11 @@
 import { auth } from "@/auth";
 import prisma from "@/lib/db";
 import { Prisma } from "@/generated/prisma/client/client";
+import {
+  decryptAccountRecords,
+  encryptAccountDescription,
+  encryptAccountName,
+} from "@/lib/account-crypto";
 import { revalidatePath } from "next/cache";
 import {
   ACCOUNT_TYPES,
@@ -51,6 +56,12 @@ export type ImportResult = {
   imported: number;
   failed: number;
   errors: Array<{ row: number; error: string }>;
+};
+
+type AccountLookupItem = {
+  id: string;
+  name: string;
+  currency: string;
 };
 
 /**
@@ -415,7 +426,12 @@ export async function importTransactions(
     const [existingAccounts, existingCategories] = await Promise.all([
       prisma.financialAccount.findMany({
         where: { userId: session.user.id },
-        select: { id: true, name: true, currency: true },
+        select: {
+          id: true,
+          nameEncrypted: true,
+          descriptionEncrypted: true,
+          currency: true,
+        },
       }),
       prisma.category.findMany({
         where: { userId: session.user.id },
@@ -424,8 +440,12 @@ export async function importTransactions(
     ]);
 
     // Create lookup maps
-    const accountMap = new Map(
-      existingAccounts.map((a) => [a.name.toLowerCase(), a])
+    const decryptedAccounts = await decryptAccountRecords(
+      session.user.id,
+      existingAccounts
+    );
+    const accountMap = new Map<string, AccountLookupItem>(
+      decryptedAccounts.map((a) => [a.name.toLowerCase(), a])
     );
     const categoryMap = new Map(
       existingCategories.map((c) => [c.name.toLowerCase(), c])
@@ -444,19 +464,26 @@ export async function importTransactions(
 
       try {
         // Find or create source account
-        let account = accountMap.get(tx.account.toLowerCase());
+        let account: AccountLookupItem | undefined = accountMap.get(
+          tx.account.toLowerCase()
+        );
 
         if (!account && options?.createMissingAccounts) {
           // Create new account
-          account = await prisma.financialAccount.create({
+          const createdAccount = await prisma.financialAccount.create({
             data: {
-              name: tx.account,
+              nameEncrypted: await encryptAccountName(session.user.id, tx.account),
               type: "BANK", // Default type
               currency: tx.currency || "IDR",
               balance: 0,
               userId: session.user.id,
             },
           });
+          account = {
+            id: createdAccount.id,
+            name: tx.account,
+            currency: createdAccount.currency,
+          };
           accountMap.set(tx.account.toLowerCase(), account);
         } else if (!account) {
           result.failed++;
@@ -466,23 +493,31 @@ export async function importTransactions(
           });
           continue;
         }
+        if (!account) {
+          continue;
+        }
 
         // For TRANSFER type, find or create destination account
-        let toAccount = null;
+        let toAccount: AccountLookupItem | null = null;
         if (tx.type === "TRANSFER" && tx.toAccount) {
-          toAccount = accountMap.get(tx.toAccount.toLowerCase());
+          toAccount = accountMap.get(tx.toAccount.toLowerCase()) ?? null;
 
           if (!toAccount && options?.createMissingAccounts) {
             // Create new destination account
-            toAccount = await prisma.financialAccount.create({
+            const createdToAccount = await prisma.financialAccount.create({
               data: {
-                name: tx.toAccount,
+                nameEncrypted: await encryptAccountName(session.user.id, tx.toAccount),
                 type: "BANK", // Default type
                 currency: tx.currency || "IDR",
                 balance: 0,
                 userId: session.user.id,
               },
             });
+            toAccount = {
+              id: createdToAccount.id,
+              name: tx.toAccount,
+              currency: createdToAccount.currency,
+            };
             accountMap.set(tx.toAccount.toLowerCase(), toAccount);
           } else if (!toAccount) {
             result.failed++;
@@ -490,6 +525,9 @@ export async function importTransactions(
               row: tx.rowNumber,
               error: `Destination account "${tx.toAccount}" not found`,
             });
+            continue;
+          }
+          if (!toAccount) {
             continue;
           }
         }
@@ -627,6 +665,20 @@ export async function importAccounts(
     };
 
     const validTypes = ACCOUNT_TYPES as readonly string[];
+    const existingAccounts = await decryptAccountRecords(
+      session.user.id,
+      await prisma.financialAccount.findMany({
+        where: {
+          userId: session.user.id,
+        },
+        select: {
+          id: true,
+          nameEncrypted: true,
+          descriptionEncrypted: true,
+          currency: true,
+        },
+      })
+    );
 
     for (let i = 0; i < accounts.length; i++) {
       const acc = accounts[i];
@@ -650,12 +702,9 @@ export async function importAccounts(
 
       try {
         // Check if account with same name exists
-        const existing = await prisma.financialAccount.findFirst({
-          where: {
-            userId: session.user.id,
-            name: acc.name,
-          },
-        });
+        const existing = existingAccounts.find(
+          (account) => account.name.toLowerCase() === acc.name.toLowerCase()
+        );
 
         if (existing) {
           result.failed++;
@@ -670,11 +719,14 @@ export async function importAccounts(
 
         await prisma.financialAccount.create({
           data: {
-            name: acc.name,
+            nameEncrypted: await encryptAccountName(session.user.id, acc.name),
             type: accountType,
             currency: acc.currency || "IDR",
             balance: normalizeAccountBalanceForType(accountType, acc.balance || 0),
-            description: acc.description,
+            descriptionEncrypted: await encryptAccountDescription(
+              session.user.id,
+              acc.description ?? null
+            ),
             userId: session.user.id,
           },
         });

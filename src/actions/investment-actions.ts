@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/auth";
+import { decryptAccountName } from "@/lib/account-crypto";
 import prisma from "@/lib/db";
 import {
     validateBuyTransaction,
@@ -425,7 +426,7 @@ export async function recordTrade(data: TradeInput) {
     }
 
     // Perform all operations within transaction with Serializable isolation to prevent race conditions
-    const result = await withSerializableTransaction(async (tx) => {
+      const result = await withSerializableTransaction(async (tx) => {
       // Lock account row for update
       const account = await tx.financialAccount.findUnique({
         where: { id: accountId },
@@ -456,7 +457,13 @@ export async function recordTrade(data: TradeInput) {
       if (type === "BUY") {
         // Validate sufficient funds within transaction
         if (account.balance < totalAmount) {
-          throw new Error(`Insufficient funds in "${account.name}". Available: ${account.balance}, Required: ${totalAmount}`);
+          const accountName = await decryptAccountName(
+            session.user.id,
+            account.nameEncrypted
+          );
+          throw new Error(
+            `Insufficient funds in "${accountName}". Available: ${account.balance}, Required: ${totalAmount}`
+          );
         }
 
         balanceAfter = balanceBefore - totalAmount;
@@ -547,7 +554,7 @@ export async function recordTrade(data: TradeInput) {
         trade,
         account: {
           id: account.id,
-          name: account.name,
+          name: await decryptAccountName(session.user.id, account.nameEncrypted),
           balanceBefore,
           balanceAfter,
         },

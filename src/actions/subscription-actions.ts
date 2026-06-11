@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { auth } from "@/auth";
+import { decryptAccountName } from "@/lib/account-crypto";
 import {
   Prisma,
   SubscriptionBillingCycle,
@@ -75,7 +76,7 @@ type SubscriptionWithRelations = Prisma.SubscriptionGetPayload<{
     account: {
       select: {
         id: true;
-        name: true;
+        nameEncrypted: true;
         currency: true;
         type: true;
       };
@@ -252,14 +253,20 @@ async function validateOwnedAccount(userId: string, accountId?: string | null) {
 
   const account = await prisma.financialAccount.findFirst({
     where: { id: accountId, userId },
-    select: { id: true, name: true, currency: true, type: true },
+    select: { id: true, nameEncrypted: true, currency: true, type: true },
   });
 
   if (!account) {
     return { success: false as const, error: "Account not found" };
   }
 
-  return { success: true as const, account };
+  return {
+    success: true as const,
+    account: {
+      ...account,
+      name: await decryptAccountName(userId, account.nameEncrypted),
+    },
+  };
 }
 
 async function getSubscriptionRecord(userId: string, id: string) {
@@ -277,7 +284,7 @@ async function getSubscriptionRecord(userId: string, id: string) {
       account: {
         select: {
           id: true,
-          name: true,
+          nameEncrypted: true,
           currency: true,
           type: true,
         },
@@ -361,6 +368,9 @@ async function toSubscriptionListItem(
           ).catch(() => subscription.recurringRule?.name ?? null)
         : Promise.resolve(subscription.recurringRule?.name ?? null),
     ]);
+  const accountName = subscription.account
+    ? await decryptAccountName(userId, subscription.account.nameEncrypted)
+    : null;
 
   const effectiveStatus = resolveSubscriptionStatus(subscription);
   const monthlyEquivalent = toMonthlyEquivalent(
@@ -415,7 +425,12 @@ async function toSubscriptionListItem(
     categoryId: subscription.categoryId,
     category: subscription.category,
     accountId: subscription.accountId,
-    account: subscription.account,
+    account: subscription.account
+      ? {
+          ...subscription.account,
+          name: accountName ?? "Unknown account",
+        }
+      : null,
     recurringRuleId: subscription.recurringRuleId,
     recurringRule,
     cancellationUrl,
@@ -598,7 +613,7 @@ export async function getSubscriptions(filters?: {
         account: {
           select: {
             id: true,
-            name: true,
+            nameEncrypted: true,
             currency: true,
             type: true,
           },

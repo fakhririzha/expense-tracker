@@ -1,12 +1,11 @@
 "use server";
 
 import { auth } from "@/auth";
-import prisma from "@/lib/db";
-import { revalidatePath } from "next/cache";
-import { z } from "zod";
-import { encryptUserField, decryptUserField } from "@/lib/user-encryption";
-import { getExchangeRate } from "@/lib/finance-service";
-import { getCurrentPortfolioValuation } from "@/lib/investment-valuation-service";
+import {
+  decryptAccountRecords,
+  encryptAccountDescription,
+  encryptAccountName,
+} from "@/lib/account-crypto";
 import {
   ACCOUNT_TYPES,
   type AccountTypeValue,
@@ -14,6 +13,11 @@ import {
   isLiabilityAccountType,
   normalizeAccountBalanceForType,
 } from "@/lib/account-types";
+import prisma from "@/lib/db";
+import { getExchangeRate } from "@/lib/finance-service";
+import { getCurrentPortfolioValuation } from "@/lib/investment-valuation-service";
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
 
 const accountSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -42,25 +46,25 @@ export async function createAccount(data: AccountInput) {
     }
 
     // Encrypt sensitive fields
-    const encryptedName = validatedFields.data.name
-      ? await encryptUserField(session.user.id, "account.name", validatedFields.data.name)
-      : null;
-    
-    const encryptedDescription = validatedFields.data.description
-      ? await encryptUserField(session.user.id, "account.description", validatedFields.data.description)
-      : null;
+    const encryptedName = await encryptAccountName(
+      session.user.id,
+      validatedFields.data.name
+    );
+    const encryptedDescription = await encryptAccountDescription(
+      session.user.id,
+      validatedFields.data.description ?? null
+    );
 
     const account = await prisma.financialAccount.create({
       data: {
-        ...validatedFields.data,
+        type: validatedFields.data.type,
+        currency: validatedFields.data.currency,
+        isActive: validatedFields.data.isActive,
         balance: normalizeAccountBalanceForType(
           validatedFields.data.type,
           validatedFields.data.balance
         ),
-        // Store encrypted version of name (for security display)
         nameEncrypted: encryptedName,
-        // Nullify optional plaintext field after encryption
-        description: validatedFields.data.description ? null : undefined,
         descriptionEncrypted: encryptedDescription,
         userId: session.user.id,
       },
@@ -92,18 +96,19 @@ export async function updateAccount(id: string, data: Partial<AccountInput>) {
     }
 
     // Encrypt sensitive fields if provided
-    let encryptedName: string | null = null;
-    let encryptedDescription: string | null = null;
-    
-    if (data.name) {
-      encryptedName = await encryptUserField(session.user.id, "account.name", data.name);
+    const updateData: Record<string, unknown> = {};
+    const nextType = data.type ?? existingAccount.type;
+
+    if (data.type !== undefined) {
+      updateData.type = data.type;
     }
-    if (data.description) {
-      encryptedDescription = await encryptUserField(session.user.id, "account.description", data.description);
+    if (data.currency !== undefined) {
+      updateData.currency = data.currency;
+    }
+    if (data.isActive !== undefined) {
+      updateData.isActive = data.isActive;
     }
 
-    const updateData: Record<string, unknown> = { ...data };
-    const nextType = data.type ?? existingAccount.type;
     if (data.balance !== undefined) {
       updateData.balance = normalizeAccountBalanceForType(nextType, data.balance);
     } else if (data.type !== undefined) {
@@ -114,13 +119,17 @@ export async function updateAccount(id: string, data: Partial<AccountInput>) {
     }
     
     // If name is being updated, also store encrypted version
-    if (data.name) {
-      updateData.nameEncrypted = encryptedName;
+    if (data.name !== undefined) {
+      updateData.nameEncrypted = await encryptAccountName(
+        session.user.id,
+        data.name
+      );
     }
-    // If description is being updated, nullify plaintext and store encrypted
     if (data.description !== undefined) {
-      updateData.description = data.description ? null : undefined;
-      updateData.descriptionEncrypted = encryptedDescription;
+      updateData.descriptionEncrypted = await encryptAccountDescription(
+        session.user.id,
+        data.description ?? null
+      );
     }
 
     const account = await prisma.financialAccount.update({
@@ -195,43 +204,9 @@ export async function getAccounts(type?: AccountTypeValue) {
       orderBy: { createdAt: "desc" },
     });
 
-    // Decrypt sensitive fields
-    const decryptedAccounts = await Promise.all(
-      accounts.map(async (account) => {
-        // Use encrypted name if available, otherwise fall back to plaintext
-        let finalName = account.name;
-        if (account.nameEncrypted) {
-          try {
-            finalName = await decryptUserField(
-              session.user.id,
-              "account.name",
-              account.nameEncrypted
-            );
-          } catch {
-            // Fall back to plaintext
-          }
-        }
-
-        // Use encrypted description if available, otherwise fall back to plaintext
-        let finalDescription = account.description;
-        if (account.descriptionEncrypted) {
-          try {
-            finalDescription = await decryptUserField(
-              session.user.id,
-              "account.description",
-              account.descriptionEncrypted
-            );
-          } catch {
-            // Fall back to plaintext
-          }
-        }
-
-        return {
-          ...account,
-          name: finalName,
-          description: finalDescription,
-        };
-      })
+    const decryptedAccounts = await decryptAccountRecords(
+      session.user.id,
+      accounts
     );
 
     return { success: true, data: decryptedAccounts };
@@ -266,41 +241,9 @@ export async function getAccountsSummary() {
       return { success: false, error: "User not found" };
     }
 
-    // Decrypt sensitive fields for accounts
-    const decryptedAccounts = await Promise.all(
-      accounts.map(async (account) => {
-        let finalName = account.name;
-        if (account.nameEncrypted) {
-          try {
-            finalName = await decryptUserField(
-              session.user.id,
-              "account.name",
-              account.nameEncrypted
-            );
-          } catch {
-            // Fall back to plaintext
-          }
-        }
-
-        let finalDescription = account.description;
-        if (account.descriptionEncrypted) {
-          try {
-            finalDescription = await decryptUserField(
-              session.user.id,
-              "account.description",
-              account.descriptionEncrypted
-            );
-          } catch {
-            // Fall back to plaintext
-          }
-        }
-
-        return {
-          ...account,
-          name: finalName,
-          description: finalDescription,
-        };
-      })
+    const decryptedAccounts = await decryptAccountRecords(
+      session.user.id,
+      accounts
     );
 
     interface AccountSummary {

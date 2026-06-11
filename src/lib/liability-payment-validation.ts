@@ -8,6 +8,10 @@
  * - Reference number uniqueness
  */
 
+import {
+  decryptAccountName,
+  sortAccountsByName,
+} from "@/lib/account-crypto";
 import prisma from "@/lib/db";
 import { FinancialAccount } from "@/generated/prisma/client/client";
 
@@ -18,8 +22,17 @@ export interface ValidationResult<T = unknown> {
   errorCode?: string;
 }
 
+export type AccountWithDisplayName = Omit<
+  FinancialAccount,
+  "nameEncrypted" | "descriptionEncrypted"
+> & {
+  name: string;
+  nameEncrypted: string;
+  descriptionEncrypted: string | null;
+};
+
 export interface AccountValidationData {
-  account: FinancialAccount;
+  account: AccountWithDisplayName;
   currentBalance: number;
   availableBalance: number;
 }
@@ -51,17 +64,20 @@ export async function validateSourceAccount(
   }
 
   if (!account.isActive) {
+    const accountName = await decryptAccountName(userId, account.nameEncrypted);
     return {
       valid: false,
       errorCode: "ACCOUNT_INACTIVE",
-      error: `Source account "${account.name}" is inactive or closed. Please activate it first.`,
+      error: `Source account "${accountName}" is inactive or closed. Please activate it first.`,
     };
   }
+
+  const accountName = await decryptAccountName(userId, account.nameEncrypted);
 
   return {
     valid: true,
     data: {
-      account,
+      account: { ...account, name: accountName },
       currentBalance: account.balance,
       availableBalance: account.balance,
     },
@@ -99,17 +115,20 @@ export async function validateTargetLiabilityAccount(
   }
 
   if (!account.isActive) {
+    const accountName = await decryptAccountName(userId, account.nameEncrypted);
     return {
       valid: false,
       errorCode: "ACCOUNT_INACTIVE",
-      error: `Target account "${account.name}" is inactive or closed. Please activate it first.`,
+      error: `Target account "${accountName}" is inactive or closed. Please activate it first.`,
     };
   }
+
+  const accountName = await decryptAccountName(userId, account.nameEncrypted);
 
   return {
     valid: true,
     data: {
-      account,
+      account: { ...account, name: accountName },
       currentBalance: account.balance,
       availableBalance: account.balance,
     },
@@ -124,6 +143,7 @@ export async function validateTargetLiabilityAccount(
  * @returns ValidationResult whose `data` contains `currentBalance` and `currency` when the account has sufficient funds, `valid` is `false` with `errorCode` and `error` otherwise
  */
 export async function validateSufficientFunds(
+  userId: string,
   accountId: string,
   requiredAmount: number
 ): Promise<ValidationResult<{ currentBalance: number; currency: string }>> {
@@ -140,10 +160,11 @@ export async function validateSufficientFunds(
   }
 
   if (account.balance < requiredAmount) {
+    const accountName = await decryptAccountName(userId, account.nameEncrypted);
     return {
       valid: false,
       errorCode: "INSUFFICIENT_FUNDS",
-      error: `Insufficient funds in "${account.name}". Available: ${account.balance.toLocaleString()} ${account.currency}, Required: ${requiredAmount.toLocaleString()} ${account.currency}`,
+      error: `Insufficient funds in "${accountName}". Available: ${account.balance.toLocaleString()} ${account.currency}, Required: ${requiredAmount.toLocaleString()} ${account.currency}`,
       data: { currentBalance: account.balance, currency: account.currency },
     };
   }
@@ -163,6 +184,7 @@ export async function validateSufficientFunds(
  * @returns A ValidationResult whose `data` contains `{ liabilityBalance, maxPayment }` when valid; otherwise includes an `errorCode` and `error` describing the failure
  */
 export async function validatePaymentAmount(
+  userId: string,
   liabilityAccountId: string,
   paymentAmount: number,
   allowOverpayment = false
@@ -186,10 +208,11 @@ export async function validatePaymentAmount(
 
   // If balance is 0 or positive (no debt), can't make a payment
   if (liabilityBalance >= 0) {
+    const accountName = await decryptAccountName(userId, account.nameEncrypted);
     return {
       valid: false,
       errorCode: "NO_OUTSTANDING_BALANCE",
-      error: `Account "${account.name}" has no outstanding balance to pay off.`,
+      error: `Account "${accountName}" has no outstanding balance to pay off.`,
       data: { liabilityBalance, maxPayment: 0 },
     };
   }
@@ -260,12 +283,16 @@ export async function validateAccountStatus(
 
   const sourceActive = sourceAccount.isActive;
   const targetActive = targetAccount.isActive;
+  const [sourceAccountName, targetAccountName] = await Promise.all([
+    decryptAccountName(sourceAccount.userId, sourceAccount.nameEncrypted),
+    decryptAccountName(targetAccount.userId, targetAccount.nameEncrypted),
+  ]);
 
   if (!sourceActive && !targetActive) {
     return {
       valid: false,
       errorCode: "ACCOUNTS_INACTIVE",
-      error: `Both accounts are inactive. Source: "${sourceAccount.name}", Target: "${targetAccount.name}"`,
+      error: `Both accounts are inactive. Source: "${sourceAccountName}", Target: "${targetAccountName}"`,
       data: { sourceActive, targetActive },
     };
   }
@@ -274,7 +301,7 @@ export async function validateAccountStatus(
     return {
       valid: false,
       errorCode: "ACCOUNT_INACTIVE",
-      error: `Source account "${sourceAccount.name}" is inactive or closed.`,
+      error: `Source account "${sourceAccountName}" is inactive or closed.`,
       data: { sourceActive, targetActive },
     };
   }
@@ -283,7 +310,7 @@ export async function validateAccountStatus(
     return {
       valid: false,
       errorCode: "ACCOUNT_INACTIVE",
-      error: `Target account "${targetAccount.name}" is inactive or closed.`,
+      error: `Target account "${targetAccountName}" is inactive or closed.`,
       data: { sourceActive, targetActive },
     };
   }
@@ -324,8 +351,8 @@ export async function validateLiabilityPayment(
   }
 ): Promise<
   ValidationResult<{
-    sourceAccount: FinancialAccount;
-    targetAccount: FinancialAccount;
+    sourceAccount: AccountWithDisplayName;
+    targetAccount: AccountWithDisplayName;
     sourceBalanceBefore: number;
     targetBalanceBefore: number;
   }>
@@ -373,6 +400,7 @@ export async function validateLiabilityPayment(
 
   // Step 4: Validate source account has sufficient funds
   const fundsValidation = await validateSufficientFunds(
+    userId,
     data.sourceAccountId,
     data.amount
   );
@@ -386,6 +414,7 @@ export async function validateLiabilityPayment(
 
   // Step 5: Validate payment amount vs liability balance
   const amountValidation = await validatePaymentAmount(
+    userId,
     data.targetAccountId,
     data.amount,
     data.allowOverpayment
@@ -428,15 +457,22 @@ export async function validateLiabilityPayment(
  */
 export async function getBankAccounts(
   userId: string
-): Promise<FinancialAccount[]> {
-  return prisma.financialAccount.findMany({
+): Promise<AccountWithDisplayName[]> {
+  const accounts = await prisma.financialAccount.findMany({
     where: {
       userId,
       type: "BANK",
       isActive: true,
     },
-    orderBy: { name: "asc" },
   });
+  return sortAccountsByName(
+    await Promise.all(
+      accounts.map(async (account) => ({
+        ...account,
+        name: await decryptAccountName(userId, account.nameEncrypted),
+      }))
+    )
+  );
 }
 
 /**
@@ -444,8 +480,8 @@ export async function getBankAccounts(
  */
 export async function getLiabilityAccounts(
   userId: string
-): Promise<FinancialAccount[]> {
-  return prisma.financialAccount.findMany({
+): Promise<AccountWithDisplayName[]> {
+  const accounts = await prisma.financialAccount.findMany({
     where: {
       userId,
       type: {
@@ -453,8 +489,15 @@ export async function getLiabilityAccounts(
       },
       isActive: true,
     },
-    orderBy: { name: "asc" },
   });
+  return sortAccountsByName(
+    await Promise.all(
+      accounts.map(async (account) => ({
+        ...account,
+        name: await decryptAccountName(userId, account.nameEncrypted),
+      }))
+    )
+  );
 }
 
 /**

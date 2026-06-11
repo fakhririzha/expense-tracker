@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/auth";
+import { decryptAccountName } from "@/lib/account-crypto";
 import prisma from "@/lib/db";
 import { Prisma } from "@/generated/prisma/client/client";
 import { revalidatePath } from "next/cache";
@@ -619,8 +620,25 @@ export async function getTransactions(options?: {
           }
         }
 
+        const [accountName, toAccountName] = await Promise.all([
+          decryptAccountName(session.user.id, tx.account.nameEncrypted),
+          tx.toAccount
+            ? decryptAccountName(session.user.id, tx.toAccount.nameEncrypted)
+            : Promise.resolve(null),
+        ]);
+
         return {
           ...tx,
+          account: {
+            ...tx.account,
+            name: accountName,
+          },
+          toAccount: tx.toAccount
+            ? {
+                ...tx.toAccount,
+                name: toAccountName,
+              }
+            : null,
           description: finalDescription,
           referenceNumber: finalReferenceNumber,
           createdBy: finalCreatedBy,
