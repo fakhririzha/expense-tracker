@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "next dev",
     "dev:https": "next dev --experimental-https",
+    "db:backfill:account-encryption": "node --experimental-strip-types src/scripts/backfill-account-encryption.ts",
     "db:migrate:dev": "npx prisma@^7.4.1 migrate dev",
     "db:migrate:prod": "npx prisma@^7.4.1 migrate deploy",
     "build": "prisma generate && next build",

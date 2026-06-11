@@ -2,6 +2,7 @@
 
 import { auth } from "@/auth";
 import prisma from "@/lib/db";
+import { decryptAccountName } from "@/lib/account-crypto";
 import {
   startOfMonth,
   endOfMonth,
@@ -44,6 +45,29 @@ export interface MonthSummary {
   totalExpenses: number;
   net: number;
   currency: string;
+}
+
+async function getAccountMap(userId: string, accountIds: string[]) {
+  if (accountIds.length === 0) {
+    return new Map<string, { id: string; name: string }>();
+  }
+
+  const accounts = await prisma.financialAccount.findMany({
+    where: { id: { in: accountIds } },
+    select: { id: true, nameEncrypted: true },
+  });
+
+  const entries = await Promise.all(
+    accounts.map(async (account) => [
+      account.id,
+      {
+        id: account.id,
+        name: await decryptAccountName(userId, account.nameEncrypted),
+      },
+    ] as const)
+  );
+
+  return new Map(entries);
 }
 
 /**
@@ -106,15 +130,15 @@ export async function getCalendarEvents(params: {
           })
         : [],
       accountIds.size > 0
-        ? prisma.financialAccount.findMany({
-            where: { id: { in: Array.from(accountIds) } },
-            select: { id: true, name: true },
-          })
+        ? getAccountMap(session.user.id, Array.from(accountIds))
         : [],
     ]);
 
     const categoryMap = new Map(categories.map((c) => [c.id, c]));
-    const accountMap = new Map(accounts.map((a) => [a.id, a]));
+    const accountMap =
+      accounts instanceof Map
+        ? accounts
+        : new Map<string, { id: string; name: string }>();
 
     // Add recurring rules as events
     for (const rule of recurringRules) {
@@ -155,7 +179,6 @@ export async function getCalendarEvents(params: {
         account: {
           select: {
             id: true,
-            name: true,
             nameEncrypted: true,
           },
         },
@@ -183,7 +206,10 @@ export async function getCalendarEvents(params: {
         type: tx.type,
         date: tx.date,
         category: tx.category,
-        account: tx.account,
+        account: {
+          ...tx.account,
+          name: await decryptAccountName(session.user.id, tx.account.nameEncrypted),
+        },
         source: "transaction",
         recurringRuleId: tx.recurringRuleId || undefined,
       });
@@ -256,15 +282,15 @@ export async function getUpcomingBills(params: {
           })
         : [],
       accountIds.size > 0
-        ? prisma.financialAccount.findMany({
-            where: { id: { in: Array.from(accountIds) } },
-            select: { id: true, name: true },
-          })
+        ? getAccountMap(session.user.id, Array.from(accountIds))
         : [],
     ]);
 
     const categoryMap = new Map(categories.map((c) => [c.id, c]));
-    const accountMap = new Map(accounts.map((a) => [a.id, a]));
+    const accountMap =
+      accounts instanceof Map
+        ? accounts
+        : new Map<string, { id: string; name: string }>();
 
     for (const rule of recurringRules) {
       events.push({
@@ -303,7 +329,7 @@ export async function getUpcomingBills(params: {
         account: {
           select: {
             id: true,
-            name: true,
+            nameEncrypted: true,
           },
         },
       },
@@ -329,7 +355,10 @@ export async function getUpcomingBills(params: {
         type: tx.type,
         date: tx.date,
         category: tx.category,
-        account: tx.account,
+        account: {
+          ...tx.account,
+          name: await decryptAccountName(session.user.id, tx.account.nameEncrypted),
+        },
         source: "transaction",
         recurringRuleId: tx.recurringRuleId || undefined,
       });
@@ -401,15 +430,15 @@ export async function getEventsForDate(params: {
           })
         : [],
       accountIds.size > 0
-        ? prisma.financialAccount.findMany({
-            where: { id: { in: Array.from(accountIds) } },
-            select: { id: true, name: true },
-          })
+        ? getAccountMap(session.user.id, Array.from(accountIds))
         : [],
     ]);
 
     const categoryMap = new Map(categories.map((c) => [c.id, c]));
-    const accountMap = new Map(accounts.map((a) => [a.id, a]));
+    const accountMap =
+      accounts instanceof Map
+        ? accounts
+        : new Map<string, { id: string; name: string }>();
 
     for (const rule of recurringRules) {
       events.push({
@@ -448,7 +477,7 @@ export async function getEventsForDate(params: {
         account: {
           select: {
             id: true,
-            name: true,
+            nameEncrypted: true,
           },
         },
       },
@@ -471,7 +500,10 @@ export async function getEventsForDate(params: {
         type: tx.type,
         date: tx.date,
         category: tx.category,
-        account: tx.account,
+        account: {
+          ...tx.account,
+          name: await decryptAccountName(session.user.id, tx.account.nameEncrypted),
+        },
         source: "transaction",
         recurringRuleId: tx.recurringRuleId || undefined,
       });

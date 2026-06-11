@@ -94,62 +94,9 @@ async function migrateAccounts(): Promise<MigrationResult> {
     errors: 0,
   };
 
-  try {
-    const users = await prisma.user.findMany({
-      select: { id: true, encryptionSalt: true },
-    });
-
-    for (const user of users) {
-      if (!user.encryptionSalt) continue;
-
-      const masterKey = getMasterKey();
-      const userKey = deriveUserKey(masterKey, user.encryptionSalt);
-
-      const accounts = await prisma.financialAccount.findMany({
-        where: {
-          userId: user.id,
-          description: { not: undefined },
-        },
-        select: {
-          id: true,
-          name: true,
-          description: true,
-        },
-      });
-
-      for (const account of accounts) {
-        try {
-          // Encrypt name
-          if (account.name) {
-            const encryptedName = encrypt(account.name, userKey);
-            await prisma.financialAccount.update({
-              where: { id: account.id },
-              data: { nameEncrypted: encryptedName },
-            });
-          }
-
-          // Encrypt description
-          if (account.description) {
-            const encryptedDesc = encrypt(account.description, userKey);
-            await prisma.financialAccount.update({
-              where: { id: account.id },
-              data: { descriptionEncrypted: encryptedDesc },
-            });
-          }
-
-          result.encrypted++;
-        } catch (error) {
-          console.error(`Error encrypting account ${account.id}:`, error);
-          result.errors++;
-        }
-        result.processed++;
-      }
-    }
-
-    console.log(`Accounts: Processed ${result.processed}, Encrypted ${result.encrypted}, Errors ${result.errors}`);
-  } catch (error) {
-    console.error("Error migrating accounts:", error);
-  }
+  console.log(
+    "Accounts: skipped in migrate-encryption.ts. Use `pnpm db:backfill:account-encryption` for FinancialAccount backfill."
+  );
 
   return result;
 }

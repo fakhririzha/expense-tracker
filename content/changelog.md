@@ -1,5 +1,10 @@
 # FinHealth Changelog
 
+## v4.4.2
+
+- Improved account privacy by moving account names and descriptions fully into encrypted storage instead of keeping a plaintext copy in the database.
+- Kept account labels working across the dashboard, imports, exports, forecasting, and transaction flows while tightening how account data is handled behind the scenes.
+
 ## v4.4.1
 
 - Fixed the dashboard install prompt so the header renders more reliably on first load without hydration errors in supported browsers.

@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/auth";
+import { decryptAccountName } from "@/lib/account-crypto";
 import prisma from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -43,6 +44,21 @@ export interface GoalWithProgress {
   monthlyTarget: number | null;
 }
 
+async function mapGoalAccount(
+  userId: string,
+  account: { id: string; nameEncrypted: string; currency: string } | null
+) {
+  if (!account) {
+    return null;
+  }
+
+  return {
+    id: account.id,
+    name: await decryptAccountName(userId, account.nameEncrypted),
+    currency: account.currency,
+  };
+}
+
 /**
  * Retrieve all savings goals belonging to the authenticated user, including each goal's basic account info.
  *
@@ -63,7 +79,7 @@ export async function getGoals() {
         account: {
           select: {
             id: true,
-            name: true,
+            nameEncrypted: true,
             currency: true,
           },
         },
@@ -104,6 +120,7 @@ export async function getGoals() {
 
         return {
           ...goal,
+          account: await mapGoalAccount(session.user.id, goal.account),
           name: finalName,
           description: finalDescription,
         };
@@ -136,7 +153,7 @@ export async function getGoal(id: string) {
         account: {
           select: {
             id: true,
-            name: true,
+            nameEncrypted: true,
             currency: true,
           },
         },
@@ -178,6 +195,7 @@ export async function getGoal(id: string) {
       success: true,
       data: {
         ...goal,
+        account: await mapGoalAccount(session.user.id, goal.account),
         name: finalName,
         description: finalDescription,
       },
@@ -250,7 +268,7 @@ export async function createGoal(data: GoalInput) {
         account: {
           select: {
             id: true,
-            name: true,
+            nameEncrypted: true,
             currency: true,
           },
         },
@@ -260,7 +278,13 @@ export async function createGoal(data: GoalInput) {
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/goals");
 
-    return { success: true, data: goal };
+    return {
+      success: true,
+      data: {
+        ...goal,
+        account: await mapGoalAccount(session.user.id, goal.account),
+      },
+    };
   } catch (error) {
     console.error("Create goal error:", error);
     return { success: false, error: "Failed to create goal" };
@@ -357,7 +381,7 @@ export async function updateGoal(id: string, data: Partial<GoalInput>) {
         account: {
           select: {
             id: true,
-            name: true,
+            nameEncrypted: true,
             currency: true,
           },
         },
@@ -367,7 +391,13 @@ export async function updateGoal(id: string, data: Partial<GoalInput>) {
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/goals");
 
-    return { success: true, data: goal };
+    return {
+      success: true,
+      data: {
+        ...goal,
+        account: await mapGoalAccount(session.user.id, goal.account),
+      },
+    };
   } catch (error) {
     console.error("Update goal error:", error);
     return { success: false, error: "Failed to update goal" };
@@ -450,7 +480,7 @@ export async function addProgress(id: string, amount: number) {
           account: {
             select: {
               id: true,
-              name: true,
+              nameEncrypted: true,
               currency: true,
             },
           },
@@ -473,7 +503,13 @@ export async function addProgress(id: string, amount: number) {
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/goals");
 
-    return { success: true, data: updatedGoal };
+    return {
+      success: true,
+      data: {
+        ...updatedGoal,
+        account: await mapGoalAccount(session.user.id, updatedGoal.account),
+      },
+    };
   } catch (error) {
     console.error("Add progress error:", error);
     if (error instanceof Error && error.message === "Goal not found") {
@@ -528,7 +564,7 @@ export async function withdrawProgress(id: string, amount: number) {
           account: {
             select: {
               id: true,
-              name: true,
+              nameEncrypted: true,
               currency: true,
             },
           },
@@ -551,7 +587,13 @@ export async function withdrawProgress(id: string, amount: number) {
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/goals");
 
-    return { success: true, data: updatedGoal };
+    return {
+      success: true,
+      data: {
+        ...updatedGoal,
+        account: await mapGoalAccount(session.user.id, updatedGoal.account),
+      },
+    };
   } catch (error) {
     console.error("Withdraw progress error:", error);
     if (error instanceof Error) {
@@ -586,7 +628,7 @@ export async function getGoalsSummary() {
         account: {
           select: {
             id: true,
-            name: true,
+            nameEncrypted: true,
             currency: true,
           },
         },
@@ -627,6 +669,7 @@ export async function getGoalsSummary() {
 
         return {
           ...goal,
+          account: await mapGoalAccount(session.user.id, goal.account),
           name: finalName,
           description: finalDescription,
         };

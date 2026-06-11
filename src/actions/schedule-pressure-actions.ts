@@ -128,12 +128,10 @@ export async function getUpcomingBankPressureForUser(
       },
       select: {
         id: true,
-        name: true,
         nameEncrypted: true,
         currency: true,
         balance: true,
       },
-      orderBy: { name: "asc" },
     });
 
     if (bankAccounts.length === 0) {
@@ -198,7 +196,7 @@ export async function getUpcomingBankPressureForUser(
             userId,
             "account.name",
             account.nameEncrypted,
-            account.name
+            ""
           ),
         },
       ] as const)

@@ -7,6 +7,10 @@
  * - Holding existence validation for sell orders
  */
 
+import {
+  decryptAccountName,
+  sortAccountsByName,
+} from "@/lib/account-crypto";
 import prisma from "@/lib/db";
 import { FinancialAccount } from "@/generated/prisma/client/client";
 
@@ -19,6 +23,15 @@ export interface ValidationResult<T = unknown> {
   error?: string;
 }
 
+export type AccountWithDisplayName = Omit<
+  FinancialAccount,
+  "nameEncrypted" | "descriptionEncrypted"
+> & {
+  name: string;
+  nameEncrypted: string;
+  descriptionEncrypted: string | null;
+};
+
 /**
  * Ensure the user has at least one active INVESTMENT account.
  *
@@ -26,17 +39,24 @@ export interface ValidationResult<T = unknown> {
  */
 export async function validateInvestmentAccountPrerequisite(
   userId: string
-): Promise<ValidationResult<FinancialAccount[]>> {
+): Promise<ValidationResult<AccountWithDisplayName[]>> {
   const accounts = await prisma.financialAccount.findMany({
     where: {
       userId,
       type: "INVESTMENT",
       isActive: true,
     },
-    orderBy: { name: "asc" },
   });
+  const decryptedAccounts = sortAccountsByName(
+    await Promise.all(
+      accounts.map(async (account) => ({
+        ...account,
+        name: await decryptAccountName(userId, account.nameEncrypted),
+      }))
+    )
+  );
 
-  if (accounts.length === 0) {
+  if (decryptedAccounts.length === 0) {
     return {
       valid: false,
       error: "No active INVESTMENT account found. Please create an INVESTMENT account first.",
@@ -45,7 +65,7 @@ export async function validateInvestmentAccountPrerequisite(
 
   return {
     valid: true,
-    data: accounts,
+    data: decryptedAccounts,
   };
 }
 
@@ -59,7 +79,7 @@ export async function validateInvestmentAccountPrerequisite(
 export async function validateInvestmentAccountOwnership(
   userId: string,
   accountId: string
-): Promise<ValidationResult<FinancialAccount>> {
+): Promise<ValidationResult<AccountWithDisplayName>> {
   const account = await prisma.financialAccount.findFirst({
     where: {
       id: accountId,
@@ -76,15 +96,18 @@ export async function validateInvestmentAccountOwnership(
   }
 
   if (!account.isActive) {
+    const accountName = await decryptAccountName(userId, account.nameEncrypted);
     return {
       valid: false,
-      error: `Account "${account.name}" is inactive. Please activate it first.`,
+      error: `Account "${accountName}" is inactive. Please activate it first.`,
     };
   }
 
+  const accountName = await decryptAccountName(userId, account.nameEncrypted);
+
   return {
     valid: true,
-    data: account,
+    data: { ...account, name: accountName },
   };
 }
 
@@ -94,6 +117,7 @@ export async function validateInvestmentAccountOwnership(
  * @returns A ValidationResult whose `data` contains `currentBalance` and `currency` when the account has sufficient funds; otherwise `valid` is `false` and `error` explains the shortage or that the account was not found.
  */
 export async function validateSufficientFunds(
+  userId: string,
   accountId: string,
   requiredAmount: number
 ): Promise<ValidationResult<{ currentBalance: number; currency: string }>> {
@@ -109,9 +133,10 @@ export async function validateSufficientFunds(
   }
 
   if (account.balance < requiredAmount) {
+    const accountName = await decryptAccountName(userId, account.nameEncrypted);
     return {
       valid: false,
-      error: `Insufficient funds in "${account.name}". Available: ${account.balance.toLocaleString()} ${account.currency}, Required: ${requiredAmount.toLocaleString()} ${account.currency}`,
+      error: `Insufficient funds in "${accountName}". Available: ${account.balance.toLocaleString()} ${account.currency}, Required: ${requiredAmount.toLocaleString()} ${account.currency}`,
       data: { currentBalance: account.balance, currency: account.currency },
     };
   }
@@ -183,7 +208,7 @@ export async function validateBuyTransaction(
   userId: string,
   accountId: string,
   totalAmount: number
-): Promise<ValidationResult<{ account: FinancialAccount; balanceBefore: number }>> {
+): Promise<ValidationResult<{ account: AccountWithDisplayName; balanceBefore: number }>> {
   // Step 1: Validate account ownership and status
   const ownershipResult = await validateInvestmentAccountOwnership(userId, accountId);
   if (!ownershipResult.valid || !ownershipResult.data) {
@@ -196,7 +221,11 @@ export async function validateBuyTransaction(
   const account = ownershipResult.data;
 
   // Step 2: Validate sufficient funds
-  const fundsResult = await validateSufficientFunds(accountId, totalAmount);
+  const fundsResult = await validateSufficientFunds(
+    userId,
+    accountId,
+    totalAmount
+  );
   if (!fundsResult.valid) {
     return {
       valid: false,
@@ -230,7 +259,7 @@ export async function validateSellTransaction(
   assetId: string,
   sellQuantity: number
 ): Promise<ValidationResult<{
-  account: FinancialAccount;
+  account: AccountWithDisplayName;
   asset: { id: string; symbol: string; name: string | null; quantity: number; avgBuyPrice: number };
   balanceBefore: number;
 }>> {
@@ -290,13 +319,22 @@ export async function validateSellTransaction(
  *
  * @returns The array of active INVESTMENT `FinancialAccount` records for the user, ordered ascending by `name`
  */
-export async function getInvestmentAccounts(userId: string): Promise<FinancialAccount[]> {
-  return prisma.financialAccount.findMany({
+export async function getInvestmentAccounts(
+  userId: string
+): Promise<AccountWithDisplayName[]> {
+  const accounts = await prisma.financialAccount.findMany({
     where: {
       userId,
       type: "INVESTMENT",
       isActive: true,
     },
-    orderBy: { name: "asc" },
   });
+  return sortAccountsByName(
+    await Promise.all(
+      accounts.map(async (account) => ({
+        ...account,
+        name: await decryptAccountName(userId, account.nameEncrypted),
+      }))
+    )
+  );
 }

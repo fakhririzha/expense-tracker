@@ -109,12 +109,10 @@ enum AccountType {
 
 model FinancialAccount {
   id                   String      @id @default(cuid())
-  name                 String
-  nameEncrypted        String?     @db.Text // Encrypted account name
+  nameEncrypted        String      @db.Text // Encrypted account name
   type                 AccountType
   currency             String      @default("IDR") // ISO currency code
   balance              Float       @default(0)
-  description          String?
   descriptionEncrypted String?     @db.Text // Encrypted description
   isActive             Boolean     @default(true)
 
