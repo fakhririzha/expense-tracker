@@ -44,6 +44,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { MoneyInput } from "@/components/ui/money-input";
 import { cn } from "@/lib/utils";
 
 
@@ -264,14 +265,13 @@ export function RecordSellTradeDialog({ onSuccess }: RecordSellTradeDialogProps)
                 <FormItem>
                   <FormLabel>Sell Price per Unit</FormLabel>
                   <FormControl>
-                    <Input
-                      type="number"
-                      step="0.01"
+                    <MoneyInput
                       placeholder="0.00"
-                      {...field}
-                      onChange={(e) =>
-                        field.onChange(parseFloat(e.target.value) || 0)
-                      }
+                      name={field.name}
+                      ref={field.ref}
+                      value={field.value}
+                      onBlur={field.onBlur}
+                      onValueChange={(value) => field.onChange(value ?? 0)}
                     />
                   </FormControl>
                   <FormMessage />
@@ -286,14 +286,13 @@ export function RecordSellTradeDialog({ onSuccess }: RecordSellTradeDialogProps)
                 <FormItem>
                   <FormLabel>Fees (Optional)</FormLabel>
                   <FormControl>
-                    <Input
-                      type="number"
-                      step="0.01"
+                    <MoneyInput
                       placeholder="0.00"
-                      {...field}
-                      onChange={(e) =>
-                        field.onChange(parseFloat(e.target.value) || 0)
-                      }
+                      name={field.name}
+                      ref={field.ref}
+                      value={field.value}
+                      onBlur={field.onBlur}
+                      onValueChange={(value) => field.onChange(value ?? 0)}
                     />
                   </FormControl>
                   <FormMessage />

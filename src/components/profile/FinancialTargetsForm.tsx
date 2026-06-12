@@ -15,7 +15,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/ui/money-input";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -76,23 +76,14 @@ export function FinancialTargetsForm({
             <FormItem>
               <FormLabel>Retirement Target</FormLabel>
               <FormControl>
-                <Input
-                  type="number"
-                  min="0.01"
-                  step="0.01"
+                <MoneyInput
                   placeholder="e.g. 5000000000"
                   name={field.name}
                   ref={field.ref}
-                  value={field.value ?? ""}
+                  value={field.value}
                   disabled={form.formState.isSubmitting}
                   onBlur={field.onBlur}
-                  onChange={(event) =>
-                    field.onChange(
-                      event.target.value === ""
-                        ? null
-                        : event.target.valueAsNumber
-                    )
-                  }
+                  onValueChange={field.onChange}
                 />
               </FormControl>
               <FormDescription>
@@ -111,23 +102,14 @@ export function FinancialTargetsForm({
             <FormItem>
               <FormLabel>Monthly Budget Target</FormLabel>
               <FormControl>
-                <Input
-                  type="number"
-                  min="0.01"
-                  step="0.01"
+                <MoneyInput
                   placeholder="e.g. 10000000"
                   name={field.name}
                   ref={field.ref}
-                  value={field.value ?? ""}
+                  value={field.value}
                   disabled={form.formState.isSubmitting}
                   onBlur={field.onBlur}
-                  onChange={(event) =>
-                    field.onChange(
-                      event.target.value === ""
-                        ? null
-                        : event.target.valueAsNumber
-                    )
-                  }
+                  onValueChange={field.onChange}
                 />
               </FormControl>
               <FormDescription>

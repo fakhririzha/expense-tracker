@@ -33,6 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { MoneyInput } from "@/components/ui/money-input";
 import { useAccounts } from "@/hooks/useAccountQueries";
 import {
   useRecordLoanDisbursement,
@@ -250,14 +251,13 @@ export function ReceivableTransferDialog({ mode }: ReceivableTransferDialogProps
                 <FormItem>
                   <FormLabel>Amount</FormLabel>
                   <FormControl>
-                    <Input
-                      type="number"
-                      step="0.01"
+                    <MoneyInput
                       placeholder="0.00"
-                      {...field}
-                      onChange={(event) =>
-                        field.onChange(parseFloat(event.target.value) || 0)
-                      }
+                      name={field.name}
+                      ref={field.ref}
+                      value={field.value}
+                      onBlur={field.onBlur}
+                      onValueChange={(value) => field.onChange(value ?? 0)}
                     />
                   </FormControl>
                   <FormMessage />

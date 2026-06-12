@@ -1,5 +1,10 @@
 # FinHealth Changelog
 
+## v4.4.3
+
+- Improved money entry fields with Indonesian thousand separators across accounts, transactions, budgets, goals, subscriptions, investments, assets, and profile targets.
+- Kept non-money numeric fields like coordinates, reminders, percentages, and investment quantities unchanged for precise input.
+
 ## v4.4.2
 
 - Improved account privacy by moving account names and descriptions fully into encrypted storage instead of keeping a plaintext copy in the database.
