@@ -97,6 +97,7 @@ export function AddProgressDialog({
     }
   };
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const selectedAction = form.watch("action");
   const amountValue = form.watch("amount") || 0;
 
@@ -114,7 +115,7 @@ export function AddProgressDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-106.25">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <span className="text-2xl">{goal.icon || "💰"}</span>

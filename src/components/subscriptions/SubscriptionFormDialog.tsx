@@ -257,7 +257,7 @@ export function SubscriptionFormDialog({
   };
 
   const dialogContent = (
-    <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+    <DialogContent className="sm:max-w-175 max-h-[90vh] overflow-y-auto">
       <DialogHeader>
         <DialogTitle>
           {mode === "create" ? "Add Subscription" : "Edit Subscription"}
