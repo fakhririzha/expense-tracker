@@ -20,6 +20,15 @@ const loginSchema = z.object({
 
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
+export type LoginResult =
+  | {
+      success: true;
+      redirectTo: string;
+    }
+  | {
+      success: false;
+      error: string;
+    };
 
 export async function register(data: RegisterInput) {
   try {
@@ -75,7 +84,42 @@ export async function register(data: RegisterInput) {
   }
 }
 
-export async function login(data: LoginInput) {
+function getLoginErrorMessage(error: unknown) {
+  if (typeof error === "string") {
+    switch (error) {
+      case "CredentialsSignin":
+        return "Invalid email or password";
+      default:
+        return "Something went wrong. Please try again.";
+    }
+  }
+
+  if (error instanceof AuthError) {
+    return getLoginErrorMessage(error.type);
+  }
+
+  return "Something went wrong. Please try again.";
+}
+
+function getRelativeRedirectPath(redirectUrl: string) {
+  try {
+    const parsedUrl = new URL(redirectUrl, "http://localhost");
+    return `${parsedUrl.pathname}${parsedUrl.search}${parsedUrl.hash}`;
+  } catch {
+    return redirectUrl;
+  }
+}
+
+function getRedirectError(redirectUrl: string) {
+  try {
+    const parsedUrl = new URL(redirectUrl, "http://localhost");
+    return parsedUrl.searchParams.get("error");
+  } catch {
+    return null;
+  }
+}
+
+export async function login(data: LoginInput): Promise<LoginResult> {
   try {
     const validatedFields = loginSchema.safeParse(data);
 
@@ -88,23 +132,41 @@ export async function login(data: LoginInput) {
 
     const { email, password } = validatedFields.data;
 
-    await signIn("credentials", {
+    const redirectUrl = await signIn("credentials", {
       email,
       password,
+      redirect: false,
       redirectTo: "/dashboard",
     });
 
-    return { success: true };
-  } catch (error) {
-    if (error instanceof AuthError) {
-      switch (error.type) {
-        case "CredentialsSignin":
-          return { success: false, error: "Invalid email or password" };
-        default:
-          return { success: false, error: "Something went wrong" };
+    if (typeof redirectUrl === "string") {
+      const redirectError = getRedirectError(redirectUrl);
+      if (redirectError) {
+        return {
+          success: false,
+          error: getLoginErrorMessage(redirectError),
+        };
       }
+
+      return {
+        success: true,
+        redirectTo: getRelativeRedirectPath(redirectUrl),
+      };
     }
-    throw error;
+
+    return {
+      success: true,
+      redirectTo: "/dashboard",
+    };
+  } catch (error) {
+    if (!(error instanceof AuthError)) {
+      console.error("Login error:", error);
+    }
+
+    return {
+      success: false,
+      error: getLoginErrorMessage(error),
+    };
   }
 }
 

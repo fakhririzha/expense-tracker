@@ -1,5 +1,10 @@
 # FinHealth Changelog
 
+## v4.4.4
+
+- Added login confirmation dialogs so successful and failed sign-ins are now acknowledged more clearly before the app continues.
+- Kept the existing registration and account-deletion messages on the login page while making the sign-in feedback more visible.
+
 ## v4.4.3
 
 - Improved money entry fields with Indonesian thousand separators across accounts, transactions, budgets, goals, subscriptions, investments, assets, and profile targets.

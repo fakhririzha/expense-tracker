@@ -154,7 +154,7 @@ export function AddBudgetDialog({ onSuccess }: AddBudgetDialogProps) {
           Add Budget
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-125 max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add Budget</DialogTitle>
           <DialogDescription>
