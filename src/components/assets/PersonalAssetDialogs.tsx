@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MoneyInput } from "@/components/ui/money-input";
 import {
   Select,
   SelectContent,
@@ -51,11 +52,11 @@ function parseInputDate(value: string): Date {
 interface AssetDraft {
   name: string;
   category: PersonalAssetCategory;
-  currentValue: string;
+  currentValue: number | null;
   currency: string;
   valuedAt: string;
   purchaseDate: string;
-  purchasePrice: string;
+  purchasePrice: number | null;
   purchaseCurrency: string;
   notes: string;
 }
@@ -63,11 +64,11 @@ interface AssetDraft {
 const emptyDraft = (): AssetDraft => ({
   name: "",
   category: "ELECTRONICS",
-  currentValue: "",
+  currentValue: null,
   currency: "IDR",
   valuedAt: today(),
   purchaseDate: "",
-  purchasePrice: "",
+  purchasePrice: null,
   purchaseCurrency: "IDR",
   notes: "",
 });
@@ -135,13 +136,10 @@ function AssetMetadataFields({
         <div className="grid gap-4 sm:grid-cols-[1fr_120px]">
           <div className="grid gap-2">
             <Label htmlFor="asset-value">Initial value</Label>
-            <Input
+            <MoneyInput
               id="asset-value"
-              type="number"
-              min="0"
-              step="0.01"
               value={draft.currentValue}
-              onChange={(event) => update("currentValue", event.target.value)}
+              onValueChange={(value) => update("currentValue", value)}
               placeholder="0.00"
             />
           </div>
@@ -170,13 +168,10 @@ function AssetMetadataFields({
         </div>
         <div className="grid gap-2">
           <Label htmlFor="asset-purchase-price">Purchase price</Label>
-          <Input
+          <MoneyInput
             id="asset-purchase-price"
-            type="number"
-            min="0"
-            step="0.01"
             value={draft.purchasePrice}
-            onChange={(event) => update("purchasePrice", event.target.value)}
+            onValueChange={(value) => update("purchasePrice", value)}
             placeholder="Optional"
           />
         </div>
@@ -223,12 +218,13 @@ export function AddPersonalAssetDialog() {
       await createMutation.mutateAsync({
         name: draft.name,
         category: draft.category,
-        currentValue: Number(draft.currentValue),
+        currentValue: draft.currentValue ?? 0,
         currency: draft.currency,
         valuedAt: parseInputDate(draft.valuedAt),
         purchaseDate: draft.purchaseDate ? parseInputDate(draft.purchaseDate) : null,
-        purchasePrice: draft.purchasePrice ? Number(draft.purchasePrice) : null,
-        purchaseCurrency: draft.purchasePrice ? draft.purchaseCurrency : null,
+        purchasePrice: draft.purchasePrice && draft.purchasePrice > 0 ? draft.purchasePrice : null,
+        purchaseCurrency:
+          draft.purchasePrice && draft.purchasePrice > 0 ? draft.purchaseCurrency : null,
         notes: draft.notes || null,
       });
       setDraft(emptyDraft());
@@ -285,11 +281,11 @@ export function EditPersonalAssetDialog({
       ? {
           name: asset.name,
           category: asset.category,
-          currentValue: "",
+          currentValue: null,
           currency: asset.currency,
           valuedAt: "",
           purchaseDate: toInputDate(asset.purchaseDate),
-          purchasePrice: asset.purchasePrice?.toString() ?? "",
+          purchasePrice: asset.purchasePrice ?? null,
           purchaseCurrency: asset.purchaseCurrency ?? asset.currency,
           notes: asset.notes ?? "",
         }
@@ -308,8 +304,10 @@ export function EditPersonalAssetDialog({
           name: draft.name,
           category: draft.category,
           purchaseDate: draft.purchaseDate ? parseInputDate(draft.purchaseDate) : null,
-          purchasePrice: draft.purchasePrice ? Number(draft.purchasePrice) : null,
-          purchaseCurrency: draft.purchasePrice ? draft.purchaseCurrency : null,
+          purchasePrice:
+            draft.purchasePrice && draft.purchasePrice > 0 ? draft.purchasePrice : null,
+          purchaseCurrency:
+            draft.purchasePrice && draft.purchasePrice > 0 ? draft.purchaseCurrency : null,
           notes: draft.notes || null,
         },
       });
@@ -352,7 +350,7 @@ export function RevaluePersonalAssetDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const [value, setValue] = useState(() => asset?.currentValue.toString() ?? "");
+  const [value, setValue] = useState<number | null>(() => asset?.currentValue ?? null);
   const [currency, setCurrency] = useState(() => asset?.currency ?? "IDR");
   const [valuedAt, setValuedAt] = useState(today());
   const [error, setError] = useState<string>();
@@ -364,7 +362,7 @@ export function RevaluePersonalAssetDialog({
     try {
       await mutation.mutateAsync({
         id: asset.id,
-        data: { value: Number(value), currency, valuedAt: parseInputDate(valuedAt) },
+        data: { value: value ?? 0, currency, valuedAt: parseInputDate(valuedAt) },
       });
       onOpenChange(false);
     } catch (submitError) {
@@ -385,13 +383,10 @@ export function RevaluePersonalAssetDialog({
           <div className="grid grid-cols-[1fr_110px] gap-4">
             <div className="grid gap-2">
               <Label htmlFor="valuation-value">Value</Label>
-              <Input
+              <MoneyInput
                 id="valuation-value"
-                type="number"
-                min="0"
-                step="0.01"
                 value={value}
-                onChange={(event) => setValue(event.target.value)}
+                onValueChange={setValue}
               />
             </div>
             <div className="grid gap-2">
