@@ -1,5 +1,10 @@
 # FinHealth Changelog
 
+## v4.5.1
+
+- Improved transfer entry so choosing a source account now shows its current balance directly in the Add Transaction form.
+- Made it easier to confirm available funds before moving money between cash and bank accounts.
+
 ## v4.5.0
 
 - Added manual split transactions for expenses so one purchase can now be divided across multiple categories without affecting the account balance more than once.

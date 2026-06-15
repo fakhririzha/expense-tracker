@@ -36,7 +36,7 @@ import {
 } from "@/components/ui/select";
 import { MoneyInput } from "@/components/ui/money-input";
 import { TransactionSplitEditor } from "@/components/transactions/TransactionSplitEditor";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
 import { CalendarIcon, Loader2, MapPin, Plus } from "lucide-react";
@@ -103,11 +103,21 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
   const { data: accountsData = [] } = useAccounts();
   const createMutation = useCreateTransaction();
 
-  const accounts = accountsData.map((a: { id: string; name: string; type: string }) => ({
-    id: a.id,
-    name: a.name,
-    type: a.type,
-  }));
+  const accounts = accountsData.map(
+    (a: {
+      id: string;
+      name: string;
+      type: string;
+      balance: number;
+      currency: string;
+    }) => ({
+      id: a.id,
+      name: a.name,
+      type: a.type,
+      balance: a.balance,
+      currency: a.currency,
+    })
+  );
   const transferAccountTypes = new Set(["BANK", "CASH"]);
 
   const form = useForm<TransactionFormInput, unknown, TransactionFormValues>({
@@ -131,8 +141,12 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
   });
 
   const selectedType = form.watch("type");
+  const selectedFromAccountId = form.watch("accountId");
   const splits = form.watch("splits") ?? [];
   const isSplitEnabled = splits.length > 0;
+  const selectedFromAccount = accounts.find(
+    (account) => account.id === selectedFromAccountId
+  );
 
   const handleSplitToggle = (enabled: boolean) => {
     if (!enabled) {
@@ -360,6 +374,15 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
                           ))}
                       </SelectContent>
                     </Select>
+                    {selectedFromAccount ? (
+                      <p className="text-xs text-muted-foreground">
+                        Available balance:{" "}
+                        {formatCurrency(
+                          selectedFromAccount.balance,
+                          selectedFromAccount.currency
+                        )}
+                      </p>
+                    ) : null}
                     <FormMessage />
                   </FormItem>
                 )}
