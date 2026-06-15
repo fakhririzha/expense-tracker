@@ -39,6 +39,7 @@ model User {
   // Financial relations
   financialAccounts FinancialAccount[]
   transactions      Transaction[]
+  transactionSplits TransactionSplit[]
   categories        Category[]
   investmentAssets  InvestmentAsset[]
   tradeHistory      TradeHistory[]
@@ -163,6 +164,7 @@ model Category {
   user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   transactions Transaction[]
+  transactionSplits TransactionSplit[]
   budgets      Budget[]
   subscriptions Subscription[]
 
@@ -174,6 +176,7 @@ model Category {
 
 model Transaction {
   id                   String          @id @default(cuid())
+  clientMutationId     String?
   amount               Float
   currency             String          @default("IDR") // Transaction currency
   exchangeRate         Float           @default(1) // Rate to convert to user's main currency
@@ -213,6 +216,7 @@ model Transaction {
 
   recurringRuleId String?
   recurringRule   RecurringRule? @relation(fields: [recurringRuleId], references: [id], onDelete: SetNull)
+  splits          TransactionSplit[]
 
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
@@ -223,6 +227,7 @@ model Transaction {
   liabilityPaymentAudit LiabilityPaymentAudit?
 
   @@index([userId])
+  @@unique([userId, clientMutationId])
   @@index([accountId])
   @@index([toAccountId])
   @@index([categoryId])
@@ -230,6 +235,31 @@ model Transaction {
   @@index([referenceNumber])
   @@index([financialAccountId], map: "Transaction_financialAccountId_fkey")
   @@index([recurringRuleId], map: "Transaction_recurringRuleId_fkey")
+}
+
+model TransactionSplit {
+  id                   String      @id @default(cuid())
+  amount               Float
+  description          String?
+  descriptionEncrypted String?     @db.Text
+  sortOrder            Int         @default(0)
+
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([transactionId])
+  @@index([userId])
+  @@index([categoryId])
+  @@index([userId, transactionId])
 }
 
 // ==================== INVESTMENT MODELS ====================

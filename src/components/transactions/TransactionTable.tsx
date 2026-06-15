@@ -40,6 +40,8 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { getSplitSummary } from "@/lib/transaction-allocation-service";
 import { formatCurrency } from "@/lib/utils";
 
 export interface Transaction {
@@ -72,6 +74,19 @@ export interface Transaction {
     icon: string | null;
     color: string | null;
   } | null;
+  splits: Array<{
+    id: string;
+    amount: number;
+    description: string | null;
+    sortOrder: number;
+    categoryId: string | null;
+    category: {
+      id: string;
+      name: string;
+      icon: string | null;
+      color: string | null;
+    } | null;
+  }>;
 }
 
 interface TransactionTableProps {
@@ -148,13 +163,48 @@ export function TransactionTable({
       accessorKey: "category",
       header: "Category",
       cell: ({ row }) => {
-        const category = row.original.category;
-        if (!category) return <span className="text-muted-foreground">-</span>;
+        const transaction = row.original;
+        const summary = getSplitSummary(transaction);
+        if (!summary.isSplit) {
+          const category = transaction.category;
+          if (!category) return <span className="text-muted-foreground">-</span>;
+          return (
+            <div className="flex items-center gap-2">
+              {category.icon && <span>{category.icon}</span>}
+              <span>{category.name}</span>
+            </div>
+          );
+        }
+
+        const splitLines = transaction.splits.map((split) => ({
+          id: split.id,
+          label: split.category?.name || "Uncategorized",
+          icon: split.category?.icon,
+          amount: split.amount,
+        }));
+
         return (
-          <div className="flex items-center gap-2">
-            {category.icon && <span>{category.icon}</span>}
-            <span>{category.name}</span>
-          </div>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="cursor-default">
+                  <Badge variant="secondary">Split</Badge>
+                  <div className="mt-1 text-sm">{summary.label}</div>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent className="space-y-1">
+                {splitLines.map((split) => (
+                  <div key={split.id} className="flex items-center justify-between gap-4">
+                    <span>
+                      {split.icon ? `${split.icon} ` : ""}
+                      {split.label}
+                    </span>
+                    <span>{formatCurrency(split.amount, transaction.currency)}</span>
+                  </div>
+                ))}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         );
       },
     },

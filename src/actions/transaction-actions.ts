@@ -8,6 +8,11 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { encryptUserField, decryptUserField } from "@/lib/user-encryption";
 import { isLoanReceivableAccountType } from "@/lib/account-types";
+import {
+  normalizeTransactionSplits,
+  validateTransactionSplits,
+  type NormalizedTransactionSplitInput,
+} from "@/lib/transaction-split-validation";
 
 // Define TransactionType enum locally since Prisma client may not be generated yet
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -31,6 +36,7 @@ function normalizeOptionalText(value?: string) {
 
 const transactionSchema = z
   .object({
+    clientMutationId: z.string().uuid().optional(),
     amount: z.number().positive("Amount must be positive"),
     currency: z.string().default("IDR"),
     exchangeRate: z.number().positive().default(1),
@@ -46,6 +52,16 @@ const transactionSchema = z
     categoryId: z.string().optional(),
     isRecurring: z.boolean().default(false),
     recurringRuleId: z.string().optional(),
+    splits: z
+      .array(
+        z.object({
+          categoryId: z.string().optional().nullable(),
+          amount: z.number().positive("Amount must be positive"),
+          description: z.string().optional().nullable(),
+          sortOrder: z.number().int().optional(),
+        })
+      )
+      .optional(),
     // Liability payment specific fields
     referenceNumber: z.string().optional(),
     // Audit field
@@ -84,6 +100,57 @@ const transactionSchema = z
 
 export type TransactionInput = z.infer<typeof transactionSchema>;
 
+async function validateOwnedSplitCategories(
+  userId: string,
+  splits: NormalizedTransactionSplitInput[]
+) {
+  const categoryIds = Array.from(
+    new Set(splits.map((split) => split.categoryId).filter(Boolean) as string[])
+  );
+
+  if (categoryIds.length === 0) {
+    return { success: true as const };
+  }
+
+  const categories = await prisma.category.findMany({
+    where: {
+      userId,
+      id: { in: categoryIds },
+      type: TransactionTypeEnum.EXPENSE,
+    },
+    select: { id: true },
+  });
+
+  if (categories.length !== categoryIds.length) {
+    return {
+      success: false as const,
+      error: "One or more split categories are invalid.",
+    };
+  }
+
+  return { success: true as const };
+}
+
+async function buildSplitCreateData(
+  userId: string,
+  transactionId: string,
+  splits: NormalizedTransactionSplitInput[]
+) {
+  return Promise.all(
+    splits.map(async (split) => ({
+      transactionId,
+      userId,
+      categoryId: split.categoryId,
+      amount: split.amount,
+      sortOrder: split.sortOrder,
+      description: null,
+      descriptionEncrypted: split.description
+        ? await encryptUserField(userId, "transactionSplit.description", split.description)
+        : null,
+    }))
+  );
+}
+
 /**
  * Creates a financial transaction, adjusts the related account balance(s), and revalidates relevant caches.
  *
@@ -105,7 +172,7 @@ export async function createTransaction(data: TransactionInput) {
       };
     }
 
-    const { amount, type, accountId, toAccountId, ...rest } = validatedFields.data;
+    const { amount, type, accountId, toAccountId, splits, ...rest } = validatedFields.data;
 
     // Verify account belongs to user
     const account = await prisma.financialAccount.findFirst({
@@ -150,9 +217,21 @@ export async function createTransaction(data: TransactionInput) {
     // Sanitize optional FKs: empty string causes foreign key violation, use null
     const categoryId = rest.categoryId?.trim() || null;
     const recurringRuleId = rest.recurringRuleId?.trim() || null;
+    const splitValidation = validateTransactionSplits({
+      type,
+      amount,
+      currency: rest.currency,
+      splits,
+    });
+
+    if (!splitValidation.success) {
+      return { success: false, error: splitValidation.error };
+    }
+
+    const normalizedSplits = splitValidation.data;
 
     // Validate category belongs to the current user (IDOR prevention)
-    if (categoryId) {
+    if (categoryId && normalizedSplits.length === 0) {
       const category = await prisma.category.findFirst({
         where: {
           id: categoryId,
@@ -161,6 +240,16 @@ export async function createTransaction(data: TransactionInput) {
       });
       if (!category) {
         return { success: false, error: "Category not found" };
+      }
+    }
+
+    if (normalizedSplits.length > 0) {
+      const categoryValidation = await validateOwnedSplitCategories(
+        session.user.id,
+        normalizedSplits
+      );
+      if (!categoryValidation.success) {
+        return { success: false, error: categoryValidation.error };
       }
     }
 
@@ -204,7 +293,7 @@ export async function createTransaction(data: TransactionInput) {
       referenceNumberEncrypted: encryptedReferenceNumber,
       createdBy: null, // Nullify plaintext after encryption
       createdByEncrypted: encryptedCreatedBy,
-      categoryId,
+      categoryId: normalizedSplits.length > 0 ? null : categoryId,
       recurringRuleId,
     };
 
@@ -214,6 +303,17 @@ export async function createTransaction(data: TransactionInput) {
       const transaction = await tx.transaction.create({
         data: createData,
       });
+
+      if (normalizedSplits.length > 0) {
+        const splitData = await buildSplitCreateData(
+          session.user.id,
+          transaction.id,
+          normalizedSplits
+        );
+        await tx.transactionSplit.createMany({
+          data: splitData,
+        });
+      }
 
       if (type === "TRANSFER") {
         // For transfers: decrement from source account, increment to destination account
@@ -244,6 +344,12 @@ export async function createTransaction(data: TransactionInput) {
     return { success: true, data: result };
   } catch (error) {
     console.error("Create transaction error:", error);
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return { success: false, error: "This transaction was already submitted." };
+    }
     return { success: false, error: "Failed to create transaction" };
   }
 }
@@ -270,7 +376,7 @@ export async function updateTransaction(
     // Get existing transaction
     const existingTransaction = await prisma.transaction.findFirst({
       where: { id, userId: session.user.id },
-      include: { account: true, toAccount: true },
+      include: { account: true, toAccount: true, splits: true },
     });
 
     if (!existingTransaction) {
@@ -303,8 +409,27 @@ export async function updateTransaction(
       };
     }
 
+    const nextAmount = amount ?? existingTransaction.amount;
+    const nextCurrency = data.currency ?? existingTransaction.currency;
+    const normalizedIncomingSplits =
+      data.splits !== undefined
+        ? normalizeTransactionSplits(data.splits)
+        : normalizeTransactionSplits(existingTransaction.splits);
+    const splitValidation = validateTransactionSplits({
+      type: newType,
+      amount: nextAmount,
+      currency: nextCurrency,
+      splits: data.splits !== undefined ? data.splits : existingTransaction.splits,
+    });
+
+    if (!splitValidation.success) {
+      return { success: false, error: splitValidation.error };
+    }
+
+    const normalizedSplits = splitValidation.data;
+
     // Validate category belongs to the current user (IDOR prevention)
-    if (categoryId !== undefined) {
+    if (categoryId !== undefined && normalizedSplits.length === 0) {
       const sanitizedCategoryId = categoryId?.trim() || null;
       if (sanitizedCategoryId) {
         const category = await prisma.category.findFirst({
@@ -316,6 +441,16 @@ export async function updateTransaction(
         if (!category) {
           return { success: false, error: "Category not found" };
         }
+      }
+    }
+
+    if (normalizedIncomingSplits.length > 0) {
+      const categoryValidation = await validateOwnedSplitCategories(
+        session.user.id,
+        normalizedIncomingSplits
+      );
+      if (!categoryValidation.success) {
+        return { success: false, error: categoryValidation.error };
       }
     }
 
@@ -365,6 +500,14 @@ export async function updateTransaction(
         !["BANK", "CASH"].includes(newTargetAccount.type)
       ) {
         return { success: false, error: "Transfers can only use bank or cash accounts" };
+      }
+    } else if (accountId) {
+      const newAccount = await prisma.financialAccount.findFirst({
+        where: { id: accountId, userId: session.user.id },
+      });
+
+      if (!newAccount) {
+        return { success: false, error: "Account not found" };
       }
     }
 
@@ -447,8 +590,14 @@ export async function updateTransaction(
         where: { id },
         data: {
           amount: newAmount,
+          currency: data.currency ?? existingTransaction.currency,
+          exchangeRate: data.exchangeRate ?? existingTransaction.exchangeRate,
           type: newType,
           accountId: newAccountId,
+          toAccountId:
+            newType === "TRANSFER"
+              ? data.toAccountId ?? existingTransaction.toAccountId
+              : null,
           date: data.date ?? existingTransaction.date,
           description: data.description !== undefined ? null : undefined,
           descriptionEncrypted:
@@ -457,14 +606,36 @@ export async function updateTransaction(
           latitude: data.latitude !== undefined ? data.latitude ?? null : undefined,
           longitude: data.longitude !== undefined ? data.longitude ?? null : undefined,
           googleMapsLink: sanitizedGoogleMapsLink,
-          categoryId: categoryId !== undefined ? (categoryId?.trim() || null) : undefined,
+          categoryId:
+            normalizedSplits.length > 0
+              ? null
+              : categoryId !== undefined
+                ? (categoryId?.trim() || null)
+                : existingTransaction.categoryId,
           recurringRuleId: recurringRuleId !== undefined ? (recurringRuleId?.trim() || null) : undefined,
         },
       });
+
+      await tx.transactionSplit.deleteMany({
+        where: { transactionId: id, userId: session.user.id },
+      });
+
+      if (normalizedSplits.length > 0) {
+        const splitData = await buildSplitCreateData(
+          session.user.id,
+          id,
+          normalizedSplits
+        );
+        await tx.transactionSplit.createMany({
+          data: splitData,
+        });
+      }
     });
 
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/transactions");
+    revalidatePath("/dashboard/budgets");
+    revalidatePath("/dashboard/reports");
 
     return { success: true };
   } catch (error) {
@@ -547,7 +718,12 @@ export async function getTransactions(options?: {
     };
 
     if (options?.accountId) where.accountId = options.accountId;
-    if (options?.categoryId) where.categoryId = options.categoryId;
+    if (options?.categoryId) {
+      where.OR = [
+        { categoryId: options.categoryId },
+        { splits: { some: { categoryId: options.categoryId } } },
+      ];
+    }
     if (options?.type) where.type = options.type;
     if (options?.startDate || options?.endDate) {
       where.date = {};
@@ -564,6 +740,12 @@ export async function getTransactions(options?: {
           account: true,
           toAccount: true,
           category: true,
+          splits: {
+            include: {
+              category: true,
+            },
+            orderBy: { sortOrder: "asc" },
+          },
         },
         orderBy: { date: "desc" },
         take: options?.limit ?? 50,
@@ -620,11 +802,32 @@ export async function getTransactions(options?: {
           }
         }
 
-        const [accountName, toAccountName] = await Promise.all([
+        const [accountName, toAccountName, decryptedSplits] = await Promise.all([
           decryptAccountName(session.user.id, tx.account.nameEncrypted),
           tx.toAccount
             ? decryptAccountName(session.user.id, tx.toAccount.nameEncrypted)
             : Promise.resolve(null),
+          Promise.all(
+            tx.splits.map(async (split) => {
+              let finalSplitDescription = split.description;
+              if (split.descriptionEncrypted) {
+                try {
+                  finalSplitDescription = await decryptUserField(
+                    session.user.id,
+                    "transactionSplit.description",
+                    split.descriptionEncrypted
+                  );
+                } catch {
+                  finalSplitDescription = split.description;
+                }
+              }
+
+              return {
+                ...split,
+                description: finalSplitDescription,
+              };
+            })
+          ),
         ]);
 
         return {
@@ -642,6 +845,7 @@ export async function getTransactions(options?: {
           description: finalDescription,
           referenceNumber: finalReferenceNumber,
           createdBy: finalCreatedBy,
+          splits: decryptedSplits,
         };
       })
     );

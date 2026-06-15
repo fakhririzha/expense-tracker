@@ -23,6 +23,7 @@ import {
   type Prisma,
 } from "@/generated/prisma/client/client";
 import prisma from "@/lib/db";
+import { flattenTransactionAllocationRows } from "@/lib/transaction-allocation-service";
 import { decryptUserField, encryptUserField } from "@/lib/user-encryption";
 
 const DEFAULT_SUBSCRIPTION_REMINDER_DAYS = 3;
@@ -840,36 +841,76 @@ async function sendBudgetThresholdNotifications(
   let sent = 0;
   for (const budget of budgets) {
     const window = getBudgetWindow(budget.period, now);
-    const where: Prisma.TransactionWhereInput = {
-      userId,
-      date: {
-        gte: window.start,
-        lte: window.end,
-      },
-      ...(budget.categoryId
-        ? {
-            type: TransactionType.EXPENSE,
-            categoryId: budget.categoryId,
-          }
-        : {
-            type: {
-              in: [TransactionType.EXPENSE, TransactionType.LIABILITY_PAYMENT],
+    const spent = budget.categoryId
+      ? flattenTransactionAllocationRows(
+          await prisma.transaction.findMany({
+            where: {
+              userId,
+              type: TransactionType.EXPENSE,
+              date: {
+                gte: window.start,
+                lte: window.end,
+              },
             },
-          }),
-    };
-
-    const transactions = await prisma.transaction.findMany({
-      where,
-      select: {
-        amount: true,
-        exchangeRate: true,
-      },
-    });
-
-    const spent = transactions.reduce(
-      (sum, transaction) => sum + transaction.amount * transaction.exchangeRate,
-      0
-    );
+            select: {
+              id: true,
+              amount: true,
+              currency: true,
+              exchangeRate: true,
+              type: true,
+              date: true,
+              categoryId: true,
+              accountId: true,
+              toAccountId: true,
+              description: true,
+              category: {
+                select: {
+                  id: true,
+                  name: true,
+                  icon: true,
+                  color: true,
+                },
+              },
+              splits: {
+                select: {
+                  id: true,
+                  amount: true,
+                  description: true,
+                  sortOrder: true,
+                  categoryId: true,
+                  category: {
+                    select: {
+                      id: true,
+                      name: true,
+                      icon: true,
+                      color: true,
+                    },
+                  },
+                },
+              },
+            },
+          })
+        )
+          .filter((transaction) => transaction.categoryId === budget.categoryId)
+          .reduce((sum, transaction) => sum + transaction.normalizedAmount, 0)
+      : (
+          await prisma.transaction.findMany({
+            where: {
+              userId,
+              date: {
+                gte: window.start,
+                lte: window.end,
+              },
+              type: {
+                in: [TransactionType.EXPENSE, TransactionType.LIABILITY_PAYMENT],
+              },
+            },
+            select: {
+              amount: true,
+              exchangeRate: true,
+            },
+          })
+        ).reduce((sum, transaction) => sum + transaction.amount * transaction.exchangeRate, 0);
     const percentage = budget.amount > 0 ? (spent / budget.amount) * 100 : 0;
 
     const threshold =

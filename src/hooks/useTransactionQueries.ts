@@ -6,7 +6,11 @@ import {
   updateTransaction,
   deleteTransaction,
 } from "@/actions/transaction-actions";
+import { budgetKeys } from "@/hooks/useBudgetQueries";
 import { forecastKeys } from "@/hooks/useCashFlowForecast";
+import { financialInsightKeys } from "@/hooks/useFinancialInsightQueries";
+import { reportKeys } from "@/hooks/useReportQueries";
+import { sidebarMetricsKeys } from "@/hooks/useSidebarMetrics";
 import { accountKeys } from "./useAccountQueries";
 
 // ---------------------------------------------------------------------------
@@ -75,7 +79,11 @@ export function useCreateTransaction() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: transactionKeys.all });
       qc.invalidateQueries({ queryKey: accountKeys.all });
+      qc.invalidateQueries({ queryKey: budgetKeys.all });
       qc.invalidateQueries({ queryKey: forecastKeys.all });
+      qc.invalidateQueries({ queryKey: reportKeys.all });
+      qc.invalidateQueries({ queryKey: financialInsightKeys.all });
+      qc.invalidateQueries({ queryKey: sidebarMetricsKeys.all });
     },
   });
 }
@@ -97,7 +105,11 @@ export function useUpdateTransaction() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: transactionKeys.all });
       qc.invalidateQueries({ queryKey: accountKeys.all });
+      qc.invalidateQueries({ queryKey: budgetKeys.all });
       qc.invalidateQueries({ queryKey: forecastKeys.all });
+      qc.invalidateQueries({ queryKey: reportKeys.all });
+      qc.invalidateQueries({ queryKey: financialInsightKeys.all });
+      qc.invalidateQueries({ queryKey: sidebarMetricsKeys.all });
     },
   });
 }
@@ -112,7 +124,11 @@ export function useDeleteTransaction() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: transactionKeys.all });
       qc.invalidateQueries({ queryKey: accountKeys.all });
+      qc.invalidateQueries({ queryKey: budgetKeys.all });
       qc.invalidateQueries({ queryKey: forecastKeys.all });
+      qc.invalidateQueries({ queryKey: reportKeys.all });
+      qc.invalidateQueries({ queryKey: financialInsightKeys.all });
+      qc.invalidateQueries({ queryKey: sidebarMetricsKeys.all });
     },
   });
 }
