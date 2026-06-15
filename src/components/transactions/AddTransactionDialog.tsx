@@ -139,12 +139,25 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
     },
   });
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const selectedType = form.watch("type");
   const selectedFromAccountId = form.watch("accountId");
+  const selectedToAccountId = form.watch("toAccountId");
   const splits = form.watch("splits") ?? [];
   const isSplitEnabled = splits.length > 0;
   const selectedFromAccount = accounts.find(
     (account) => account.id === selectedFromAccountId
+  );
+  const selectedToAccount = accounts.find(
+    (account) => account.id === selectedToAccountId
+  );
+  const eligibleTransferAccounts = accounts.filter((account) =>
+    isTransferAccountType(account.type)
+  );
+  const eligibleDestinationAccounts = eligibleTransferAccounts.filter(
+    (account) =>
+      account.id !== selectedFromAccountId &&
+      (!selectedFromAccount || account.currency === selectedFromAccount.currency)
   );
 
   const handleSplitToggle = (enabled: boolean) => {
@@ -243,6 +256,30 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
     }
   }, [form, isSplitEnabled, selectedType]);
 
+  useEffect(() => {
+    if (selectedType !== "TRANSFER") {
+      return;
+    }
+
+    if (
+      selectedToAccount &&
+      (selectedToAccount.id === selectedFromAccountId ||
+        (selectedFromAccount &&
+          selectedToAccount.currency !== selectedFromAccount.currency))
+    ) {
+      form.setValue("toAccountId", "", {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+    }
+  }, [
+    form,
+    selectedFromAccount,
+    selectedFromAccountId,
+    selectedToAccount,
+    selectedType,
+  ]);
+
   const onSubmit = async (data: TransactionFormValues) => {
     if (
       data.type === "EXPENSE" &&
@@ -253,6 +290,19 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
     ) {
       form.setError("root", {
         message: "Split amounts must exactly equal the parent amount.",
+      });
+      return;
+    }
+
+    if (
+      data.type === "TRANSFER" &&
+      selectedFromAccount &&
+      selectedToAccount &&
+      selectedFromAccount.currency !== selectedToAccount.currency
+    ) {
+      form.setError("root", {
+        message:
+          "Transfers require source and destination accounts to use the same currency.",
       });
       return;
     }
@@ -364,23 +414,30 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
                         </SelectTrigger>
                         </FormControl>
                       <SelectContent>
-                        {accounts
-                          .filter((account) => isTransferAccountType(account.type))
-                          .map((account) => (
+                        {eligibleTransferAccounts.map((account) => (
                             <SelectItem key={account.id} value={account.id}>
-                              {account.name}
+                              {account.name} ({account.currency})
                             </SelectItem>
                           ))}
                       </SelectContent>
                     </Select>
                     {selectedFromAccount ? (
-                      <p className="text-xs text-muted-foreground">
-                        Available balance:{" "}
-                        {formatCurrency(
-                          selectedFromAccount.balance,
-                          selectedFromAccount.currency
-                        )}
-                      </p>
+                      <div className="mt-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-[11px] font-medium uppercase tracking-wide text-primary/80">
+                            Available balance
+                          </span>
+                          <span className="text-sm font-semibold text-foreground">
+                            {formatCurrency(
+                              selectedFromAccount.balance,
+                              selectedFromAccount.currency
+                            )}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Destination accounts must use {selectedFromAccount.currency}.
+                        </p>
+                      </div>
                     ) : null}
                     <FormMessage />
                   </FormItem>
@@ -403,16 +460,9 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {accounts
-                          .filter(
-                            (account) =>
-                              isTransferAccountType(account.type) &&
-                              // eslint-disable-next-line react-hooks/incompatible-library
-                              account.id !== form.watch("accountId")
-                          )
-                          .map((account) => (
+                        {eligibleDestinationAccounts.map((account) => (
                             <SelectItem key={account.id} value={account.id}>
-                              {account.name}
+                              {account.name} ({account.currency})
                             </SelectItem>
                           ))}
                       </SelectContent>

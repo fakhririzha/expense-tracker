@@ -1,5 +1,10 @@
 # FinHealth Changelog
 
+## v4.5.3
+
+- Tightened transfer validation so source and destination accounts must now use the same currency before money can be moved.
+- Made transfer setup easier to review by highlighting the selected source account balance and the destination currency rule directly in the Add Transaction form.
+
 ## v4.5.2
 
 - Expanded transfer transactions so Investment accounts can now be selected alongside Bank and Cash accounts when moving money between eligible accounts.

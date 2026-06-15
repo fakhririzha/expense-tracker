@@ -36,6 +36,13 @@ function normalizeOptionalText(value?: string) {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function hasMatchingTransferCurrency(
+  sourceAccount: { currency: string },
+  destinationAccount: { currency: string }
+) {
+  return sourceAccount.currency === destinationAccount.currency;
+}
+
 const transactionSchema = z
   .object({
     clientMutationId: z.string().uuid().optional(),
@@ -216,6 +223,14 @@ export async function createTransaction(data: TransactionInput) {
 
       if (accountId === toAccountId) {
         return { success: false, error: "Cannot transfer to the same account" };
+      }
+
+      if (!hasMatchingTransferCurrency(account, toAccount)) {
+        return {
+          success: false,
+          error:
+            "Transfers require source and destination accounts to use the same currency.",
+        };
       }
     }
 
@@ -510,6 +525,14 @@ export async function updateTransaction(
         return {
           success: false,
           error: "Transfers can only use bank, cash, or investment accounts",
+        };
+      }
+
+      if (!hasMatchingTransferCurrency(newSourceAccount, newTargetAccount)) {
+        return {
+          success: false,
+          error:
+            "Transfers require source and destination accounts to use the same currency.",
         };
       }
     } else if (accountId) {

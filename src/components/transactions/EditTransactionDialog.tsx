@@ -175,11 +175,14 @@ export function EditTransactionDialog({
   const { data: accountsData = [] } = useAccounts();
   const updateMutation = useUpdateTransaction();
 
-  const accounts = accountsData.map((a: { id: string; name: string; type: string }) => ({
-    id: a.id,
-    name: a.name,
-    type: a.type,
-  }));
+  const accounts = accountsData.map(
+    (a: { id: string; name: string; type: string; currency: string }) => ({
+      id: a.id,
+      name: a.name,
+      type: a.type,
+      currency: a.currency,
+    })
+  );
   const form = useForm<EditTransactionFormInput, unknown, EditTransactionFormValues>({
     resolver: zodResolver(editTransactionFormSchema),
     defaultValues: {
@@ -201,8 +204,24 @@ export function EditTransactionDialog({
   });
 
   const selectedType = form.watch("type");
+  const selectedFromAccountId = form.watch("accountId");
+  const selectedToAccountId = form.watch("toAccountId");
   const splits = form.watch("splits") ?? [];
   const isSplitEnabled = splits.length > 0;
+  const selectedFromAccount = accounts.find(
+    (account) => account.id === selectedFromAccountId
+  );
+  const selectedToAccount = accounts.find(
+    (account) => account.id === selectedToAccountId
+  );
+  const eligibleTransferAccounts = accounts.filter((account) =>
+    isTransferAccountType(account.type)
+  );
+  const eligibleDestinationAccounts = eligibleTransferAccounts.filter(
+    (account) =>
+      account.id !== selectedFromAccountId &&
+      (!selectedFromAccount || account.currency === selectedFromAccount.currency)
+  );
 
   // Reset form when transaction changes
   useEffect(() => {
@@ -295,6 +314,30 @@ export function EditTransactionDialog({
     }
   }, [form, isSplitEnabled, selectedType]);
 
+  useEffect(() => {
+    if (selectedType !== "TRANSFER") {
+      return;
+    }
+
+    if (
+      selectedToAccount &&
+      (selectedToAccount.id === selectedFromAccountId ||
+        (selectedFromAccount &&
+          selectedToAccount.currency !== selectedFromAccount.currency))
+    ) {
+      form.setValue("toAccountId", "", {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+    }
+  }, [
+    form,
+    selectedFromAccount,
+    selectedFromAccountId,
+    selectedToAccount,
+    selectedType,
+  ]);
+
   const onSubmit = async (data: EditTransactionFormValues) => {
     if (!transaction) return;
 
@@ -307,6 +350,19 @@ export function EditTransactionDialog({
     ) {
       form.setError("root", {
         message: "Split amounts must exactly equal the parent amount.",
+      });
+      return;
+    }
+
+    if (
+      data.type === "TRANSFER" &&
+      selectedFromAccount &&
+      selectedToAccount &&
+      selectedFromAccount.currency !== selectedToAccount.currency
+    ) {
+      form.setError("root", {
+        message:
+          "Transfers require source and destination accounts to use the same currency.",
       });
       return;
     }
@@ -441,15 +497,19 @@ export function EditTransactionDialog({
                           </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {accounts
-                          .filter((account) => isTransferAccountType(account.type))
-                          .map((account) => (
+                        {eligibleTransferAccounts.map((account) => (
                             <SelectItem key={account.id} value={account.id}>
-                              {account.name}
+                              {account.name} ({account.currency})
                               </SelectItem>
                             ))}
                         </SelectContent>
                       </Select>
+                      {selectedFromAccount ? (
+                        <p className="text-xs text-muted-foreground">
+                          Transfers only allow destination accounts in{" "}
+                          {selectedFromAccount.currency}.
+                        </p>
+                      ) : null}
                       <FormMessage />
                     </FormItem>
                   )}
@@ -469,24 +529,17 @@ export function EditTransactionDialog({
                           <SelectTrigger>
                             <SelectValue placeholder="Select destination account" />
                           </SelectTrigger>
-                        </FormControl>
+                      </FormControl>
                       <SelectContent>
-                        {accounts
-                          .filter(
-                            (account) =>
-                              isTransferAccountType(account.type) &&
-                              // eslint-disable-next-line react-hooks/incompatible-library
-                              account.id !== form.watch("accountId")
-                          )
-                            .map((account) => (
+                        {eligibleDestinationAccounts.map((account) => (
                               <SelectItem key={account.id} value={account.id}>
-                                {account.name}
+                                {account.name} ({account.currency})
                               </SelectItem>
                             ))}
                         </SelectContent>
                       </Select>
                       <FormMessage />
-                    </FormItem>
+                  </FormItem>
                   )}
                 />
               </>
