@@ -94,6 +94,8 @@ export function DateRangePicker({
 }: DateRangePickerProps) {
   const [selectedPreset, setSelectedPreset] = React.useState<PresetKey>("thisMonth");
   const [isCustomOpen, setIsCustomOpen] = React.useState(false);
+  const [draftRange, setDraftRange] = React.useState<DateRange | undefined>(value);
+  const presetBeforeCustomRef = React.useRef<PresetKey>("thisMonth");
 
   // Initialize with this month's range if no value provided
   React.useEffect(() => {
@@ -104,20 +106,45 @@ export function DateRangePicker({
   }, [value, onChange]);
 
   const handlePresetChange = (preset: PresetKey) => {
-    setSelectedPreset(preset);
-    
     if (preset === "custom") {
+      presetBeforeCustomRef.current = selectedPreset;
+      setSelectedPreset("custom");
+      setDraftRange(value);
       setIsCustomOpen(true);
     } else {
+      setSelectedPreset(preset);
+      presetBeforeCustomRef.current = preset;
       const range = getPresetRange(preset);
       onChange(range);
+      setDraftRange(range);
       setIsCustomOpen(false);
     }
   };
 
   const handleCalendarSelect = (range: DateRange | undefined) => {
-    onChange(range);
+    setDraftRange(range);
+  };
+
+  const handleApply = () => {
+    onChange(draftRange);
+    presetBeforeCustomRef.current = "custom";
     setSelectedPreset("custom");
+    setIsCustomOpen(false);
+  };
+
+  const handleCustomOpenChange = (open: boolean) => {
+    setIsCustomOpen(open);
+
+    if (open) {
+      setDraftRange(value);
+      return;
+    }
+
+    setDraftRange(value);
+
+    if (selectedPreset === "custom" && presetBeforeCustomRef.current !== "custom") {
+      setSelectedPreset(presetBeforeCustomRef.current);
+    }
   };
 
   const formatDateRange = () => {
@@ -145,7 +172,7 @@ export function DateRangePicker({
         </SelectContent>
       </Select>
 
-      <Popover open={isCustomOpen} onOpenChange={setIsCustomOpen}>
+      <Popover open={isCustomOpen} onOpenChange={handleCustomOpenChange}>
         <PopoverTrigger asChild>
           <Button
             variant="outline"
@@ -162,11 +189,19 @@ export function DateRangePicker({
           <Calendar
             initialFocus
             mode="range"
-            defaultMonth={value?.from}
-            selected={value}
+            defaultMonth={draftRange?.from ?? value?.from}
+            selected={draftRange}
             onSelect={handleCalendarSelect}
             numberOfMonths={2}
           />
+          <div className="flex justify-end border-t p-3">
+            <Button
+              onClick={handleApply}
+              disabled={!draftRange?.from || !draftRange?.to}
+            >
+              Apply
+            </Button>
+          </div>
         </PopoverContent>
       </Popover>
     </div>

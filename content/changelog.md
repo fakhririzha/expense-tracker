@@ -1,5 +1,10 @@
 # FinHealth Changelog
 
+## v4.5.4
+
+- Improved the Reports date-range picker so custom calendar selections wait for an Apply button before refreshing charts and summaries.
+- Made it easier to review a custom reporting window without reloading analytics on every calendar click.
+
 ## v4.5.3
 
 - Tightened transfer validation so source and destination accounts must now use the same currency before money can be moved.
