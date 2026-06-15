@@ -7,7 +7,10 @@ import { Prisma } from "@/generated/prisma/client/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { encryptUserField, decryptUserField } from "@/lib/user-encryption";
-import { isLoanReceivableAccountType } from "@/lib/account-types";
+import {
+  isLoanReceivableAccountType,
+  isTransferAccountType,
+} from "@/lib/account-types";
 import {
   normalizeTransactionSplits,
   validateTransactionSplits,
@@ -15,7 +18,6 @@ import {
 } from "@/lib/transaction-split-validation";
 
 // Define TransactionType enum locally since Prisma client may not be generated yet
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const TransactionTypeEnum = {
   INCOME: "INCOME",
   EXPENSE: "EXPENSE",
@@ -183,7 +185,7 @@ export async function createTransaction(data: TransactionInput) {
       return { success: false, error: "Account not found" };
     }
 
-    // For transfers, verify to account belongs to user and is a BANK account
+    // For transfers, verify both accounts belong to the user and support transfers
     let toAccount = null;
     if (type === "TRANSFER") {
       if (!toAccountId) {
@@ -198,12 +200,18 @@ export async function createTransaction(data: TransactionInput) {
         return { success: false, error: "To account not found" };
       }
 
-      if (!["BANK", "CASH"].includes(toAccount.type)) {
-        return { success: false, error: "Transfers can only be made to bank or cash accounts" };
+      if (!isTransferAccountType(toAccount.type)) {
+        return {
+          success: false,
+          error: "Transfers can only be made to bank, cash, or investment accounts",
+        };
       }
 
-      if (!["BANK", "CASH"].includes(account.type)) {
-        return { success: false, error: "Transfers can only be made from bank or cash accounts" };
+      if (!isTransferAccountType(account.type)) {
+        return {
+          success: false,
+          error: "Transfers can only be made from bank, cash, or investment accounts",
+        };
       }
 
       if (accountId === toAccountId) {
@@ -496,10 +504,13 @@ export async function updateTransaction(
       }
 
       if (
-        !["BANK", "CASH"].includes(newSourceAccount.type) ||
-        !["BANK", "CASH"].includes(newTargetAccount.type)
+        !isTransferAccountType(newSourceAccount.type) ||
+        !isTransferAccountType(newTargetAccount.type)
       ) {
-        return { success: false, error: "Transfers can only use bank or cash accounts" };
+        return {
+          success: false,
+          error: "Transfers can only use bank, cash, or investment accounts",
+        };
       }
     } else if (accountId) {
       const newAccount = await prisma.financialAccount.findFirst({

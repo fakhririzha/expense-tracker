@@ -1,5 +1,10 @@
 # FinHealth Changelog
 
+## v4.5.2
+
+- Expanded transfer transactions so Investment accounts can now be selected alongside Bank and Cash accounts when moving money between eligible accounts.
+- Kept transfer rules intact by continuing to block liability and loans receivable accounts from the standard transfer flow.
+
 ## v4.5.1
 
 - Improved transfer entry so choosing a source account now shows its current balance directly in the Add Transaction form.

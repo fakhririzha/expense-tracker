@@ -35,6 +35,12 @@ export const LIQUID_ACCOUNT_TYPES = [
   "CASH",
 ] as const satisfies readonly AccountTypeValue[];
 
+export const TRANSFER_ACCOUNT_TYPES = [
+  "BANK",
+  "CASH",
+  "INVESTMENT",
+] as const satisfies readonly AccountTypeValue[];
+
 export function isAssetAccountType(type: string): boolean {
   return (ASSET_ACCOUNT_TYPES as readonly string[]).includes(type);
 }
@@ -45,6 +51,10 @@ export function isLiabilityAccountType(type: string): boolean {
 
 export function isLiquidAccountType(type: string): boolean {
   return (LIQUID_ACCOUNT_TYPES as readonly string[]).includes(type);
+}
+
+export function isTransferAccountType(type: string): boolean {
+  return (TRANSFER_ACCOUNT_TYPES as readonly string[]).includes(type);
 }
 
 export function isLoanReceivableAccountType(type: string): boolean {

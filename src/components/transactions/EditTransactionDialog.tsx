@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/select";
 import { MoneyInput } from "@/components/ui/money-input";
 import { TransactionSplitEditor } from "@/components/transactions/TransactionSplitEditor";
+import { isTransferAccountType } from "@/lib/account-types";
 import { cn } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
@@ -179,8 +180,6 @@ export function EditTransactionDialog({
     name: a.name,
     type: a.type,
   }));
-  const transferAccountTypes = new Set(["BANK", "CASH"]);
-
   const form = useForm<EditTransactionFormInput, unknown, EditTransactionFormValues>({
     resolver: zodResolver(editTransactionFormSchema),
     defaultValues: {
@@ -440,10 +439,10 @@ export function EditTransactionDialog({
                           <SelectTrigger>
                             <SelectValue placeholder="Select source account" />
                           </SelectTrigger>
-                        </FormControl>
+                      </FormControl>
                       <SelectContent>
                         {accounts
-                          .filter((account) => transferAccountTypes.has(account.type))
+                          .filter((account) => isTransferAccountType(account.type))
                           .map((account) => (
                             <SelectItem key={account.id} value={account.id}>
                               {account.name}
@@ -475,7 +474,7 @@ export function EditTransactionDialog({
                         {accounts
                           .filter(
                             (account) =>
-                              transferAccountTypes.has(account.type) &&
+                              isTransferAccountType(account.type) &&
                               // eslint-disable-next-line react-hooks/incompatible-library
                               account.id !== form.watch("accountId")
                           )
