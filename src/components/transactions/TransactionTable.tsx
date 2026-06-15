@@ -1,116 +1,106 @@
 "use client";
 
 import {
-    ColumnDef,
-    ColumnFiltersState,
-    SortingState,
-    flexRender,
-    getCoreRowModel,
-    getFilteredRowModel,
-    getPaginationRowModel,
-    getSortedRowModel,
-    useReactTable,
+  type OnChangeFn,
+  type SortingState,
+  type ColumnDef,
+  flexRender,
+  getCoreRowModel,
+  useReactTable,
 } from "@tanstack/react-table";
 import { format } from "date-fns";
 import {
-    ArrowDownCircle,
-    ArrowRightLeft,
-    ArrowUpCircle,
-    ArrowUpDown,
-    ExternalLink,
-    MoreHorizontal,
-    Pencil,
-    Trash2,
+  ArrowDownCircle,
+  ArrowRightLeft,
+  ArrowUpCircle,
+  ArrowUpDown,
+  ExternalLink,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
 } from "lucide-react";
-import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { getSplitSummary } from "@/lib/transaction-allocation-service";
 import { formatCurrency } from "@/lib/utils";
+import {
+  TRANSACTION_PAGE_SIZES,
+  type TransactionListItem,
+} from "@/types/transaction-list";
 
-export interface Transaction {
-  id: string;
-  amount: number;
-  currency: string;
-  exchangeRate: number;
-  type: "INCOME" | "EXPENSE" | "TRANSFER" | "LIABILITY_PAYMENT";
-  description: string | null;
-  location: string | null;
-  latitude: number | null;
-  longitude: number | null;
-  googleMapsLink: string | null;
-  date: Date;
-  isRecurring: boolean;
-  toAccountId: string | null;
-  account: {
-    id: string;
-    name: string;
-    type: string;
-  };
-  toAccount?: {
-    id: string;
-    name: string;
-    type: string;
-  } | null;
-  category: {
-    id: string;
-    name: string;
-    icon: string | null;
-    color: string | null;
-  } | null;
-  splits: Array<{
-    id: string;
-    amount: number;
-    description: string | null;
-    sortOrder: number;
-    categoryId: string | null;
-    category: {
-      id: string;
-      name: string;
-      icon: string | null;
-      color: string | null;
-    } | null;
-  }>;
-}
+export type Transaction = TransactionListItem;
 
 interface TransactionTableProps {
   transactions: Transaction[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  sorting: SortingState;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
+  onSortingChange: (sorting: SortingState) => void;
   onEdit?: (transaction: Transaction) => void;
   onDelete?: (id: string) => void;
 }
 
 /**
- * Render an interactive table of transactions with sortable columns, filtering, pagination, and per-row actions.
+ * Render an interactive transaction table with server-driven sorting and pagination.
  *
- * @param transactions - The list of transactions to display.
+ * @param transactions - The current page of transactions to display.
+ * @param page - The current 1-based page index.
+ * @param pageSize - The current page size.
+ * @param total - The total number of matching transactions across all pages.
+ * @param totalPages - The total number of available pages.
+ * @param sorting - The current server-side sorting state.
+ * @param onPageChange - Callback invoked when the requested page changes.
+ * @param onPageSizeChange - Callback invoked when the page size changes.
+ * @param onSortingChange - Callback invoked when the sort order changes.
  * @param onEdit - Optional callback invoked with the full transaction when the user chooses "Edit".
  * @param onDelete - Optional callback invoked with the transaction id when the user chooses "Delete".
  * @returns The rendered transaction table element.
  */
 export function TransactionTable({
   transactions,
+  page,
+  pageSize,
+  total,
+  totalPages,
+  sorting,
+  onPageChange,
+  onPageSizeChange,
+  onSortingChange,
   onEdit,
   onDelete,
 }: TransactionTableProps) {
-  const [sorting, setSorting] = useState<SortingState>([]);
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-
   const columns: ColumnDef<Transaction>[] = [
     {
       accessorKey: "date",
@@ -280,7 +270,7 @@ export function TransactionTable({
           <Button
             variant="ghost"
             onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-            className="justify-end w-full"
+            className="w-full justify-end"
           >
             Amount
             <ArrowUpDown className="ml-2 h-4 w-4" />
@@ -341,21 +331,32 @@ export function TransactionTable({
     },
   ];
 
+  const handleSortingChange: OnChangeFn<SortingState> = (updater) => {
+    const nextSorting = typeof updater === "function" ? updater(sorting) : updater;
+    onSortingChange(nextSorting);
+  };
+
   // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data: transactions,
     columns,
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
     state: {
       sorting,
-      columnFilters,
+      pagination: {
+        pageIndex: Math.max(page - 1, 0),
+        pageSize,
+      },
     },
+    onSortingChange: handleSortingChange,
+    getCoreRowModel: getCoreRowModel(),
+    manualPagination: true,
+    manualSorting: true,
+    pageCount: totalPages,
+    enableSortingRemoval: false,
   });
+
+  const startRow = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const endRow = total === 0 ? 0 : Math.min(page * pageSize, total);
 
   return (
     <div className="space-y-4">
@@ -380,7 +381,7 @@ export function TransactionTable({
             ))}
           </TableHeader>
           <TableBody>
-            {table.getRowModel().rows?.length ? (
+            {table.getRowModel().rows.length > 0 ? (
               table.getRowModel().rows.map((row) => (
                 <TableRow
                   key={row.id}
@@ -409,23 +410,51 @@ export function TransactionTable({
           </TableBody>
         </Table>
       </div>
-      <div className="flex items-center justify-end space-x-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => table.previousPage()}
-          disabled={!table.getCanPreviousPage()}
-        >
-          Previous
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => table.nextPage()}
-          disabled={!table.getCanNextPage()}
-        >
-          Next
-        </Button>
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="text-sm text-muted-foreground">
+          Showing {startRow}-{endRow} of {total} transactions
+        </div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Rows per page</span>
+            <Select
+              value={String(pageSize)}
+              onValueChange={(value) => onPageSizeChange(Number(value))}
+            >
+              <SelectTrigger className="w-22">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {TRANSACTION_PAGE_SIZES.map((size) => (
+                  <SelectItem key={size} value={String(size)}>
+                    {size}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="text-sm text-muted-foreground">
+            Page {page} of {totalPages}
+          </div>
+          <div className="flex items-center justify-end space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onPageChange(page - 1)}
+              disabled={page <= 1}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onPageChange(page + 1)}
+              disabled={page >= totalPages}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   getTransactions,
   getTransactionSummary,
@@ -11,6 +11,10 @@ import { forecastKeys } from "@/hooks/useCashFlowForecast";
 import { financialInsightKeys } from "@/hooks/useFinancialInsightQueries";
 import { reportKeys } from "@/hooks/useReportQueries";
 import { sidebarMetricsKeys } from "@/hooks/useSidebarMetrics";
+import {
+  type PaginatedTransactionsData,
+  type TransactionListQueryParams,
+} from "@/types/transaction-list";
 import { accountKeys } from "./useAccountQueries";
 
 // ---------------------------------------------------------------------------
@@ -28,15 +32,7 @@ export const transactionKeys = {
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-export interface TransactionFilters {
-  type?: string;
-  categoryId?: string;
-  accountId?: string;
-  startDate?: Date;
-  endDate?: Date;
-  limit?: number;
-  offset?: number;
-}
+export type TransactionFilters = TransactionListQueryParams;
 
 // ---------------------------------------------------------------------------
 // Queries
@@ -45,11 +41,12 @@ export interface TransactionFilters {
 export function useTransactions(filters: TransactionFilters = {}) {
   return useQuery({
     queryKey: transactionKeys.list(filters as Record<string, unknown>),
-    queryFn: async () => {
+    queryFn: async (): Promise<PaginatedTransactionsData> => {
       const result = await getTransactions(filters as Parameters<typeof getTransactions>[0]);
       if (!result.success) throw new Error(result.error);
       return result.data;
     },
+    placeholderData: (previousData) => previousData,
   });
 }
 
