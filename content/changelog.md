@@ -1,5 +1,10 @@
 # FinHealth Changelog
 
+## v4.5.5
+
+- Improved the Transactions page with server-side pagination so large histories are easier to browse without loading every record at once.
+- Added persistent page, sort, and filter state to the Transactions URL so your current view is easier to refresh, revisit, and share.
+
 ## v4.5.4
 
 - Improved the Reports date-range picker so custom calendar selections wait for an Apply button before refreshing charts and summaries.

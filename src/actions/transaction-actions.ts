@@ -16,6 +16,13 @@ import {
   validateTransactionSplits,
   type NormalizedTransactionSplitInput,
 } from "@/lib/transaction-split-validation";
+import {
+  DEFAULT_TRANSACTION_PAGE,
+  DEFAULT_TRANSACTION_PAGE_SIZE,
+  TRANSACTION_PAGE_SIZES,
+  type PaginatedTransactionsData,
+  type TransactionListQueryParams,
+} from "@/types/transaction-list";
 
 // Define TransactionType enum locally since Prisma client may not be generated yet
 const TransactionTypeEnum = {
@@ -24,8 +31,6 @@ const TransactionTypeEnum = {
   TRANSFER: "TRANSFER",
   LIABILITY_PAYMENT: "LIABILITY_PAYMENT",
 } as const;
-
-type TransactionType = (typeof TransactionTypeEnum)[keyof typeof TransactionTypeEnum];
 
 function normalizeOptionalText(value?: string) {
   if (value === undefined) {
@@ -732,19 +737,37 @@ export async function deleteTransaction(id: string) {
   }
 }
 
-export async function getTransactions(options?: {
-  accountId?: string;
-  categoryId?: string;
-  type?: TransactionType;
-  startDate?: Date;
-  endDate?: Date;
-  limit?: number;
-  offset?: number;
-}) {
+function getEmptyTransactionPage(): PaginatedTransactionsData {
+  return {
+    transactions: [],
+    total: 0,
+    page: DEFAULT_TRANSACTION_PAGE,
+    pageSize: DEFAULT_TRANSACTION_PAGE_SIZE,
+    totalPages: 1,
+  };
+}
+
+function normalizeTransactionPageSize(pageSize?: number) {
+  if (pageSize && TRANSACTION_PAGE_SIZES.includes(pageSize as (typeof TRANSACTION_PAGE_SIZES)[number])) {
+    return pageSize;
+  }
+
+  return DEFAULT_TRANSACTION_PAGE_SIZE;
+}
+
+function normalizeTransactionPage(page?: number) {
+  if (page && Number.isInteger(page) && page > 0) {
+    return page;
+  }
+
+  return DEFAULT_TRANSACTION_PAGE;
+}
+
+export async function getTransactions(options?: TransactionListQueryParams) {
   try {
     const session = await auth();
     if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized", data: [] };
+      return { success: false, error: "Unauthorized", data: getEmptyTransactionPage() };
     }
 
     const where: Record<string, unknown> = {
@@ -767,26 +790,35 @@ export async function getTransactions(options?: {
         (where.date as Record<string, Date>).lte = options.endDate;
     }
 
-    const [transactions, total] = await Promise.all([
-      prisma.transaction.findMany({
-        where,
-        include: {
-          account: true,
-          toAccount: true,
-          category: true,
-          splits: {
-            include: {
-              category: true,
-            },
-            orderBy: { sortOrder: "asc" },
+    const pageSize = normalizeTransactionPageSize(options?.pageSize);
+    const requestedPage = normalizeTransactionPage(options?.page);
+    const sortBy = options?.sortBy === "amount" ? "amount" : "date";
+    const sortOrder = options?.sortOrder === "asc" ? "asc" : "desc";
+
+    const total = await prisma.transaction.count({ where });
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const page = Math.min(requestedPage, totalPages);
+    const skip = (page - 1) * pageSize;
+    const orderBy: Prisma.TransactionOrderByWithRelationInput =
+      sortBy === "amount" ? { amount: sortOrder } : { date: sortOrder };
+
+    const transactions = await prisma.transaction.findMany({
+      where,
+      include: {
+        account: true,
+        toAccount: true,
+        category: true,
+        splits: {
+          include: {
+            category: true,
           },
+          orderBy: { sortOrder: "asc" },
         },
-        orderBy: { date: "desc" },
-        take: options?.limit ?? 50,
-        skip: options?.offset ?? 0,
-      }),
-      prisma.transaction.count({ where }),
-    ]);
+      },
+      orderBy,
+      take: pageSize,
+      skip,
+    });
 
     // Decrypt sensitive fields
     const decryptedTransactions = await Promise.all(
@@ -884,10 +916,19 @@ export async function getTransactions(options?: {
       })
     );
 
-    return { success: true, data: decryptedTransactions, total };
+    return {
+      success: true,
+      data: {
+        transactions: decryptedTransactions,
+        total,
+        page,
+        pageSize,
+        totalPages,
+      },
+    };
   } catch (error) {
     console.error("Get transactions error:", error);
-    return { success: false, error: "Failed to fetch transactions", data: [] };
+    return { success: false, error: "Failed to fetch transactions", data: getEmptyTransactionPage() };
   }
 }
 
