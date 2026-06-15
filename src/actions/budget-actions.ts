@@ -7,6 +7,7 @@ import { TransactionType } from "@/generated/prisma/client/client";
 import { startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear } from "date-fns";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { flattenTransactionAllocationRows } from "@/lib/transaction-allocation-service";
 
 // Schema for budget validation
 const budgetSchema = z.object({
@@ -68,6 +69,8 @@ export interface BudgetTransactionListItem {
   date: Date;
   category: BudgetCategorySummary | null;
   account: BudgetAccountSummary;
+  splitId?: string | null;
+  isSplit?: boolean;
 }
 
 const BUDGET_SPENDING_TYPES: TransactionType[] = [
@@ -80,6 +83,35 @@ function getNormalizedAmount(transaction: {
   exchangeRate: number;
 }): number {
   return transaction.amount * transaction.exchangeRate;
+}
+
+function getUncategorizedCategorySummary(): BudgetCategorySummary {
+  return {
+    id: "uncategorized",
+    name: "Uncategorized",
+    icon: null,
+    color: null,
+  };
+}
+
+function toBudgetCategorySummary(
+  category: {
+    id: string;
+    name: string;
+    icon?: string | null;
+    color?: string | null;
+  } | null
+): BudgetCategorySummary {
+  if (!category) {
+    return getUncategorizedCategorySummary();
+  }
+
+  return {
+    id: category.id,
+    name: category.name,
+    icon: category.icon ?? null,
+    color: category.color ?? null,
+  };
 }
 
 /**
@@ -434,29 +466,71 @@ export async function getBudgetProgress(id: string): Promise<{ success: boolean;
     const { start, end } = getBudgetDateRange(budget);
 
     // Get transactions for the budget period
-    const whereClause = {
-      userId: session.user.id,
-      date: { gte: start, lte: end },
-      ...(budget.categoryId
-        ? {
-            type: TransactionType.EXPENSE,
-            categoryId: budget.categoryId,
-          }
-        : {
-            type: { in: BUDGET_SPENDING_TYPES },
-          }),
-    };
+    let spent = 0;
+    if (budget.categoryId) {
+      const transactions = await prisma.transaction.findMany({
+        where: {
+          userId: session.user.id,
+          type: TransactionType.EXPENSE,
+          date: { gte: start, lte: end },
+        },
+        select: {
+          id: true,
+          amount: true,
+          currency: true,
+          exchangeRate: true,
+          type: true,
+          categoryId: true,
+          date: true,
+          accountId: true,
+          toAccountId: true,
+          description: true,
+          category: {
+            select: {
+              id: true,
+              name: true,
+              icon: true,
+              color: true,
+            },
+          },
+          splits: {
+            select: {
+              id: true,
+              amount: true,
+              description: true,
+              sortOrder: true,
+              categoryId: true,
+              category: {
+                select: {
+                  id: true,
+                  name: true,
+                  icon: true,
+                  color: true,
+                },
+              },
+            },
+          },
+        },
+      });
 
-    const transactions = await prisma.transaction.findMany({
-      where: whereClause,
-      select: {
-        amount: true,
-        exchangeRate: true,
-      },
-    });
+      spent = flattenTransactionAllocationRows(transactions)
+        .filter((transaction) => transaction.categoryId === budget.categoryId)
+        .reduce((sum, transaction) => sum + transaction.normalizedAmount, 0);
+    } else {
+      const transactions = await prisma.transaction.findMany({
+        where: {
+          userId: session.user.id,
+          type: { in: BUDGET_SPENDING_TYPES },
+          date: { gte: start, lte: end },
+        },
+        select: {
+          amount: true,
+          exchangeRate: true,
+        },
+      });
 
-    // Calculate spent amount
-    const spent = transactions.reduce((sum, t) => sum + getNormalizedAmount(t), 0);
+      spent = transactions.reduce((sum, transaction) => sum + getNormalizedAmount(transaction), 0);
+    }
     const remaining = budget.amount - spent;
     const percentage = budget.amount > 0 ? (spent / budget.amount) * 100 : 0;
 
@@ -546,58 +620,83 @@ export async function getBudgetsSummary() {
     const maxDate = new Date(Math.max(...Object.values(dateRanges).map(r => r.end.getTime())));
 
     // 4. Collect all category IDs (including null for budgets without category)
-    const categoryIds = budgets
-      .map(b => b.categoryId)
-      .filter((id): id is string => id !== null);
-
     // Check if any budget has no category (all-category budget)
     const hasAllCategoryBudget = budgets.some(b => b.categoryId === null);
 
     // 5. Fetch all relevant transactions in a single query
-    const allTransactions = await prisma.transaction.findMany({
+    const parentTransactions = await prisma.transaction.findMany({
       where: {
         userId: session.user.id,
         type: hasAllCategoryBudget
           ? { in: BUDGET_SPENDING_TYPES }
           : TransactionType.EXPENSE,
         date: { gte: minDate, lte: maxDate },
-        // Only filter by categoryId if there are category-specific budgets AND no all-category budget
-        ...(categoryIds.length > 0 && !hasAllCategoryBudget && { categoryId: { in: categoryIds } }),
       },
       select: {
+        id: true,
+        accountId: true,
         amount: true,
+        currency: true,
+        exchangeRate: true,
+        type: true,
         date: true,
         categoryId: true,
-        exchangeRate: true,
+        toAccountId: true,
+        description: true,
+        category: {
+          select: {
+            id: true,
+            name: true,
+            icon: true,
+            color: true,
+          },
+        },
+        splits: {
+          select: {
+            id: true,
+            amount: true,
+            description: true,
+            sortOrder: true,
+            categoryId: true,
+            category: {
+              select: {
+                id: true,
+                name: true,
+                icon: true,
+                color: true,
+              },
+            },
+          },
+        },
       },
     });
 
-    // 6. Group transactions by category for efficient lookup
-    const transactionsByCategory = new Map<string | null, typeof allTransactions>();
-    for (const transaction of allTransactions) {
-      const key = transaction.categoryId;
-      if (!transactionsByCategory.has(key)) {
-        transactionsByCategory.set(key, []);
-      }
-      transactionsByCategory.get(key)!.push(transaction);
-    };
+    const allocationRows = flattenTransactionAllocationRows(
+      parentTransactions.filter((transaction) => transaction.type === TransactionType.EXPENSE)
+    );
 
     // 7. Calculate progress for each budget using in-memory data
     const budgetsWithProgress: BudgetWithProgress[] = budgets.map(budget => {
       const { start, end } = dateRanges[budget.period as keyof typeof dateRanges] || dateRanges.MONTHLY;
       
       // Get transactions for this budget's category (or all transactions if no category)
-      const relevantTransactions = budget.categoryId
-        ? (transactionsByCategory.get(budget.categoryId) || [])
-        : allTransactions.filter(t => t.date >= start && t.date <= end);
-      
-      // Filter by date range for category-specific budgets
-      const budgetTransactions = budget.categoryId
-        ? relevantTransactions.filter(t => t.date >= start && t.date <= end)
-        : relevantTransactions;
-
-      // Calculate spent amount
-      const spent = budgetTransactions.reduce((sum, t) => sum + getNormalizedAmount(t), 0);
+      const spent = budget.categoryId
+        ? allocationRows
+            .filter(
+              (transaction) =>
+                transaction.categoryId === budget.categoryId &&
+                transaction.date >= start &&
+                transaction.date <= end
+            )
+            .reduce((sum, transaction) => sum + transaction.normalizedAmount, 0)
+        : parentTransactions
+            .filter(
+              (transaction) =>
+                BUDGET_SPENDING_TYPES.includes(transaction.type as TransactionType) &&
+                transaction.date >= start &&
+                transaction.date <= end
+            )
+            .reduce((sum, transaction) => sum + getNormalizedAmount(transaction), 0);
       const remaining = budget.amount - spent;
       const percentage = budget.amount > 0 ? (spent / budget.amount) * 100 : 0;
 
@@ -691,16 +790,39 @@ export async function getBudgetVsActual() {
         date: { gte: monthStart, lte: monthEnd },
       },
       select: {
+        id: true,
+        accountId: true,
         amount: true,
+        currency: true,
         exchangeRate: true,
         type: true,
+        date: true,
         categoryId: true,
+        toAccountId: true,
+        description: true,
         category: {
           select: {
             id: true,
             name: true,
             icon: true,
             color: true,
+          },
+        },
+        splits: {
+          select: {
+            id: true,
+            amount: true,
+            description: true,
+            sortOrder: true,
+            categoryId: true,
+            category: {
+              select: {
+                id: true,
+                name: true,
+                icon: true,
+                color: true,
+              },
+            },
           },
         },
       },
@@ -713,20 +835,20 @@ export async function getBudgetVsActual() {
     for (const expense of budgetSpending) {
       const normalizedAmount = getNormalizedAmount(expense);
       allCategoryActual += normalizedAmount;
+    }
 
-      if (expense.type !== TransactionType.EXPENSE) {
-        continue;
-      }
-
-      const categoryId = expense.categoryId || "uncategorized";
+    for (const allocation of flattenTransactionAllocationRows(
+      budgetSpending.filter((transaction) => transaction.type === TransactionType.EXPENSE)
+    )) {
+      const categoryId = allocation.categoryId || "uncategorized";
       const existing = expensesByCategory.get(categoryId);
-      
+
       if (existing) {
-        existing.amount += normalizedAmount;
+        existing.amount += allocation.normalizedAmount;
       } else {
         expensesByCategory.set(categoryId, {
-          category: expense.category || { id: "uncategorized", name: "Uncategorized", icon: null, color: null },
-          amount: normalizedAmount,
+          category: toBudgetCategorySummary(allocation.category),
+          amount: allocation.normalizedAmount,
         });
       }
     }
@@ -810,29 +932,24 @@ export async function getBudgetTransactions(
 
     const { start, end } = getBudgetDateRange(budget);
 
-    const whereClause = {
-      userId: session.user.id,
-      date: { gte: start, lte: end },
-      ...(budget.categoryId
-        ? {
-            type: TransactionType.EXPENSE,
-            categoryId: budget.categoryId,
-          }
-        : {
-            type: { in: BUDGET_SPENDING_TYPES },
-          }),
-    };
-
     const transactions = await prisma.transaction.findMany({
-      where: whereClause,
+      where: {
+        userId: session.user.id,
+        date: { gte: start, lte: end },
+        type: budget.categoryId
+          ? TransactionType.EXPENSE
+          : { in: BUDGET_SPENDING_TYPES },
+      },
       select: {
         id: true,
+        accountId: true,
         amount: true,
         currency: true,
         exchangeRate: true,
         type: true,
         description: true,
         date: true,
+        categoryId: true,
         category: {
           select: {
             id: true,
@@ -848,23 +965,81 @@ export async function getBudgetTransactions(
             currency: true,
           },
         },
+        splits: {
+          select: {
+            id: true,
+            amount: true,
+            description: true,
+            sortOrder: true,
+            categoryId: true,
+            category: {
+              select: {
+                id: true,
+                name: true,
+                icon: true,
+                color: true,
+              },
+            },
+          },
+        },
       },
       orderBy: { date: "desc" },
     });
+
     const decryptedTransactions = await Promise.all(
-      transactions.map(async (transaction) => ({
-        ...transaction,
-        account: {
-          ...transaction.account,
-          name: await decryptAccountName(
-            session.user.id,
-            transaction.account.nameEncrypted
-          ),
-        },
-      }))
+      transactions.map(async (transaction) => {
+        const accountName = await decryptAccountName(
+          session.user.id,
+          transaction.account.nameEncrypted
+        );
+
+        return {
+          ...transaction,
+          account: {
+            ...transaction.account,
+            name: accountName,
+          },
+        };
+      })
     );
 
-    return { success: true, data: decryptedTransactions };
+    const data: BudgetTransactionListItem[] = budget.categoryId
+      ? flattenTransactionAllocationRows(
+          decryptedTransactions.filter((transaction) => transaction.type === TransactionType.EXPENSE)
+        )
+          .filter((transaction) => transaction.categoryId === budget.categoryId)
+          .map((transaction) => {
+            const parent = decryptedTransactions.find(
+              (candidate) => candidate.id === transaction.transactionId
+            )!;
+            return {
+              id: transaction.transactionId,
+              splitId: transaction.splitId,
+              amount: transaction.amount,
+              currency: transaction.currency,
+              exchangeRate: transaction.exchangeRate,
+              type: transaction.type as TransactionType,
+              description: transaction.description,
+              date: transaction.date,
+              category: toBudgetCategorySummary(transaction.category),
+              account: parent.account,
+              isSplit: transaction.isSplit,
+            };
+          })
+      : decryptedTransactions.map((transaction) => ({
+          id: transaction.id,
+          amount: transaction.amount,
+          currency: transaction.currency,
+          exchangeRate: transaction.exchangeRate,
+          type: transaction.type,
+          description: transaction.description,
+          date: transaction.date,
+          category: transaction.category,
+          account: transaction.account,
+          isSplit: transaction.splits.length > 0,
+        }));
+
+    return { success: true, data };
   } catch (error) {
     console.error("Get budget transactions error:", error);
     return { success: false, error: "Failed to fetch budget transactions", data: [] };

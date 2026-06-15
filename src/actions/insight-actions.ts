@@ -15,6 +15,7 @@ import {
   createInsightCurrencyConverter,
   normalizeTransactionAmount,
 } from "@/lib/financial-insights/insight-currency-utils";
+import { flattenTransactionAllocationRows } from "@/lib/transaction-allocation-service";
 import {
   generateFinancialInsights,
   type FinancialInsightComputationContext,
@@ -148,6 +149,11 @@ function buildBudgetProgress(input: {
     date: Date;
     categoryId: string | null;
   }>;
+  expenseAllocations: Array<{
+    normalizedAmount: number;
+    date: Date;
+    categoryId: string | null;
+  }>;
   now: Date;
 }): InsightBudgetProgress[] {
   return input.budgets
@@ -158,27 +164,32 @@ function buildBudgetProgress(input: {
     )
     .map((budget) => {
       const range = getBudgetRange(budget.period, input.now);
-      const spent = input.transactions.reduce((sum, transaction) => {
-        if (transaction.date < range.start || transaction.date > range.end) {
-          return sum;
-        }
+      const spent = budget.categoryId
+        ? input.expenseAllocations.reduce((sum, transaction) => {
+            if (transaction.date < range.start || transaction.date > range.end) {
+              return sum;
+            }
 
-        if (budget.categoryId) {
-          if (
-            transaction.type !== "EXPENSE" ||
-            transaction.categoryId !== budget.categoryId
-          ) {
-            return sum;
-          }
-        } else if (
-          transaction.type !== "EXPENSE" &&
-          transaction.type !== "LIABILITY_PAYMENT"
-        ) {
-          return sum;
-        }
+            if (transaction.categoryId !== budget.categoryId) {
+              return sum;
+            }
 
-        return sum + normalizeTransactionAmount(transaction);
-      }, 0);
+            return sum + transaction.normalizedAmount;
+          }, 0)
+        : input.transactions.reduce((sum, transaction) => {
+            if (transaction.date < range.start || transaction.date > range.end) {
+              return sum;
+            }
+
+            if (
+              transaction.type !== "EXPENSE" &&
+              transaction.type !== "LIABILITY_PAYMENT"
+            ) {
+              return sum;
+            }
+
+            return sum + normalizeTransactionAmount(transaction);
+          }, 0);
 
       const percentage = budget.amount > 0 ? (spent / budget.amount) * 100 : 0;
       return {
@@ -195,14 +206,12 @@ function buildBudgetProgress(input: {
 
 function buildCategoryComparisons(input: {
   currentTransactions: Array<{
-    amount: number;
-    exchangeRate: number;
+    normalizedAmount: number;
     categoryId: string | null;
     category: { id: string; name: string } | null;
   }>;
   previousTransactions: Array<{
-    amount: number;
-    exchangeRate: number;
+    normalizedAmount: number;
     categoryId: string | null;
     category: { id: string; name: string } | null;
   }>;
@@ -221,8 +230,7 @@ function buildCategoryComparisons(input: {
   const upsert = (
     bucket: "currentAmount" | "previousAmount",
     transaction: {
-      amount: number;
-      exchangeRate: number;
+      normalizedAmount: number;
       categoryId: string | null;
       category: { id: string; name: string } | null;
     }
@@ -234,7 +242,7 @@ function buildCategoryComparisons(input: {
       currentAmount: 0,
       previousAmount: 0,
     };
-    entry[bucket] += normalizeTransactionAmount(transaction);
+    entry[bucket] += transaction.normalizedAmount;
     byCategory.set(key, entry);
   };
 
@@ -574,6 +582,23 @@ export async function getFinancialInsights(
               name: true,
             },
           },
+          splits: {
+            select: {
+              id: true,
+              amount: true,
+              description: true,
+              sortOrder: true,
+              categoryId: true,
+              category: {
+                select: {
+                  id: true,
+                  name: true,
+                  icon: true,
+                  color: true,
+                },
+              },
+            },
+          },
         },
         orderBy: {
           date: "asc",
@@ -702,6 +727,17 @@ export async function getFinancialInsights(
         transaction.date >= currentPeriod.from &&
         transaction.date <= currentPeriod.to
     );
+    const expenseAllocationRows = flattenTransactionAllocationRows(
+      transactions.filter((transaction) => transaction.type === "EXPENSE")
+    );
+    const currentExpenseAllocations = expenseAllocationRows.filter(
+      (transaction) =>
+        transaction.date >= currentPeriod.from && transaction.date <= currentPeriod.to
+    );
+    const previousExpenseAllocations = expenseAllocationRows.filter(
+      (transaction) =>
+        transaction.date >= previousPeriod.from && transaction.date <= previousPeriod.to
+    );
 
     const currentMonthExpense = currentExpenseTransactions.reduce(
       (sum, transaction) => sum + normalizeTransactionAmount(transaction),
@@ -741,11 +777,12 @@ export async function getFinancialInsights(
     const budgetProgress = buildBudgetProgress({
       budgets,
       transactions,
+      expenseAllocations: expenseAllocationRows,
       now,
     });
     const categorySpending = buildCategoryComparisons({
-      currentTransactions: currentExpenseTransactions,
-      previousTransactions: previousExpenseTransactions,
+      currentTransactions: currentExpenseAllocations,
+      previousTransactions: previousExpenseAllocations,
       currentMonthExpense,
     });
     const unusualTransactions = buildUnusualTransactionCandidates({

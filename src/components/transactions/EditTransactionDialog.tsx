@@ -35,6 +35,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { MoneyInput } from "@/components/ui/money-input";
+import { TransactionSplitEditor } from "@/components/transactions/TransactionSplitEditor";
 import { cn } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
@@ -56,6 +57,17 @@ const editTransactionFormSchema = z
     accountId: z.string().min(1, "Account is required"),
     toAccountId: z.string().optional(),
     categoryId: z.string().optional(),
+    currency: z.string().optional(),
+    exchangeRate: z.number().optional(),
+    splits: z
+      .array(
+        z.object({
+          categoryId: z.string().optional(),
+          amount: z.number().nonnegative(),
+          description: z.string().optional(),
+        })
+      )
+      .default([]),
   })
   .refine(
     (data) => {
@@ -84,7 +96,8 @@ const editTransactionFormSchema = z
     }
   );
 
-type EditTransactionFormValues = z.infer<typeof editTransactionFormSchema>;
+type EditTransactionFormInput = z.input<typeof editTransactionFormSchema>;
+type EditTransactionFormValues = z.output<typeof editTransactionFormSchema>;
 
 interface Category {
   id: string;
@@ -103,6 +116,8 @@ interface Transaction {
   longitude: number | null;
   googleMapsLink: string | null;
   date: Date;
+  currency: string;
+  exchangeRate: number;
   toAccountId: string | null;
   account: {
     id: string;
@@ -114,6 +129,18 @@ interface Transaction {
     name: string;
     icon: string | null;
   } | null;
+  splits: Array<{
+    id: string;
+    amount: number;
+    description: string | null;
+    sortOrder: number;
+    categoryId: string | null;
+    category: {
+      id: string;
+      name: string;
+      icon: string | null;
+    } | null;
+  }>;
 }
 
 interface EditTransactionDialogProps {
@@ -154,7 +181,7 @@ export function EditTransactionDialog({
   }));
   const transferAccountTypes = new Set(["BANK", "CASH"]);
 
-  const form = useForm<EditTransactionFormValues>({
+  const form = useForm<EditTransactionFormInput, unknown, EditTransactionFormValues>({
     resolver: zodResolver(editTransactionFormSchema),
     defaultValues: {
       amount: 0,
@@ -168,10 +195,15 @@ export function EditTransactionDialog({
       accountId: "",
       toAccountId: "",
       categoryId: "",
+      currency: "IDR",
+      exchangeRate: 1,
+      splits: [],
     },
   });
 
   const selectedType = form.watch("type");
+  const splits = form.watch("splits") ?? [];
+  const isSplitEnabled = splits.length > 0;
 
   // Reset form when transaction changes
   useEffect(() => {
@@ -188,9 +220,52 @@ export function EditTransactionDialog({
         accountId: transaction.account.id,
         toAccountId: transaction.toAccountId || "",
         categoryId: transaction.category?.id || "",
+        currency: transaction.currency,
+        exchangeRate: transaction.exchangeRate,
+        splits: transaction.splits.map((split) => ({
+          categoryId: split.categoryId || "",
+          amount: split.amount,
+          description: split.description || "",
+        })),
       });
     }
   }, [transaction, open, form]);
+
+  const handleSplitToggle = (enabled: boolean) => {
+    if (!transaction) return;
+
+    if (!enabled) {
+      const firstSplitCategoryId = form.getValues("splits.0.categoryId");
+      if (!form.getValues("categoryId") && firstSplitCategoryId) {
+        form.setValue("categoryId", firstSplitCategoryId, {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+      }
+      form.setValue("splits", [], { shouldDirty: true, shouldValidate: true });
+      return;
+    }
+
+    const totalAmount = form.getValues("amount");
+    const parentCategoryId = form.getValues("categoryId");
+    form.setValue(
+      "splits",
+      [
+        {
+          categoryId: parentCategoryId || "",
+          amount: totalAmount > 0 ? totalAmount : 0,
+          description: "",
+        },
+        {
+          categoryId: "",
+          amount: 0,
+          description: "",
+        },
+      ],
+      { shouldDirty: true, shouldValidate: true }
+    );
+    form.setValue("categoryId", "", { shouldDirty: true, shouldValidate: true });
+  };
 
   // Fetch categories from database based on transaction type
   useEffect(() => {
@@ -215,8 +290,27 @@ export function EditTransactionDialog({
     }
   }, [open, selectedType]);
 
+  useEffect(() => {
+    if (selectedType !== "EXPENSE" && isSplitEnabled) {
+      form.setValue("splits", [], { shouldDirty: true, shouldValidate: true });
+    }
+  }, [form, isSplitEnabled, selectedType]);
+
   const onSubmit = async (data: EditTransactionFormValues) => {
     if (!transaction) return;
+
+    if (
+      data.type === "EXPENSE" &&
+      data.splits.length > 0 &&
+      Math.abs(
+        data.amount - data.splits.reduce((sum, split) => sum + (split.amount || 0), 0)
+      ) > 0.005
+    ) {
+      form.setError("root", {
+        message: "Split amounts must exactly equal the parent amount.",
+      });
+      return;
+    }
 
     try {
       await updateMutation.mutateAsync({
@@ -230,9 +324,12 @@ export function EditTransactionDialog({
           longitude: data.longitude,
           googleMapsLink: data.googleMapsLink,
           date: data.date,
+          currency: data.currency,
+          exchangeRate: data.exchangeRate,
           accountId: data.accountId,
           toAccountId: data.toAccountId,
           categoryId: data.categoryId,
+          splits: data.splits,
         },
       });
       onOpenChange(false);
@@ -424,33 +521,50 @@ export function EditTransactionDialog({
               />
             )}
 
-            <FormField
-              control={form.control}
-              name="categoryId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Category (Optional)</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    value={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select category" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {categories.map((category) => (
-                        <SelectItem key={category.id} value={category.id}>
-                          {category.icon} {category.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {selectedType !== "TRANSFER" ? (
+              <>
+                {!isSplitEnabled ? (
+                  <FormField
+                    control={form.control}
+                    name="categoryId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Category (Optional)</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select category" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {categories.map((category) => (
+                              <SelectItem key={category.id} value={category.id}>
+                                {category.icon} {category.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ) : null}
+
+                {selectedType === "EXPENSE" ? (
+                  <TransactionSplitEditor
+                    control={form.control}
+                    watch={form.watch}
+                    setValue={form.setValue}
+                    categories={categories}
+                    onToggle={handleSplitToggle}
+                    disabled={updateMutation.isPending}
+                  />
+                ) : null}
+              </>
+            ) : null}
 
             <FormField
               control={form.control}

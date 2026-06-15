@@ -35,6 +35,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { MoneyInput } from "@/components/ui/money-input";
+import { TransactionSplitEditor } from "@/components/transactions/TransactionSplitEditor";
 import { cn } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
@@ -61,9 +62,19 @@ const transactionFormSchema = z.object({
   categoryId: z.string().optional(),
   currency: z.string(),
   exchangeRate: z.number(),
+  splits: z
+    .array(
+      z.object({
+        categoryId: z.string().optional(),
+        amount: z.number().nonnegative(),
+        description: z.string().optional(),
+      })
+    )
+    .default([]),
 });
 
-type TransactionFormValues = z.infer<typeof transactionFormSchema>;
+type TransactionFormInput = z.input<typeof transactionFormSchema>;
+type TransactionFormValues = z.output<typeof transactionFormSchema>;
 
 interface Category {
   id: string;
@@ -99,7 +110,7 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
   }));
   const transferAccountTypes = new Set(["BANK", "CASH"]);
 
-  const form = useForm<TransactionFormValues>({
+  const form = useForm<TransactionFormInput, unknown, TransactionFormValues>({
     resolver: zodResolver(transactionFormSchema),
     defaultValues: {
       amount: 0,
@@ -115,10 +126,47 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
       categoryId: "",
       currency: "IDR",
       exchangeRate: 1,
+      splits: [],
     },
   });
 
   const selectedType = form.watch("type");
+  const splits = form.watch("splits") ?? [];
+  const isSplitEnabled = splits.length > 0;
+
+  const handleSplitToggle = (enabled: boolean) => {
+    if (!enabled) {
+      const firstSplitCategoryId = form.getValues("splits.0.categoryId");
+      if (!form.getValues("categoryId") && firstSplitCategoryId) {
+        form.setValue("categoryId", firstSplitCategoryId, {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+      }
+      form.setValue("splits", [], { shouldDirty: true, shouldValidate: true });
+      return;
+    }
+
+    const totalAmount = form.getValues("amount");
+    const parentCategoryId = form.getValues("categoryId");
+    form.setValue(
+      "splits",
+      [
+        {
+          categoryId: parentCategoryId || "",
+          amount: totalAmount > 0 ? totalAmount : 0,
+          description: "",
+        },
+        {
+          categoryId: "",
+          amount: 0,
+          description: "",
+        },
+      ],
+      { shouldDirty: true, shouldValidate: true }
+    );
+    form.setValue("categoryId", "", { shouldDirty: true, shouldValidate: true });
+  };
 
   const handleUseCurrentLocation = () => {
     if (!("geolocation" in navigator)) {
@@ -176,11 +224,34 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
     }
   }, [open, selectedType]);
 
+  useEffect(() => {
+    if (selectedType !== "EXPENSE" && isSplitEnabled) {
+      form.setValue("splits", [], { shouldDirty: true, shouldValidate: true });
+    }
+  }, [form, isSplitEnabled, selectedType]);
+
   const onSubmit = async (data: TransactionFormValues) => {
+    if (
+      data.type === "EXPENSE" &&
+      data.splits.length > 0 &&
+      Math.abs(
+        data.amount - data.splits.reduce((sum, split) => sum + (split.amount || 0), 0)
+      ) > 0.005
+    ) {
+      form.setError("root", {
+        message: "Split amounts must exactly equal the parent amount.",
+      });
+      return;
+    }
+
     try {
       await createMutation.mutateAsync({
         ...data,
         isRecurring: false,
+        clientMutationId:
+          typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : undefined,
       });
       setOpen(false);
       form.reset();
@@ -359,33 +430,50 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
             />
           )}
 
-            <FormField
-              control={form.control}
-              name="categoryId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Category (Optional)</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    defaultValue={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select category" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {categories.map((category) => (
-                        <SelectItem key={category.id} value={category.id}>
-                          {category.icon} {category.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {selectedType !== "TRANSFER" && (
+              <>
+                {!isSplitEnabled ? (
+                  <FormField
+                    control={form.control}
+                    name="categoryId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Category (Optional)</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select category" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {categories.map((category) => (
+                              <SelectItem key={category.id} value={category.id}>
+                                {category.icon} {category.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ) : null}
+
+                {selectedType === "EXPENSE" ? (
+                  <TransactionSplitEditor
+                    control={form.control}
+                    watch={form.watch}
+                    setValue={form.setValue}
+                    categories={categories}
+                    onToggle={handleSplitToggle}
+                    disabled={createMutation.isPending}
+                  />
+                ) : null}
+              </>
+            )}
 
             <FormField
               control={form.control}

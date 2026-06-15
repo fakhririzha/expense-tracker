@@ -56,6 +56,11 @@ export default function TransactionsPage() {
       if (tx.category) {
         uniqueCategories.set(tx.category.id, tx.category);
       }
+      tx.splits.forEach((split) => {
+        if (split.category) {
+          uniqueCategories.set(split.category.id, split.category);
+        }
+      });
     });
     return Array.from(uniqueCategories.values());
   }, [transactions]);

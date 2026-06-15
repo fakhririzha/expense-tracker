@@ -108,6 +108,14 @@ export async function exportTransactionsCSV(params?: {
         toAccount: {
           select: { nameEncrypted: true },
         },
+        splits: {
+          include: {
+            category: {
+              select: { id: true, name: true },
+            },
+          },
+          orderBy: { sortOrder: "asc" },
+        },
       },
       orderBy: { date: "desc" },
     });
@@ -127,27 +135,53 @@ export async function exportTransactionsCSV(params?: {
       "Google Maps Link",
       "Currency",
       "Exchange Rate",
+      "Parent Transaction ID",
+      "Is Split",
+      "Split Count",
+      "Split Allocations",
     ];
 
     // CSV Rows
     const rows = await Promise.all(
-      transactions.map(async (t) => [
-        format(new Date(t.date), "yyyy-MM-dd"),
-        t.amount.toString(),
-        t.type,
-        t.category?.name || "",
-        await decryptAccountName(session.user.id, t.account.nameEncrypted),
-        t.toAccount
-          ? await decryptAccountName(session.user.id, t.toAccount.nameEncrypted)
-          : "",
-        t.description || "",
-        t.location || "",
-        t.latitude?.toString() || "",
-        t.longitude?.toString() || "",
-        t.googleMapsLink || "",
-        t.currency,
-        t.exchangeRate.toString(),
-      ])
+      transactions.map(async (t) => {
+        const description = t.descriptionEncrypted
+          ? await decryptUserField(session.user.id, "transaction.description", t.descriptionEncrypted).catch(() => t.description || "")
+          : (t.description || "");
+        const splitAllocations = await Promise.all(
+          t.splits.map(async (split) => {
+            const splitDescription = split.descriptionEncrypted
+              ? await decryptUserField(
+                  session.user.id,
+                  "transactionSplit.description",
+                  split.descriptionEncrypted
+                ).catch(() => split.description || "")
+              : (split.description || "");
+            return `${split.category?.name || "Uncategorized"}:${split.amount}${splitDescription ? ` (${splitDescription})` : ""}`;
+          })
+        );
+
+        return [
+          format(new Date(t.date), "yyyy-MM-dd"),
+          t.amount.toString(),
+          t.type,
+          t.category?.name || "",
+          await decryptAccountName(session.user.id, t.account.nameEncrypted),
+          t.toAccount
+            ? await decryptAccountName(session.user.id, t.toAccount.nameEncrypted)
+            : "",
+          description,
+          t.location || "",
+          t.latitude?.toString() || "",
+          t.longitude?.toString() || "",
+          t.googleMapsLink || "",
+          t.currency,
+          t.exchangeRate.toString(),
+          t.id,
+          t.splits.length > 0 ? "Yes" : "No",
+          t.splits.length.toString(),
+          splitAllocations.join(" | "),
+        ];
+      })
     );
 
     // Combine headers and rows
@@ -203,6 +237,12 @@ export async function exportAllData() {
           account: { select: { nameEncrypted: true } },
           category: { select: { name: true } },
           toAccount: { select: { nameEncrypted: true } },
+          splits: {
+            include: {
+              category: { select: { id: true, name: true } },
+            },
+            orderBy: { sortOrder: "asc" },
+          },
         },
         orderBy: { date: "desc" },
       }),
@@ -246,6 +286,13 @@ export async function exportAllData() {
         Promise.all(
           transactions.map(async (t) => ({
             ...t,
+            description: t.descriptionEncrypted
+              ? await decryptUserField(
+                  session.user.id,
+                  "transaction.description",
+                  t.descriptionEncrypted
+                ).catch(() => t.description)
+              : t.description,
             accountName: await decryptAccountName(
               session.user.id,
               t.account.nameEncrypted
@@ -253,6 +300,18 @@ export async function exportAllData() {
             toAccountName: t.toAccount
               ? await decryptAccountName(session.user.id, t.toAccount.nameEncrypted)
               : null,
+            splits: await Promise.all(
+              t.splits.map(async (split) => ({
+                ...split,
+                description: split.descriptionEncrypted
+                  ? await decryptUserField(
+                      session.user.id,
+                      "transactionSplit.description",
+                      split.descriptionEncrypted
+                    ).catch(() => split.description)
+                  : split.description,
+              }))
+            ),
           }))
         ),
         Promise.all(
@@ -266,7 +325,7 @@ export async function exportAllData() {
     // Create a JSON backup
     const backup = {
       exportDate: new Date().toISOString(),
-      version: "1.2",
+      version: "1.3",
       data: {
         accounts: decryptedAccounts,
         transactions: decryptedTransactions.map((t) => ({
@@ -284,6 +343,14 @@ export async function exportAllData() {
           accountName: t.accountName,
           categoryName: t.category?.name || null,
           toAccountName: t.toAccountName,
+          splits: t.splits.map((split) => ({
+            id: split.id,
+            amount: split.amount,
+            description: split.description,
+            sortOrder: split.sortOrder,
+            categoryId: split.categoryId,
+            categoryName: split.category?.name || null,
+          })),
         })),
         categories,
         budgets: budgets.map((b) => ({
@@ -337,6 +404,10 @@ export async function exportAllData() {
       summary: {
         accounts: accounts.length,
         transactions: transactions.length,
+        transactionSplits: transactions.reduce(
+          (count, transaction) => count + transaction.splits.length,
+          0
+        ),
         categories: categories.length,
         budgets: budgets.length,
         investmentAssets: investmentAssets.length,

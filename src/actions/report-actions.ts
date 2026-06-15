@@ -3,6 +3,7 @@
 import { auth } from "@/auth";
 import prisma from "@/lib/db";
 import { getExchangeRate } from "@/lib/finance-service";
+import { flattenTransactionAllocationRows } from "@/lib/transaction-allocation-service";
 
 // ==================== TYPES ====================
 
@@ -255,6 +256,12 @@ export async function getCategoryBreakdown(params: {
       },
       include: {
         category: true,
+        splits: {
+          include: {
+            category: true,
+          },
+          orderBy: { sortOrder: "asc" },
+        },
       },
     });
 
@@ -270,15 +277,34 @@ export async function getCategoryBreakdown(params: {
 
     let totalAmount = 0;
 
-    for (const t of transactions) {
-      const normalizedAmount = await convertToUserCurrency(
-        t.amount,
-        t.currency,
-        t.exchangeRate
-      );
+    const rows =
+      type === "EXPENSE"
+        ? flattenTransactionAllocationRows(transactions)
+        : transactions.map((transaction) => ({
+            transactionId: transaction.id,
+            splitId: null,
+            amount: transaction.amount,
+            normalizedAmount: transaction.amount * transaction.exchangeRate,
+            currency: transaction.currency,
+            exchangeRate: transaction.exchangeRate,
+            type: transaction.type,
+            date: transaction.date,
+            accountId: transaction.accountId,
+            toAccountId: transaction.toAccountId,
+            categoryId: transaction.categoryId,
+            category: transaction.category,
+            description: transaction.description,
+            isSplit: false,
+          }));
+
+    for (const row of rows) {
+      const normalizedAmount =
+        type === "EXPENSE"
+          ? row.normalizedAmount
+          : await convertToUserCurrency(row.amount, row.currency, row.exchangeRate);
       totalAmount += normalizedAmount;
 
-      const key = t.categoryId;
+      const key = row.categoryId;
       const existing = categoryMap.get(key);
 
       if (existing) {
@@ -286,10 +312,10 @@ export async function getCategoryBreakdown(params: {
         existing.transactionCount += 1;
       } else {
         categoryMap.set(key, {
-          categoryId: t.categoryId,
-          categoryName: t.category?.name || "Uncategorized",
-          categoryColor: t.category?.color || null,
-          categoryIcon: t.category?.icon || null,
+          categoryId: row.categoryId,
+          categoryName: row.category?.name || "Uncategorized",
+          categoryColor: row.category?.color || null,
+          categoryIcon: row.category?.icon || null,
           amount: normalizedAmount,
           transactionCount: 1,
         });

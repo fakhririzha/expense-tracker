@@ -43,6 +43,7 @@ import {
   buildHistoricalSpendingEstimate,
   getHistoricalLookbackStart,
 } from "@/lib/forecasting/historical-spending-estimator";
+import { flattenTransactionAllocationRows } from "@/lib/transaction-allocation-service";
 import {
   BudgetPeriod,
   SubscriptionStatus,
@@ -689,34 +690,83 @@ export async function getCashFlowForecast(
 
       for (const budget of budgets) {
         const range = getBudgetPeriodRange(budget.period, startDate);
-        const spentTransactions = await prisma.transaction.findMany({
-          where: {
-            userId: session.user.id,
-            date: {
-              gte: range.start,
-              lt: startDate,
-            },
-            type: {
-              in: budget.categoryId
-                ? [TransactionType.EXPENSE]
-                : [TransactionType.EXPENSE, TransactionType.LIABILITY_PAYMENT],
-            },
-            ...(budget.categoryId ? { categoryId: budget.categoryId } : {}),
-          },
-          select: {
-            amount: true,
-            exchangeRate: true,
-            currency: true,
-          },
-        });
-
-        const spent = spentTransactions.reduce((sum, transaction) => {
-          const normalized =
-            transaction.currency === user.mainCurrency
-              ? transaction.amount
-              : transaction.amount * transaction.exchangeRate;
-          return sum + normalized;
-        }, 0);
+        const spent = budget.categoryId
+          ? flattenTransactionAllocationRows(
+              await prisma.transaction.findMany({
+                where: {
+                  userId: session.user.id,
+                  date: {
+                    gte: range.start,
+                    lt: startDate,
+                  },
+                  type: TransactionType.EXPENSE,
+                },
+                select: {
+                  id: true,
+                  amount: true,
+                  currency: true,
+                  exchangeRate: true,
+                  type: true,
+                  date: true,
+                  categoryId: true,
+                  accountId: true,
+                  toAccountId: true,
+                  description: true,
+                  category: {
+                    select: {
+                      id: true,
+                      name: true,
+                      icon: true,
+                      color: true,
+                    },
+                  },
+                  splits: {
+                    select: {
+                      id: true,
+                      amount: true,
+                      description: true,
+                      sortOrder: true,
+                      categoryId: true,
+                      category: {
+                        select: {
+                          id: true,
+                          name: true,
+                          icon: true,
+                          color: true,
+                        },
+                      },
+                    },
+                  },
+                },
+              })
+            )
+              .filter((transaction) => transaction.categoryId === budget.categoryId)
+              .reduce((sum, transaction) => sum + transaction.normalizedAmount, 0)
+          : (
+              await prisma.transaction.findMany({
+                where: {
+                  userId: session.user.id,
+                  date: {
+                    gte: range.start,
+                    lt: startDate,
+                  },
+                  type: {
+                    in: [TransactionType.EXPENSE, TransactionType.LIABILITY_PAYMENT],
+                  },
+                },
+                select: {
+                  amount: true,
+                  exchangeRate: true,
+                  currency: true,
+                },
+              })
+            ).reduce((sum, transaction) => {
+              const normalized =
+                transaction.currency === user.mainCurrency
+                  ? transaction.amount
+                  : transaction.amount * transaction.exchangeRate;
+              return sum + normalized;
+            }, 0);
 
         actualSpentByBudgetId.set(budget.id, roundMoney(spent));
       }

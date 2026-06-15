@@ -1,5 +1,11 @@
 # FinHealth Changelog
 
+## v4.5.0
+
+- Added manual split transactions for expenses so one purchase can now be divided across multiple categories without affecting the account balance more than once.
+- Updated budgets, category reports, and financial insights so split expenses count toward their line items instead of double-counting the parent transaction.
+- Improved transaction exports and transaction list labels so split purchases are easier to review and understand later.
+
 ## v4.4.4
 
 - Added login confirmation dialogs so successful and failed sign-ins are now acknowledged more clearly before the app continues.
