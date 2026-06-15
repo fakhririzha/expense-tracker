@@ -1,30 +1,28 @@
 # AGENTS.md - Expense Tracker
 
-This file contains essential information for AI coding agents working on the Expense Tracker project.
+This file describes the current repository state for AI coding agents working on Expense Tracker, branded in the app as **FinHealth**.
 
 ## Project Overview
 
-**Expense Tracker** (branded as "FinHealth") is a personal finance management application built with Next.js 16 and React 19. It provides account and transaction tracking, investment portfolio valuation, liabilities, loans receivable, personal assets, subscriptions, forecasting, multi-currency reporting, and financial dashboard insights.
+FinHealth is a personal finance dashboard built with Next.js 16 and React 19. It covers day-to-day money tracking, portfolio valuation, liabilities, loans receivable, personal assets, subscriptions, budgets, goals, cash-flow forecasting, rule-based insights, month-end net-worth snapshots, PWA install support, and browser push notifications.
 
-### Key Features
+### Current Feature Set
 
-- **Account Management**: Create and manage Bank, Cash, Investment, Loan, Credit Card, and Loans Receivable accounts.
-- **Transaction Tracking**: Record income, expenses, transfers, liability payments, and optional location metadata.
-- **Category Management**: Maintain system and user-defined transaction categories.
-- **Investment Portfolio**: Track holdings, trade history, realized/unrealized PnL, account linkage, and unit conversions for stocks and precious metals.
-- **Yahoo Finance Pricing**: Fetch market and FX data with caching, fallback values, batching/rate-limit awareness, and user-friendly error handling.
-- **Personal Assets**: Track durable owned items with dated manual valuations and disposal history.
-- **Liabilities**: Record loan and credit-card payments with audit trails, overpayment handling, and rollback support.
-- **Loans Receivable**: Track principal owed to the user and move funds through disbursement and repayment flows without treating principal as income or expense.
-- **Recurring Transactions**: Automate regular transactions with daily, weekly, biweekly, monthly, quarterly, and yearly schedules.
-- **Subscriptions**: Track recurring subscriptions, billing cycles, trial end dates, renewals, and optional recurring-rule linkage.
-- **Multi-Currency Support**: Track finances across currencies with exchange-rate conversion.
-- **Budgeting**: Create and monitor monthly, quarterly, and yearly budgets.
-- **Savings Goals and Profile Targets**: Track savings goals plus user-level retirement and monthly budget targets.
-- **Forecasting and Insights**: Analyze projected liquid-cash balances plus cross-feature financial insights in dashboard and reports.
-- **Reports, Calendar, and Data Tools**: View financial reports, upcoming calendar events, month-end net-worth snapshots, and import/export data.
-- **Financial Dashboard**: Executive overview with net worth, wealth health score, monthly budget status, retirement progress, sidebar metrics, and changelog visibility.
-- **Profile Security**: Support self-service account deletion from the profile page.
+- **Accounts**: Bank, Cash, Investment, Loan, Credit Card, and Loans Receivable account types.
+- **Transactions**: Income, expense, transfer, and liability-payment flows with optional location metadata.
+- **Split Expenses**: Manual split rows for expense transactions, with exact amount matching and category-level reporting support.
+- **Categories**: System and user-defined categories with icon and color metadata.
+- **Investments**: Holdings, buy/sell trade history, realized PnL, valuation, account linkage, and precious-metal unit conversion.
+- **Liabilities**: Loan and credit-card payment flows with audit history, overpayment support, and rollback metadata.
+- **Loans Receivable**: Principal disbursement and repayment flows that move balances without misclassifying principal as income or expense.
+- **Recurring Transactions**: Daily, weekly, biweekly, monthly, quarterly, and yearly rules.
+- **Subscriptions**: Renewal tracking, trial tracking, recurring-rule linkage, summaries, and detail drawers.
+- **Budgets and Goals**: Monthly, quarterly, and yearly budgets plus savings goals and profile-level targets.
+- **Reports and Analytics**: Category breakdowns, spending trends, income-vs-expense views, frozen month-end net-worth history, forecasting, and rule-based financial insights.
+- **Calendar and Pressure Alerts**: Upcoming recurring items, subscription renewals, and bank-balance pressure alerts for the next 30 days.
+- **Data Tools**: CSV import with mapping and export support.
+- **PWA and Notifications**: Install prompt, offline fallback page, service worker, push subscriptions, notification preferences, and daily notification dispatch cron.
+- **Profile Security**: Self-service account deletion, base currency settings, financial targets, and notification settings.
 
 ## Technology Stack
 
@@ -37,201 +35,128 @@ This file contains essential information for AI coding agents working on the Exp
 | UI Components | shadcn/ui (New York style) + Radix UI | - |
 | Database | MySQL / MariaDB | 8.0+ |
 | ORM | Prisma | 7.4.1 |
-| Authentication | Auth.js v5 (NextAuth) | 5.0.0-beta.30 |
-| State Management | TanStack Query (React Query) | 5.90+ |
+| Authentication | Auth.js v5 / NextAuth | 5.0.0-beta.30 |
+| State Management | TanStack Query | 5.90+ |
 | Tables | TanStack Table | 8.21+ |
 | Forms | React Hook Form + Zod | 7.71+ / 4.3+ |
 | Charts | Recharts | 3.6+ |
 | Icons | Lucide React | 0.562+ |
 | Market Data | yahoo-finance2 | 3.13+ |
+| Push Notifications | web-push | 3.6+ |
 | Package Manager | pnpm | 9.x |
 
-## Project Structure
+## Repository Structure
 
 ```text
 expense-tracker/
-├── prisma/
-│   ├── schema.prisma          # Database schema definition
-│   └── migrations/            # Database migrations
-├── public/                    # Static assets
+├── certificates/             # Local HTTPS certificates
 ├── content/
-│   └── changelog.md           # In-dashboard changelog content
-├── plans/                     # Implementation and architecture notes
+│   └── changelog.md          # In-app changelog content
+├── plans/                    # Architecture and implementation notes
+├── prisma/
+│   ├── schema.prisma         # Database schema
+│   └── migrations/           # Prisma migrations
+├── public/
+│   ├── icons/                # PWA icons and favicons
+│   ├── offline.html          # Offline fallback page
+│   └── sw.js                 # Service worker
 ├── src/
-│   ├── actions/               # Server Actions and server-side reads
-│   │   ├── account-actions.ts
-│   │   ├── auth-actions.ts
-│   │   ├── budget-actions.ts
-│   │   ├── calendar-actions.ts
-│   │   ├── category-actions.ts
-│   │   ├── exchange-rate-actions.ts
-│   │   ├── export-actions.ts
-│   │   ├── forecast-actions.ts
-│   │   ├── goal-actions.ts
-│   │   ├── import-actions.ts
-│   │   ├── insight-actions.ts
-│   │   ├── investment-actions.ts
-│   │   ├── liability-payment-actions.ts
-│   │   ├── net-worth-snapshot-actions.ts
-│   │   ├── personal-asset-actions.ts
-│   │   ├── profile-actions.ts
-│   │   ├── receivable-actions.ts
-│   │   ├── recurring-actions.ts
-│   │   ├── report-actions.ts
-│   │   ├── subscription-actions.ts
-│   │   └── transaction-actions.ts
-│   ├── app/                   # Next.js App Router
-│   │   ├── (auth)/            # Login/register route group
-│   │   ├── (dashboard)/       # Protected dashboard route group
-│   │   │   └── dashboard/
-│   │   │       ├── accounts/
-│   │   │       ├── assets/
-│   │   │       ├── budgets/
-│   │   │       ├── calendar/
-│   │   │       ├── categories/
-│   │   │       ├── data/
-│   │   │       ├── goals/
-│   │   │       ├── investments/
-│   │   │       ├── liabilities/
-│   │   │       ├── profile/
-│   │   │       ├── receivables/
-│   │   │       ├── recurring/
-│   │   │       ├── reports/
-│   │   │       ├── subscriptions/
-│   │   │       ├── transactions/
-│   │   │       └── page.tsx   # Main dashboard
-│   │   ├── api/               # API routes
-│   │   │   ├── accounts/by-type/route.ts
-│   │   │   ├── auth/[...nextauth]/route.ts
-│   │   │   ├── categories/route.ts
-│   │   │   ├── cron/monthly-net-worth-snapshots/route.ts
-│   │   │   ├── cron/recurring/route.ts
-│   │   │   └── investments/[id]/trades/route.ts
-│   │   ├── globals.css        # Tailwind 4 globals and semantic CSS variables
-│   │   ├── layout.tsx         # Root layout with providers
-│   │   └── page.tsx           # Landing page
-│   ├── components/            # React components by feature area
-│   │   ├── accounts/
-│   │   ├── assets/
-│   │   ├── budgets/
-│   │   ├── calendar/
-│   │   ├── categories/
-│   │   ├── dashboard/
-│   │   ├── export/
-│   │   ├── forecast/
-│   │   ├── goals/
-│   │   ├── insights/
-│   │   ├── investments/
-│   │   ├── liability/
-│   │   ├── profile/
-│   │   ├── providers/
-│   │   ├── receivables/
-│   │   ├── recurring/
-│   │   ├── reports/
-│   │   ├── subscriptions/
-│   │   ├── transactions/
-│   │   └── ui/                # shadcn/ui components
-│   ├── generated/             # Prisma generated client output
-│   ├── contexts/
-│   │   └── CurrencyContext.tsx
-│   ├── hooks/                 # TanStack Query custom hooks
-│   │   ├── useAccountQueries.ts
-│   │   ├── useBudgetQueries.ts
-│   │   ├── useCalendarQueries.ts
-│   │   ├── useCashFlowForecast.ts
-│   │   ├── useCategoryQueries.ts
-│   │   ├── useExchangeRateQuery.ts
-│   │   ├── useFinancialInsightQueries.ts
-│   │   ├── useGoalQueries.ts
-│   │   ├── useInvestmentQueries.ts
-│   │   ├── useLiabilityQueries.ts
-│   │   ├── useNetWorthSnapshotQueries.ts
-│   │   ├── usePersonalAssetQueries.ts
-│   │   ├── useReceivableQueries.ts
-│   │   ├── useRecurringQueries.ts
-│   │   ├── useReportQueries.ts
-│   │   ├── useSidebarMetrics.ts
-│   │   ├── useSubscriptionQueries.ts
-│   │   ├── useTradeHistory.ts
-│   │   └── useTransactionQueries.ts
-│   ├── lib/                   # Utility libraries and domain services
-│   │   ├── account-types.ts
-│   │   ├── db.ts
-│   │   ├── encryption.ts
-│   │   ├── executive-service.ts
-│   │   ├── executive-types.ts
-│   │   ├── finance-service.ts
-│   │   ├── financial-insights/
-│   │   ├── forecasting/
-│   │   ├── investment-valuation-service.ts
-│   │   ├── investment-validation.ts
-│   │   ├── liability-payment-validation.ts
-│   │   ├── net-worth-calculation.ts
-│   │   ├── unit-conversion.ts
-│   │   ├── user-encryption.ts
-│   │   └── utils.ts
-│   ├── scripts/
-│   │   ├── backfill-net-worth-snapshots.ts
-│   │   └── migrate-encryption.ts
-│   ├── types/
-│   │   ├── next-auth.d.ts
-│   │   ├── personal-assets.ts
-│   │   └── trade-history.ts
+│   ├── actions/              # Server Actions by feature
+│   ├── app/                  # Next.js App Router pages, layouts, API routes, manifest
+│   ├── components/           # Feature UI, alerts, dashboard, profile, pwa, ui primitives
+│   ├── contexts/             # React contexts
+│   ├── generated/            # Prisma generated client output
+│   ├── hooks/                # TanStack Query hooks
+│   ├── lib/                  # Domain services, encryption, forecasting, insights, notifications
+│   ├── scripts/              # Operational scripts
+│   ├── types/                # Shared TypeScript types
 │   ├── auth.config.ts
 │   ├── auth.ts
 │   └── middleware.ts
-├── components.json            # shadcn/ui configuration
-├── next.config.ts             # Next.js configuration with React Compiler
+├── AGENTS.md
+├── CONTRIBUTING.md
+├── README.md
+├── components.json
+├── eslint.config.mjs
+├── next.config.ts
+├── nixpacks.toml
 ├── package.json
-├── postcss.config.mjs         # Tailwind CSS PostCSS config
-├── prisma.config.ts           # Prisma 7 configuration
+├── postcss.config.mjs
+├── prisma.config.ts
 ├── pnpm-workspace.yaml
 ├── tsconfig.json
-└── vercel.json                # Vercel cron configuration
+└── vercel.json
 ```
+
+### Current Dashboard Pages
+
+- `/dashboard`
+- `/dashboard/accounts`
+- `/dashboard/assets`
+- `/dashboard/budgets`
+- `/dashboard/calendar`
+- `/dashboard/categories`
+- `/dashboard/data`
+- `/dashboard/goals`
+- `/dashboard/investments`
+- `/dashboard/liabilities`
+- `/dashboard/profile`
+- `/dashboard/receivables`
+- `/dashboard/recurring`
+- `/dashboard/reports`
+- `/dashboard/subscriptions`
+- `/dashboard/transactions`
+
+### Current API Routes
+
+- `/api/accounts/by-type`
+- `/api/auth/[...nextauth]`
+- `/api/categories`
+- `/api/cron/monthly-net-worth-snapshots`
+- `/api/cron/notifications`
+- `/api/cron/recurring`
+- `/api/investments/[id]/trades`
 
 ## Build and Development Commands
 
 ```bash
-# Install dependencies
 pnpm install
-
-# Development server
 pnpm dev
-
-# Build for production
-pnpm build            # Runs prisma generate && next build
-
-# Start production server
-pnpm start            # Runs next start
-
-# Lint code
-pnpm lint             # Runs eslint
-
-# Database operations
-pnpm db:migrate:dev   # Runs npx prisma@^7.4.1 migrate dev
-pnpm db:migrate:prod  # Runs npx prisma@^7.4.1 migrate deploy
+pnpm dev:https
+pnpm build
+pnpm start
+pnpm start:https
+pnpm lint
+pnpm db:migrate:dev
+pnpm db:migrate:prod
 pnpm prisma generate
 pnpm prisma db push
+pnpm db:backfill:account-encryption
 ```
 
-There is no `postinstall` script in the current `package.json`. Do not assume dependency installation automatically pushes the database schema or generates Prisma clients.
+### Command Notes
+
+- `pnpm build` runs `prisma generate && next build`.
+- `pnpm dev:https` and `pnpm start:https` use Next.js experimental HTTPS mode.
+- `pnpm db:backfill:account-encryption` runs `src/scripts/backfill-account-encryption.ts`.
+- There is **no** `postinstall` script. Dependency installation does not automatically run Prisma commands.
+- There is **no** dedicated `type-check` script. Use `pnpm build` when build-level type validation matters.
 
 ## Environment Variables
 
 | Variable | Description | Required |
 |----------|-------------|----------|
-| `DATABASE_URL` | MySQL/MariaDB connection string, e.g. `mysql://user:pass@localhost:3306/expense_tracker` | Yes |
+| `DATABASE_URL` | MySQL/MariaDB connection string | Yes |
 | `SHADOW_DATABASE_URL` | Optional shadow database URL for Prisma migrations | No |
-| `AUTH_SECRET` | Secret key for JWT signing, generated with `openssl rand -base64 32` | Yes |
-| `AUTH_URL` | Base URL for auth callbacks, usually `http://localhost:3000` locally | Yes |
-| `CRON_SECRET` | Bearer token for securing cron endpoints in production | Yes in production |
-| `ENCRYPTION_MASTER_KEY` | Base64-encoded 32-byte key for field-level encryption and encryption migration | Required for encrypted field support |
-| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Public VAPID key used by the browser when creating push subscriptions | Required for web push |
-| `VAPID_PRIVATE_KEY` | Private VAPID key used only on the server for Web Push authentication | Required for web push |
-| `VAPID_SUBJECT` | Contact subject for VAPID, usually `mailto:...` or the deployed app URL | Required for web push |
+| `AUTH_SECRET` | Secret used by Auth.js JWT/session handling | Yes |
+| `AUTH_URL` | Base app URL used by auth callbacks and metadata | Yes |
+| `CRON_SECRET` | Bearer secret for production cron endpoints | Yes in production |
+| `ENCRYPTION_MASTER_KEY` | Base64-encoded 32-byte master key for field encryption | Required for encrypted-field support |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Public VAPID key for browser push subscription | Required for web push |
+| `VAPID_PRIVATE_KEY` | Private VAPID key for server-side push delivery | Required for web push |
+| `VAPID_SUBJECT` | Contact subject for VAPID, usually `mailto:...` or the app URL | Required for web push |
 
-Generate an encryption key with:
+Generate a new encryption key with:
 
 ```bash
 openssl rand -base64 32
@@ -241,35 +166,43 @@ openssl rand -base64 32
 
 ### Key Models
 
-**User**: Core user entity with Auth.js integration, `mainCurrency`, financial targets (`retirementTarget`, `monthlyBudget`), and encryption metadata (`encryptionSalt`, `encryptionVersion`).
+**User**: Auth.js user plus `mainCurrency`, financial targets, encryption metadata, notification preference, push subscriptions, and notification events.
 
-**FinancialAccount**: User financial accounts with type, currency, balance, active state, encrypted companion fields for sensitive text, and relations to transactions, investments, trades, and savings goals.
+**FinancialAccount**: User-owned account with encrypted-only account text fields (`nameEncrypted`, `descriptionEncrypted`), type, currency, balance, active state, and cross-feature relations.
 
-**Transaction**: Financial transactions for income, expenses, transfers, and liability payments. Includes currency conversion, optional category, recurring-rule linkage, payment audit fields, encrypted companion fields, and location metadata (`location`, `latitude`, `longitude`, `googleMapsLink`).
+**Transaction**: Income, expense, transfer, and liability-payment records with currency conversion, optional category, recurring linkage, payment status, optional location metadata, and audit fields.
 
-**Category**: System and user-defined transaction categories with icon/color metadata, transaction type, transactions, and budgets.
+**TransactionSplit**: Child rows for split expense allocations. Each split has its own amount, optional description, category, and sort order.
 
-**InvestmentAsset**: Stock, ETF, crypto, or precious-metal holdings with `symbol`, `quantity`, `avgBuyPrice`, `currency`, `unitType`, and optional investment-account linkage.
+**Category**: System and user-defined categories shared across transactions, split rows, budgets, and subscriptions.
 
-**TradeHistory**: Buy/sell trades with fees, realized PnL, notes encryption, account linkage, unit type, and account balance snapshots.
+**InvestmentAsset**: Holdings with symbol, quantity, average buy price, currency, unit type, optional investment-account linkage, and trade history.
 
-**RecurringRule**: Automated recurring transaction templates with interval, next due date, optional end date, category/account linkage, and encrypted companion fields.
+**TradeHistory**: Buy/sell trades with fees, realized PnL, notes encryption, account linkage, and balance snapshots.
 
-**Subscription**: User-owned subscription records with billing cycle, status, renewal dates, optional account/category linkage, optional recurring-rule linkage, and encrypted companion fields.
+**RecurringRule**: Scheduled transaction template with interval, next due date, optional end date, optional account/category linkage, and optional subscription linkage.
 
-**ExchangeRate**: Global cached exchange rates between currencies. This is not user-owned and should not receive `userId` filters.
+**Subscription**: Renewal tracking with billing cycle, status, linked account/category, notes, optional recurring rule, and encrypted companion fields.
 
-**NetWorthSnapshot**: Month-end net-worth snapshots with account-class breakdowns, FX metadata, and calculation versions for historical reporting and trends.
+**ExchangeRate**: Global FX cache. Do not apply `userId` filters to this table.
 
-**LiabilityPaymentAudit**: Audit trail for liability payments, including source/target account snapshots, execution metadata, encrypted request metadata, and rollback fields.
+**NetWorthSnapshot**: Frozen month-end totals and breakdowns used for historical reporting.
 
-**Budget**: Budgeting rules by category and period with active state and user ownership.
+**LiabilityPaymentAudit**: Payment audit log with source/target balance snapshots, execution metadata, and rollback state.
 
-**SavingsGoal**: Savings targets with progress, target date, optional linked account, and encrypted companion fields.
+**Budget**: User-owned budget rules with period, date range, and optional category linkage.
 
-**PersonalAsset**: Durable owned items with category, current manual valuation, purchase metadata, disposal date, notes encryption, and valuation history.
+**SavingsGoal**: User-owned goal with progress, target date, optional linked account, and encrypted descriptive fields.
 
-**PersonalAssetValuation**: Dated valuation records for personal assets.
+**PersonalAsset**: Durable owned item with category, manual valuation, purchase metadata, notes, and disposal date.
+
+**PersonalAssetValuation**: Dated valuation history for a personal asset.
+
+**PushSubscription**: Encrypted browser push subscription storage with delivery health metadata.
+
+**NotificationPreference**: User-level push toggle, category toggles, reminder lead times, and budget threshold settings.
+
+**NotificationEvent**: Delivery log and dedupe record for outbound notifications.
 
 ### Important Enums
 
@@ -290,6 +223,14 @@ enum TransactionType {
   LIABILITY_PAYMENT
 }
 
+enum PaymentStatus {
+  PENDING,
+  PROCESSING,
+  COMPLETED,
+  FAILED,
+  ROLLED_BACK
+}
+
 enum TradeType {
   BUY,
   SELL
@@ -301,28 +242,10 @@ enum UnitType {
   GRAM
 }
 
-enum PersonalAssetCategory {
-  ELECTRONICS,
-  VEHICLE,
-  PROPERTY,
-  FURNITURE,
-  JEWELRY,
-  COLLECTIBLE,
-  EQUIPMENT,
-  OTHER
-}
-
 enum RecurringInterval {
   DAILY,
   WEEKLY,
   BIWEEKLY,
-  MONTHLY,
-  QUARTERLY,
-  YEARLY
-}
-
-enum SubscriptionBillingCycle {
-  WEEKLY,
   MONTHLY,
   QUARTERLY,
   YEARLY
@@ -342,22 +265,27 @@ enum BudgetPeriod {
   YEARLY
 }
 
-enum PaymentStatus {
-  PENDING,
-  PROCESSING,
-  COMPLETED,
-  FAILED,
-  ROLLED_BACK
+enum NotificationType {
+  TEST,
+  SUBSCRIPTION_RENEWAL,
+  RECURRING_TRANSACTION_DUE,
+  BUDGET_THRESHOLD,
+  LOW_CASH_FORECAST,
+  MONTHLY_NET_WORTH_SNAPSHOT,
+  GOAL_PROGRESS,
+  IMPORT_EXPORT_COMPLETION
 }
 ```
 
 ### Account Type Semantics
 
-Use `src/lib/account-types.ts` when working with account classification:
+Use `src/lib/account-types.ts` when classifying accounts or normalizing balances.
 
 - `BANK`, `CASH`, `INVESTMENT`, and `LOAN_RECEIVABLE` are asset account types.
 - `LOAN` and `CREDIT_CARD` are liability account types.
 - `BANK` and `CASH` are liquid funding account types.
+- Transfer flows currently allow `BANK`, `CASH`, and `INVESTMENT`.
+- Standard transfers require source and destination accounts to use the same currency.
 - `LOAN_RECEIVABLE` balances are normalized as positive assets.
 - Liability balances are normalized as negative values for net-worth calculations.
 
@@ -365,298 +293,226 @@ Use `src/lib/account-types.ts` when working with account classification:
 
 ### TypeScript
 
-- Use strict TypeScript configuration.
-- Define explicit types for function parameters and return values when the type is not obvious from context.
-- Avoid `any`; use `unknown` with type guards when necessary.
-- Use interfaces for object shapes and types for unions/intersections.
+- Use strict TypeScript.
+- Avoid `any`; prefer `unknown` and narrow it.
+- Add explicit parameter and return types where they improve clarity or protect public APIs.
+- Use interfaces for object shapes and types for unions or utility composition.
 
 ### React Components
 
-- Use functional components with hooks.
-- Use Server Components by default.
-- Add `'use client'` only for client-side features such as state, effects, browser APIs, event handlers, or TanStack Query hooks.
-- Keep components focused and single-responsibility.
+- Use functional components.
+- Default to Server Components.
+- Add `"use client"` only for state, effects, event handlers, browser APIs, or TanStack Query hooks.
+- Keep components aligned to existing feature folders.
 
 ### Styling
 
-- Use Tailwind CSS utility classes and semantic CSS variables from `src/app/globals.css`.
-- Use the `cn()` utility from `@/lib/utils` for conditional class merging.
-- Follow the existing shadcn/ui New York style and `components.json` aliases.
-- Prefer Lucide icons for button/iconography needs.
+- Use Tailwind CSS utilities and semantic CSS variables from `src/app/globals.css`.
+- Use `cn()` from `@/lib/utils` for class merging.
+- Follow the existing shadcn/ui New York style and current visual language.
+- Prefer Lucide icons.
 
-```tsx
-import { cn } from "@/lib/utils";
+### File Naming
 
-<button
-  className={cn(
-    "rounded-md px-4 py-2",
-    "bg-primary text-primary-foreground",
-    "hover:bg-primary/90",
-    isLoading && "cursor-not-allowed opacity-50"
-  )}
->
-  Save
-</button>;
-```
+- Components: PascalCase, for example `NotificationSettingsPanel.tsx`
+- Hooks and utilities: camelCase, for example `useNotificationQueries.ts`
+- Actions: kebab-case with `-actions`, for example `schedule-pressure-actions.ts`
+- Types: kebab-case, for example `trade-history.ts`
 
-### File Naming Conventions
+### Import Order
 
-- **Components**: PascalCase, e.g. `AddTransactionDialog.tsx`.
-- **Utilities and hooks**: camelCase, e.g. `useExchangeRateQuery.ts`.
-- **Actions**: kebab-case with `-actions` suffix, e.g. `transaction-actions.ts`.
-- **Types**: kebab-case, e.g. `trade-history.ts`.
-
-### Import Organization
-
-1. React/Next.js imports
-2. Third-party library imports
-3. Absolute imports (`@/` aliases)
+1. React and Next.js imports
+2. Third-party imports
+3. Absolute `@/` imports
 4. Relative imports
 5. Type imports
 
 ## Server Actions Pattern
 
-All mutations and authenticated server-side reads should follow the established Server Action style:
+All mutations and authenticated server-side reads should follow the current action style:
 
 - Start action files with `"use server"`.
-- Check `auth()` and require `session.user.id` for user-owned operations.
+- Require `session.user.id` from `auth()` for user-owned operations.
 - Validate inputs with Zod before database work.
 - Include `userId` in every query for user-owned models.
 - Do not add `userId` filters to global tables such as `ExchangeRate`.
-- Use Prisma transactions for balance-moving workflows, especially transactions, transfers, liabilities, investments, and loans receivable.
-- Revalidate affected dashboard paths after mutations.
-- Return standardized results: `{ success: boolean, data?: T, error?: string }`.
-- In catch blocks, identify specific Prisma errors such as `P2002` and `P2025` where useful and return targeted, user-friendly messages.
-
-```typescript
-"use server";
-
-import { auth } from "@/auth";
-import prisma from "@/lib/db";
-import { revalidatePath } from "next/cache";
-import { z } from "zod";
-
-const schema = z.object({
-  name: z.string().min(1, "Name is required"),
-});
-
-export type InputType = z.infer<typeof schema>;
-
-export async function createSomething(data: InputType) {
-  try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
-
-    const validated = schema.safeParse(data);
-    if (!validated.success) {
-      return { success: false, error: validated.error.issues[0].message };
-    }
-
-    const result = await prisma.model.create({
-      data: { ...validated.data, userId: session.user.id },
-    });
-
-    revalidatePath("/dashboard");
-
-    return { success: true, data: result };
-  } catch (error) {
-    console.error("Create something error:", error);
-    return { success: false, error: "Failed to create item" };
-  }
-}
-```
+- Use Prisma transactions for balance-moving flows such as transactions, transfers, liability payments, trades, and receivable flows.
+- Revalidate affected dashboard paths after successful mutations.
+- Return `{ success: boolean, data?: T, error?: string }`.
+- Handle useful Prisma errors such as `P2002` and `P2025` when it improves the returned message.
 
 ## Encryption Pattern
 
-Field-level encryption lives in `src/lib/encryption.ts` and `src/lib/user-encryption.ts`.
+Encryption now has two practical patterns in the repo:
 
-- Sensitive text fields generally have plaintext and encrypted companion columns, such as `description` and `descriptionEncrypted`.
-- Prefer `encryptUserField`, `decryptUserField`, `encryptCurrentUserField`, and `decryptCurrentUserField` over direct crypto calls.
-- Use the field names defined in `FIELD_CLASSIFICATIONS` where applicable, e.g. `transaction.description`, `account.description`, `tradeHistory.notes`, and `personalAsset.notes`.
-- If encryption is not configured in development, `encryptUserField` and `decryptUserField` return values as-is for compatibility.
-- Before running `src/scripts/migrate-encryption.ts`, back up the database and set `ENCRYPTION_MASTER_KEY`.
+- **Account fields** use `src/lib/account-crypto.ts`.
+  - Account names and descriptions are stored only in encrypted form.
+  - Use helpers such as `encryptAccountName`, `encryptAccountDescription`, `decryptAccountName`, and `decryptAccountRecords`.
+- **Other sensitive fields** use `src/lib/user-encryption.ts`.
+  - Many models still use plaintext plus encrypted companion columns.
+  - Prefer `encryptUserField`, `decryptUserField`, `encryptCurrentUserField`, and `decryptCurrentUserField`.
+
+Use the field names defined in `FIELD_CLASSIFICATIONS` where applicable, such as:
+
+- `account.name`
+- `account.description`
+- `transaction.description`
+- `transaction.referenceNumber`
+- `transactionSplit.description`
+- `recurringRule.name`
+- `subscription.name`
+- `tradeHistory.notes`
+- `personalAsset.notes`
+- `pushSubscription.endpoint`
+
+If encryption is not configured in development, the user-encryption helpers fall back to plaintext-compatible behavior. Back up the database before running encryption migration or backfill scripts.
 
 ## TanStack Query Pattern
 
-Client-side data fetching uses TanStack Query hooks from `src/hooks`.
+Client-side server-state access lives in `src/hooks`.
 
-- Define query key factories per feature, e.g. `accountKeys`, `transactionKeys`, and `receivableKeys`.
-- Server Actions return `{ success, data, error }`; query/mutation functions should throw `new Error(result.error)` when `success` is false.
-- Mutations should invalidate their feature keys and any related cross-feature keys, such as accounts and transactions after balance-moving operations.
-- `QueryProvider` sets financial-data defaults: 5-minute `staleTime`, 10-minute `gcTime`, retries, reconnect/focus refetching, and React Query DevTools.
+- Define feature key factories such as `accountKeys`, `transactionKeys`, `notificationKeys`, and `upcomingBankPressureKeys`.
+- Server Actions return `{ success, data, error }`; query and mutation functions should throw when `success` is false.
+- Invalidate related feature keys after mutations, especially for balance-moving workflows.
+- `QueryProvider` configures shared React Query defaults and DevTools.
 
-```typescript
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createItem, getItems, type ItemInput } from "@/actions/feature-actions";
+Notable current hooks include:
 
-export const featureKeys = {
-  all: ["features"] as const,
-  lists: () => [...featureKeys.all, "list"] as const,
-  list: (filter?: string) => [...featureKeys.lists(), { filter }] as const,
-};
+- `useNotificationQueries.ts` for push subscription and preference flows
+- `useUpcomingBankPressure.ts` for schedule-pressure alerts
+- `useCashFlowForecast.ts` for projected liquid balance reporting
+- `useNetWorthSnapshotQueries.ts` for frozen month-end reporting
 
-export function useItems(filter?: string) {
-  return useQuery({
-    queryKey: featureKeys.list(filter),
-    queryFn: async () => {
-      const result = await getItems(filter);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
-  });
-}
+## Feature-Specific Rules
 
-export function useCreateItem() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (data: ItemInput) => {
-      const result = await createItem(data);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: featureKeys.all });
-    },
-  });
-}
-```
+### Transactions and Splits
+
+- Split transactions are supported only for `EXPENSE` transactions.
+- Split rows must sum exactly to the parent amount in minor units for the transaction currency.
+- Split rows require at least two rows and at most twenty.
+- Use `src/lib/transaction-split-validation.ts` for normalization and validation.
+- Use `src/lib/transaction-allocation-service.ts` when reports or insights need split-aware allocation rows.
+
+### Transfers and Balance Integrity
+
+- Standard transfers require distinct source and destination accounts.
+- Standard transfers are limited to transfer-capable accounts from `src/lib/account-types.ts`.
+- Source and destination accounts must share the same currency.
+- Liability and receivable flows have separate dedicated actions and validation rules.
+
+### Notifications and PWA
+
+- Service worker registration is handled by `src/components/pwa/ServiceWorkerRegistrar.tsx`.
+- The service worker lives at `public/sw.js`.
+- Offline fallback content lives at `public/offline.html`.
+- Notification settings UI lives on `/dashboard/profile`.
+- Daily push dispatch is handled by `/api/cron/notifications`.
+- Notification payloads must only deep-link to safe `/dashboard` paths.
+
+### Market and FX Data
+
+- Yahoo Finance access lives in `src/lib/finance-service.ts`.
+- Quote and FX fetches must degrade gracefully.
+- Precious-metal holdings can require `TROY_OUNCE` to `GRAM` conversion through `src/lib/unit-conversion.ts`.
+- Forecasting and insight code should surface missing FX warnings instead of failing whole views.
 
 ## Authentication
 
-- **Strategy**: Auth.js v5 with JWT sessions and Prisma adapter.
-- **Provider**: Credentials provider using email/password and bcrypt.
-- **Middleware**: Protects `/dashboard/*` routes and redirects authenticated users away from `/login` and `/register`.
-- **Session user ID**: Stored in JWT and exposed as `session.user.id`.
+- Auth.js v5 with JWT sessions and Prisma adapter.
+- Credentials provider uses email and password.
+- Middleware protects `/dashboard/*` and redirects authenticated users away from `/login` and `/register`.
+- The app expects `session.user.id` to be available in Server Actions.
 
-Access the current user in Server Actions:
+## Current UI Primitive Inventory
 
-```typescript
-import { auth } from "@/auth";
+The project currently includes these `src/components/ui` primitives:
 
-const session = await auth();
-const userId = session?.user?.id;
-```
-
-## Key Utilities
-
-### `cn()`
-
-Located in `src/lib/utils.ts`. Combines `clsx` and `tailwind-merge` for conditional Tailwind classes.
-
-### Formatters
-
-Located in `src/lib/utils.ts`:
-
-- `formatCurrency(amount, currency, locale)` - Format numbers as currency.
-- `formatNumber(value, locale)` - Format numbers with two decimal places.
-- `formatDate(date, options)` - Format dates with Indonesian locale defaults.
-- `formatPercentage(value, decimals)` - Format percentages with sign.
-- `getInitials(name)` - Get up to two uppercase initials.
-
-### Domain Services
-
-- `src/lib/account-types.ts` - Account classification and balance normalization.
-- `src/lib/finance-service.ts` - Yahoo Finance quotes, historical data, search, exchange rates, and investment metrics.
-- `src/lib/financial-insights/*` - Insight generation, thresholds, date utilities, and currency normalization.
-- `src/lib/forecasting/*` - Cash-flow forecasting, projected events, risk scoring, and forecast summaries.
-- `src/lib/investment-valuation-service.ts` - Portfolio valuation in display currency.
-- `src/lib/net-worth-calculation.ts`, `src/lib/net-worth-snapshot-service.ts`, and related `src/lib/net-worth-*` files - Month-end net-worth snapshot calculations, persistence, and reporting helpers.
-- `src/lib/unit-conversion.ts` - Unit conversion for precious metals.
-- `src/lib/executive-service.ts` and `src/lib/executive-types.ts` - Dashboard metrics and financial health calculations.
-- `src/lib/liability-payment-validation.ts` and `src/lib/investment-validation.ts` - Domain validation helpers.
-- `src/lib/subscription-utils.ts` and `src/lib/subscription-constants.ts` - Subscription status, billing-cycle, and filter helpers.
-
-### Prisma Client
-
-Located in `src/lib/db.ts`. Uses the Prisma 7 generated client and MariaDB adapter:
-
-```typescript
-import { PrismaClient } from "@/generated/prisma/client/client";
-import { PrismaMariaDb } from "@prisma/adapter-mariadb";
-```
-
-## Common Patterns
-
-### Route Groups
-
-- `(auth)` - Login/register pages without dashboard sidebar.
-- `(dashboard)` - Protected dashboard pages with shared layout/sidebar.
-
-### Data Fetching
-
-- **Server Components**: Fetch directly with Prisma or call Server Actions when appropriate.
-- **Client Components**: Use TanStack Query hooks from `@/hooks/use*Queries`.
-
-### Form Handling
-
-- Use React Hook Form with Zod resolvers.
-- Keep validation schemas in action files or nearby domain validation modules.
-- Re-export input types from action files for form components.
-
-### Financial Data
-
-- Yahoo Finance calls should include caching and graceful error handling.
-- Use batched fetches and small delays where needed to reduce rate-limit pressure.
-- Never assume live quote or FX data is available; handle null/error results and show usable fallback UI.
-- Precious-metal prices may need troy-ounce to gram conversion via `unit-conversion.ts`.
-- Forecasting and insight logic should degrade gracefully when FX conversions are unavailable and should surface warnings rather than failing the whole feature.
+- `alert`
+- `avatar`
+- `badge`
+- `button`
+- `calendar`
+- `card`
+- `checkbox`
+- `command`
+- `dialog`
+- `dropdown-menu`
+- `form`
+- `input`
+- `label`
+- `money-input`
+- `popover`
+- `progress`
+- `select`
+- `separator`
+- `sheet`
+- `skeleton`
+- `switch`
+- `table`
+- `tabs`
+- `tooltip`
 
 ## Changelog Updates
 
-- Update `content/changelog.md` whenever a change is user-facing enough to matter in release notes.
-- Write changelog entries in product language, focusing on features, user-visible improvements, and outcomes rather than implementation details, component names, CSS utilities, or refactors.
-- Keep each version entry concise, usually two to four bullets, and place the newest version at the top.
-- If a release is mostly internal cleanup with little user impact, say that plainly as a maintenance release instead of overstating it.
-- When summarizing UI work, describe the experience improvement such as better mobile layout, clearer navigation, smoother forms, or more consistent styling.
+- Update `content/changelog.md` for user-facing changes.
+- Write entries in product language, not implementation language.
+- Put the newest release at the top.
+- For maintenance-only work, say so plainly.
 
 ## Security Considerations
 
-- **Authentication and CSRF**: Auth.js handles session security and CSRF protections.
-- **Input Validation**: Validate all user input with Zod or domain-specific validation helpers.
-- **SQL Injection Prevention**: Use Prisma ORM queries; do not build raw SQL from user input.
-- **XSS Protection**: React escapes rendered values by default; avoid unsafe HTML unless explicitly sanitized.
-- **Route Protection**: Middleware checks authentication for dashboard routes.
-- **Cron Endpoints**: `/api/cron/recurring`, `/api/cron/monthly-net-worth-snapshots`, and `/api/cron/notifications` require `CRON_SECRET` bearer auth in production.
-- **User Isolation**: All queries for user-owned models must include `userId`. Do not apply this to global tables like `ExchangeRate`.
-- **Encryption**: Use encrypted companion fields and user encryption helpers for sensitive text and request metadata.
-- **Balance Integrity**: Balance-changing flows must use Prisma transactions and validate ownership of every involved account.
+- Require auth for dashboard routes and user-owned data access.
+- Validate user input with Zod or feature-specific validators.
+- Use Prisma ORM instead of building raw SQL.
+- Include `userId` filters on all user-owned models.
+- Do not add `userId` filters to global tables like `ExchangeRate`.
+- Keep notification deep links on trusted in-app dashboard paths.
+- Use Prisma transactions for any balance-changing workflow.
+- Respect encrypted field helpers instead of reading or writing encrypted columns ad hoc.
 
-## Testing
+## Testing and Verification
 
-The project currently relies on linting plus manual verification. Before submitting functional changes, run targeted checks and manually verify the affected flows:
+The repo currently relies on linting plus manual verification.
 
-- Authentication and protected-route behavior.
-- Account CRUD and account type normalization.
-- Transaction creation/editing, transfers, location metadata, and balance updates.
-- Liability payments, overpayments, audit trails, and rollback behavior.
-- Loans Receivable disbursement and repayment flows.
-- Investment buy/sell trades, realized/unrealized PnL, unit conversions, and valuation fallback behavior.
-- Currency conversion and exchange-rate caching.
-- Personal asset valuation and disposal history.
-- Subscription tracking, recurring-rule linkage, renewal/trial summaries, and subscription forecast integration.
-- Recurring transaction processing.
-- Net-worth snapshot creation, trend reporting, and cron behavior.
-- Cash-flow forecasting assumptions, warnings, and projected event timelines.
-- Financial insights, especially cross-feature comparisons and multi-currency edge cases.
-- Budgets, goals, profile targets, dashboard metrics, reports, and sidebar summaries.
-- Import/export and category management.
+Run the most relevant checks:
 
-For doc-only changes, `git diff --check` is usually sufficient unless the change touches generated docs or Markdown rendering behavior.
+```bash
+pnpm lint
+pnpm build
+git diff --check
+```
+
+Manual verification should cover the touched feature area plus affected cross-feature data:
+
+- Authentication and protected-route behavior
+- Account CRUD and encrypted account-name display
+- Transaction creation, editing, transfers, split expenses, and location metadata
+- Liability payments, audit trails, rollback behavior, and overpayment handling
+- Loans Receivable disbursement and repayment flows
+- Investment buys, sells, realized PnL, valuation fallback behavior, and unit conversion
+- Subscription CRUD, recurring-rule linkage, renewal summaries, and trial behavior
+- Recurring processing and schedule-pressure alerts
+- Budget progress, goal progress, profile targets, and dashboard cards
+- Net-worth snapshot generation and historical reporting
+- Cash-flow forecasting and financial insights under missing-FX conditions
+- Push notification opt-in, test notification flow, and notification preferences
+- PWA install prompt and offline fallback behavior
+- Import/export and category management
 
 ## Deployment
 
-### Vercel Deployment
+### Vercel Cron Jobs
 
-- `vercel.json` configures `/api/cron/monthly-net-worth-snapshots` at `0 0 * * *`, `/api/cron/recurring` at `15 0 * * *`, and `/api/cron/notifications` at `30 0 * * *`.
-- Ensure `CRON_SECRET`, `DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL`, `ENCRYPTION_MASTER_KEY`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and `VAPID_SUBJECT` are set in the deployment environment.
+`vercel.json` currently schedules:
 
-### Database Migration on Production
+- `/api/cron/monthly-net-worth-snapshots` at `0 0 * * *`
+- `/api/cron/recurring` at `15 0 * * *`
+- `/api/cron/notifications` at `30 0 * * *`
 
-```bash
-pnpm db:migrate:prod
-```
+### Required Production Configuration
+
+- Set `DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL`, `CRON_SECRET`, `ENCRYPTION_MASTER_KEY`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and `VAPID_SUBJECT`.
+- Run `pnpm db:migrate:prod` before or during deployment.
 
 ### Self-Hosting
 
@@ -665,17 +521,4 @@ pnpm build
 pnpm start
 ```
 
-## Available shadcn/ui Components
-
-The project currently includes these shadcn/ui components:
-
-- alert, avatar, badge, button, calendar, card, checkbox
-- command, dialog, dropdown-menu, form, input, label
-- popover, progress, select, separator, sheet, skeleton
-- switch, table, tabs, tooltip
-
-Add new components with:
-
-```bash
-npx shadcn@latest add <component-name>
-```
+Use HTTPS if you need PWA install and web-push behavior outside localhost.
