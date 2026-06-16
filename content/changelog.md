@@ -1,5 +1,10 @@
 # FinHealth Changelog
 
+## v4.5.6
+
+- Improved split expense entry so the parent amount now updates split totals and remaining calculations immediately while you edit the transaction.
+- Kept existing split rows intact when the parent amount changes, making it easier to adjust one line item at a time without losing your manual entries.
+
 ## v4.5.5
 
 - Improved the Transactions page with server-side pagination so large histories are easier to browse without loading every record at once.
