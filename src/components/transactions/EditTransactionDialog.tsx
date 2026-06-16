@@ -42,7 +42,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
 import { AlertCircle, CalendarIcon } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 
 const editTransactionFormSchema = z
@@ -203,10 +203,16 @@ export function EditTransactionDialog({
     },
   });
 
-  const selectedType = form.watch("type");
-  const selectedFromAccountId = form.watch("accountId");
-  const selectedToAccountId = form.watch("toAccountId");
-  const splits = form.watch("splits") ?? [];
+  const selectedType = useWatch({ control: form.control, name: "type" });
+  const selectedFromAccountId = useWatch({
+    control: form.control,
+    name: "accountId",
+  });
+  const selectedToAccountId = useWatch({
+    control: form.control,
+    name: "toAccountId",
+  });
+  const splits = useWatch({ control: form.control, name: "splits" }) ?? [];
   const isSplitEnabled = splits.length > 0;
   const selectedFromAccount = accounts.find(
     (account) => account.id === selectedFromAccountId
@@ -608,7 +614,6 @@ export function EditTransactionDialog({
                 {selectedType === "EXPENSE" ? (
                   <TransactionSplitEditor
                     control={form.control}
-                    watch={form.watch}
                     setValue={form.setValue}
                     categories={categories}
                     onToggle={handleSplitToggle}

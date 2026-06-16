@@ -1,7 +1,7 @@
 "use client";
 
 import { Minus, Plus, Split } from "lucide-react";
-import { useFieldArray, type Control, type FieldValues, type UseFormSetValue, type UseFormWatch } from "react-hook-form";
+import { useFieldArray, useWatch, type Control, type FieldValues, type UseFormSetValue } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -26,7 +26,6 @@ interface SplitRowValue {
 
 interface TransactionSplitEditorProps<T extends FieldValues> {
   control: Control<T>;
-  watch: UseFormWatch<T>;
   setValue: UseFormSetValue<T>;
   categories: CategoryOption[];
   disabled?: boolean;
@@ -43,7 +42,6 @@ function buildDefaultSplitRow(): SplitRowValue {
 
 export function TransactionSplitEditor<T extends FieldValues>({
   control,
-  watch,
   setValue,
   categories,
   disabled = false,
@@ -54,9 +52,12 @@ export function TransactionSplitEditor<T extends FieldValues>({
     name: "splits" as never,
   });
 
-  const totalAmount = Number(watch("amount" as never) ?? 0);
+  const totalAmount = Number(useWatch({ control, name: "amount" as never }) ?? 0);
   const splits =
-    ((watch("splits" as never) as unknown as readonly SplitRowValue[] | undefined) ?? []);
+    ((useWatch({
+      control,
+      name: "splits" as never,
+    }) as readonly SplitRowValue[] | undefined) ?? []);
   const isEnabled = fields.length > 0;
   const allocated = splits.reduce((sum, split) => sum + Number(split.amount ?? 0), 0);
   const remaining = totalAmount - allocated;
