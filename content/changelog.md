@@ -1,5 +1,10 @@
 # FinHealth Changelog
 
+## v4.5.7
+
+- Fixed investment sell trades so fully selling a holding now closes the position more reliably, even when precious-metal quantities use fine decimal precision.
+- Added clearer quantity display and a Sell All shortcut in the investment sell flow so metal holdings are easier to review and exit without leaving tiny residual amounts behind.
+
 ## v4.5.6
 
 - Improved split expense entry so the parent amount now updates split totals and remaining calculations immediately while you edit the transaction.

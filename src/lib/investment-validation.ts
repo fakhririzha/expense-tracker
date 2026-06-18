@@ -12,6 +12,10 @@ import {
   sortAccountsByName,
 } from "@/lib/account-crypto";
 import prisma from "@/lib/db";
+import {
+  formatInvestmentQuantity,
+  hasSufficientInvestmentQuantity,
+} from "@/lib/investment-quantity";
 import { FinancialAccount } from "@/generated/prisma/client/client";
 
 /**
@@ -174,10 +178,10 @@ export async function validateHoldingExists(
     };
   }
 
-  if (asset.quantity < sellQuantity) {
+  if (!hasSufficientInvestmentQuantity(asset.quantity, sellQuantity)) {
     return {
       valid: false,
-      error: `Insufficient holdings for ${asset.symbol}. You own ${asset.quantity.toLocaleString()} units, but tried to sell ${sellQuantity.toLocaleString()} units.`,
+      error: `Insufficient holdings for ${asset.symbol}. You own ${formatInvestmentQuantity(asset.quantity)} units, but tried to sell ${formatInvestmentQuantity(sellQuantity)} units.`,
       data: {
         currentQuantity: asset.quantity,
         assetSymbol: asset.symbol,

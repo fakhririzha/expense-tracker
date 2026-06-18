@@ -27,6 +27,8 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
+import { formatInvestmentQuantity } from "@/lib/investment-quantity";
+import { getUnitLabel } from "@/lib/unit-conversion";
 import { formatCurrency } from "@/lib/utils";
 import { TradeHistoryItem } from "@/types/trade-history";
 
@@ -139,12 +141,15 @@ export function TradeHistoryTable({
       },
       cell: ({ row }) => {
         const quantity = row.getValue("quantity") as number;
+        const unitType = row.original.unitType;
         return (
           <div className="text-right">
-            {quantity.toLocaleString(undefined, {
-              minimumFractionDigits: 0,
-              maximumFractionDigits: 4,
-            })}
+            {formatInvestmentQuantity(quantity)}
+            {unitType !== "UNIT" && (
+              <span className="ml-1 text-sm text-muted-foreground">
+                {getUnitLabel(unitType)}
+              </span>
+            )}
           </div>
         );
       },
@@ -158,15 +163,23 @@ export function TradeHistoryTable({
             onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
             className="justify-end w-full"
           >
-            Price per Share
+            Price per Unit
             <ArrowUpDown className="ml-2 h-4 w-4" />
           </Button>
         );
       },
       cell: ({ row }) => {
         const price = row.getValue("pricePerUnit") as number;
+        const unitType = row.original.unitType;
         return (
-          <div className="text-right">{formatCurrency(price, assetCurrency)}</div>
+          <div className="text-right">
+            {formatCurrency(price, assetCurrency)}
+            {unitType !== "UNIT" && (
+              <span className="ml-1 text-sm text-muted-foreground">
+                /{getUnitLabel(unitType)}
+              </span>
+            )}
+          </div>
         );
       },
     },
@@ -222,7 +235,7 @@ export function TradeHistoryTable({
       cell: ({ row }) => {
         const notes = row.getValue("notes") as string | null;
         return (
-          <div className="max-w-[200px] truncate text-muted-foreground text-sm">
+          <div className="max-w-50 truncate text-muted-foreground text-sm">
             {notes || "-"}
           </div>
         );
@@ -263,6 +276,7 @@ export function TradeHistoryTable({
     },
   ];
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data: filteredData,
     columns,
@@ -296,7 +310,7 @@ export function TradeHistoryTable({
           value={typeFilter}
           onValueChange={(value: "ALL" | "BUY" | "SELL") => setTypeFilter(value)}
         >
-          <SelectTrigger className="w-[140px]">
+          <SelectTrigger className="w-35">
             <SelectValue placeholder="Filter by type" />
           </SelectTrigger>
           <SelectContent>
