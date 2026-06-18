@@ -84,6 +84,15 @@ interface Category {
   type: string;
 }
 
+interface AccountOption {
+  id: string;
+  name: string;
+  type: string;
+  balance: number;
+  currency: string;
+  isActive: boolean;
+}
+
 interface AddTransactionDialogProps {
   onSuccess?: () => void;
 }
@@ -105,20 +114,16 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
   const createMutation = useCreateTransaction();
 
   const accounts = accountsData.map(
-    (a: {
-      id: string;
-      name: string;
-      type: string;
-      balance: number;
-      currency: string;
-    }) => ({
+    (a: AccountOption) => ({
       id: a.id,
       name: a.name,
       type: a.type,
       balance: a.balance,
       currency: a.currency,
+      isActive: a.isActive,
     })
   );
+  const activeAccounts = accounts.filter((account) => account.isActive);
   const form = useForm<TransactionFormInput, unknown, TransactionFormValues>({
     resolver: zodResolver(transactionFormSchema),
     defaultValues: {
@@ -150,13 +155,13 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
   });
   const splits = useWatch({ control: form.control, name: "splits" }) ?? [];
   const isSplitEnabled = splits.length > 0;
-  const selectedFromAccount = accounts.find(
+  const selectedFromAccount = activeAccounts.find(
     (account) => account.id === selectedFromAccountId
   );
-  const selectedToAccount = accounts.find(
+  const selectedToAccount = activeAccounts.find(
     (account) => account.id === selectedToAccountId
   );
-  const eligibleTransferAccounts = accounts.filter((account) =>
+  const eligibleTransferAccounts = activeAccounts.filter((account) =>
     isTransferAccountType(account.type)
   );
   const eligibleDestinationAccounts = eligibleTransferAccounts.filter(
@@ -494,7 +499,7 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {accounts.map((account) => (
+                      {activeAccounts.map((account) => (
                         <SelectItem key={account.id} value={account.id}>
                           {account.name}
                         </SelectItem>
