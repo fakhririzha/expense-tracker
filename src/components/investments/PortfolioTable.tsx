@@ -28,6 +28,7 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { formatInvestmentQuantity } from "@/lib/investment-quantity";
 import { formatCurrency, formatPercentage } from "@/lib/utils";
 import { UnitType } from "@/generated/prisma/client/client";
 import { TradeHistoryDialog } from "./TradeHistoryDialog";
@@ -134,12 +135,7 @@ export function PortfolioTable({
         
         return (
           <div className="flex items-center gap-1">
-            <span>
-              {quantity.toLocaleString(undefined, {
-                minimumFractionDigits: 0,
-                maximumFractionDigits: 4,
-              })}
-            </span>
+            <span>{formatInvestmentQuantity(quantity)}</span>
             {isNonUnit && (
               <span className="text-muted-foreground text-sm">
                 {unitLabel}
@@ -338,6 +334,7 @@ export function PortfolioTable({
     },
   ];
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data: assets,
     columns,

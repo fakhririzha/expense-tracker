@@ -16,7 +16,7 @@ const ALLOWED_TRADE_TYPES = [ALL_TRADE_TYPE_FILTER, ...Object.values(TradeType)]
  * @param params - Route parameters containing the asset `id`
  * @returns An object with a `trades` array of trade records. Each trade includes:
  * `id`, `type`, `quantity`, `pricePerUnit`, `totalAmount`, `fees`, `date` (ISO string),
- * `notes`, `realizedPnL`, `assetId`, `userId`, `createdAt` (ISO string), and `updatedAt` (ISO string)
+ * `notes`, `realizedPnL`, `assetId`, `userId`, `unitType`, `createdAt` (ISO string), and `updatedAt` (ISO string)
  */
 export async function GET(
   request: NextRequest,
@@ -115,6 +115,7 @@ export async function GET(
         date: true,
         notes: true,
         realizedPnL: true,
+        unitType: true,
         assetId: true,
         userId: true,
         createdAt: true,

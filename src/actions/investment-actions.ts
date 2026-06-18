@@ -12,6 +12,12 @@ import {
     getAssetPrice,
     searchSymbols,
 } from "@/lib/finance-service";
+import {
+    calculateRemainingInvestmentQuantity,
+    formatInvestmentQuantity,
+    hasSufficientInvestmentQuantity,
+    normalizeSellQuantity,
+} from "@/lib/investment-quantity";
 import { isPreciousMetal } from "@/lib/unit-conversion";
 import {
     getAssetPriceInCurrency,
@@ -453,6 +459,8 @@ export async function recordTrade(data: TradeInput) {
       const balanceBefore = account.balance;
       let balanceAfter: number;
       let realizedPnL: number | null = null;
+      let executedQuantity = quantity;
+      let executedTotalAmount = totalAmount;
 
       if (type === "BUY") {
         // Validate sufficient funds within transaction
@@ -491,17 +499,19 @@ export async function recordTrade(data: TradeInput) {
       } else {
         // SELL
         // Validate sufficient quantity
-        if (asset.quantity < quantity) {
-          throw new Error(`Insufficient quantity. You own ${asset.quantity} units, but tried to sell ${quantity} units`);
+        if (!hasSufficientInvestmentQuantity(asset.quantity, quantity)) {
+          throw new Error(
+            `Insufficient quantity. You own ${formatInvestmentQuantity(asset.quantity)} units, but tried to sell ${formatInvestmentQuantity(quantity)} units`
+          );
         }
 
-        // Calculate realized PnL
-        const proceeds = quantity * pricePerUnit - fees;
-        realizedPnL = proceeds - (asset.avgBuyPrice * quantity);
-        balanceAfter = balanceBefore + proceeds;
+        executedQuantity = normalizeSellQuantity(quantity, asset.quantity);
 
-        // Calculate new quantity for later asset update/delete
-        // const newQuantity = asset.quantity - quantity;
+        // Calculate realized PnL
+        const proceeds = executedQuantity * pricePerUnit - fees;
+        executedTotalAmount = proceeds;
+        realizedPnL = proceeds - (asset.avgBuyPrice * executedQuantity);
+        balanceAfter = balanceBefore + proceeds;
 
         // Credit proceeds to account
         await tx.financialAccount.update({
@@ -519,9 +529,9 @@ export async function recordTrade(data: TradeInput) {
       const trade = await tx.tradeHistory.create({
         data: {
           type,
-          quantity,
+          quantity: executedQuantity,
           pricePerUnit,
-          totalAmount,
+          totalAmount: executedTotalAmount,
           fees,
           realizedPnL,
           assetId,
@@ -537,7 +547,10 @@ export async function recordTrade(data: TradeInput) {
 
       // For SELL trades: update asset quantity (never delete - preserve FK relationships for TradeHistory)
       if (type === "SELL") {
-        const newQuantity = asset.quantity - quantity;
+        const newQuantity = calculateRemainingInvestmentQuantity(
+          asset.quantity,
+          executedQuantity
+        );
         // When all units are sold, set avgBuyPrice to 0 since there's no remaining position
         const newAvgBuyPrice = newQuantity === 0 ? 0 : asset.avgBuyPrice;
         

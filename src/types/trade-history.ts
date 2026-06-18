@@ -29,6 +29,7 @@ export interface TradeHistoryItem {
   balanceAfter: number | null;
   createdAt: string;
   updatedAt: string;
+  unitType: "UNIT" | "TROY_OUNCE" | "GRAM";
   asset?: {
     id: string;
     symbol: string;

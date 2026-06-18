@@ -11,6 +11,11 @@ import {
   useSellableInvestments,
   useRecordTrade,
 } from "@/hooks/useInvestmentQueries";
+import {
+  formatInvestmentQuantity,
+  hasSufficientInvestmentQuantity,
+} from "@/lib/investment-quantity";
+import { getUnitLabel } from "@/lib/unit-conversion";
 import { InvestmentAccountSelector } from "./InvestmentAccountSelector";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -99,14 +104,22 @@ export function RecordSellTradeDialog({ onSuccess }: RecordSellTradeDialogProps)
   // Get the selected asset details for validation
   const selectedAsset = investments.find((inv) => inv.id === selectedAssetId);
   const maxAvailableQuantity = selectedAsset?.quantity ?? 0;
+  const selectedAssetUnitLabel = selectedAsset
+    ? selectedAsset.unitType === "UNIT"
+      ? "units"
+      : getUnitLabel(selectedAsset.unitType)
+    : "units";
+  const quantityExceedsAvailable =
+    !!selectedAsset &&
+    !hasSufficientInvestmentQuantity(maxAvailableQuantity, selectedQuantity);
 
   // Custom validation for quantity
   const validateQuantity = (value: number) => {
     if (!selectedAssetId) {
       return "Please select an asset first";
     }
-    if (value > maxAvailableQuantity) {
-      return `Quantity cannot exceed available ${maxAvailableQuantity.toLocaleString()} units`;
+    if (!hasSufficientInvestmentQuantity(maxAvailableQuantity, value)) {
+      return `Quantity cannot exceed available ${formatInvestmentQuantity(maxAvailableQuantity)} ${selectedAssetUnitLabel}`;
     }
     return true;
   };
@@ -194,7 +207,10 @@ export function RecordSellTradeDialog({ onSuccess }: RecordSellTradeDialogProps)
                               )}
                             </span>
                             <span className="text-xs text-muted-foreground">
-                              Available: {investment.quantity.toLocaleString()} units
+                              Available: {formatInvestmentQuantity(investment.quantity)}{" "}
+                              {investment.unitType === "UNIT"
+                                ? "units"
+                                : getUnitLabel(investment.unitType)}
                               {" "}• Avg Buy: {investment.avgBuyPrice.toLocaleString()}{" "}
                               {investment.currency}
                             </span>
@@ -213,7 +229,8 @@ export function RecordSellTradeDialog({ onSuccess }: RecordSellTradeDialogProps)
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Available Quantity:</span>
                   <span className="font-medium">
-                    {selectedAsset.quantity.toLocaleString()} units
+                    {formatInvestmentQuantity(selectedAsset.quantity)}{" "}
+                    {selectedAssetUnitLabel}
                   </span>
                 </div>
                 <div className="flex justify-between mt-1">
@@ -221,6 +238,9 @@ export function RecordSellTradeDialog({ onSuccess }: RecordSellTradeDialogProps)
                   <span className="font-medium">
                     {selectedAsset.avgBuyPrice.toLocaleString()}{" "}
                     {selectedAsset.currency}
+                    {selectedAsset.unitType !== "UNIT"
+                      ? `/${getUnitLabel(selectedAsset.unitType)}`
+                      : ""}
                   </span>
                 </div>
               </div>
@@ -231,7 +251,26 @@ export function RecordSellTradeDialog({ onSuccess }: RecordSellTradeDialogProps)
               name="quantity"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Quantity to Sell</FormLabel>
+                  <div className="flex items-center justify-between gap-3">
+                    <FormLabel>Quantity to Sell</FormLabel>
+                    {selectedAsset && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-auto px-2 py-1 text-xs"
+                        onClick={() => {
+                          form.setValue("quantity", maxAvailableQuantity, {
+                            shouldDirty: true,
+                            shouldValidate: true,
+                          });
+                          form.clearErrors("quantity");
+                        }}
+                      >
+                        Sell All
+                      </Button>
+                    )}
+                  </div>
                   <FormControl>
                     <Input
                       type="number"
@@ -248,9 +287,10 @@ export function RecordSellTradeDialog({ onSuccess }: RecordSellTradeDialogProps)
                       }}
                     />
                   </FormControl>
-                  {selectedAsset && selectedQuantity > maxAvailableQuantity && (
+                  {quantityExceedsAvailable && (
                     <p className="text-sm font-medium text-destructive mt-1">
-                      Quantity exceeds available {maxAvailableQuantity.toLocaleString()} units
+                      Quantity exceeds available {formatInvestmentQuantity(maxAvailableQuantity)}{" "}
+                      {selectedAssetUnitLabel}
                     </p>
                   )}
                   <FormMessage />
@@ -431,7 +471,7 @@ export function RecordSellTradeDialog({ onSuccess }: RecordSellTradeDialogProps)
                   recordTradeMutation.isPending ||
                   !selectedAssetId ||
                   selectedQuantity <= 0 ||
-                  selectedQuantity > maxAvailableQuantity
+                  quantityExceedsAvailable
                 }
               >
                 {recordTradeMutation.isPending ? (
