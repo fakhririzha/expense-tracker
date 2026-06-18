@@ -390,6 +390,8 @@ Notable current hooks include:
 - Split transactions are supported only for `EXPENSE` transactions.
 - Split rows must sum exactly to the parent amount in minor units for the transaction currency.
 - Split rows require at least two rows and at most twenty.
+- Add and Edit Transaction account selectors should only offer active accounts for new selections.
+- Existing transactions tied to an inactive account may still be edited without forcing an account replacement, as long as the inactive account is not newly selected.
 - Use `src/lib/transaction-split-validation.ts` for normalization and validation.
 - Use `src/lib/transaction-allocation-service.ts` when reports or insights need split-aware allocation rows.
 
@@ -487,6 +489,7 @@ Manual verification should cover the touched feature area plus affected cross-fe
 - Authentication and protected-route behavior
 - Account CRUD and encrypted account-name display
 - Transaction creation, editing, transfers, split expenses, and location metadata
+- Transaction add/edit account selectors excluding inactive accounts while preserving historical edits on already-linked inactive accounts
 - Liability payments, audit trails, rollback behavior, and overpayment handling
 - Loans Receivable disbursement and repayment flows
 - Investment buys, sells, realized PnL, valuation fallback behavior, and unit conversion

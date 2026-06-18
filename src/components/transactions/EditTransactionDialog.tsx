@@ -41,7 +41,7 @@ import { cn } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
 import { AlertCircle, CalendarIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 
@@ -107,6 +107,18 @@ interface Category {
   type: string;
 }
 
+interface AccountOption {
+  id: string;
+  name: string;
+  type: string;
+  currency: string;
+  isActive: boolean;
+}
+
+function formatAccountOptionLabel(account: AccountOption, showCurrency = false) {
+  return showCurrency ? `${account.name} (${account.currency})` : account.name;
+}
+
 interface Transaction {
   id: string;
   amount: number;
@@ -125,6 +137,11 @@ interface Transaction {
     name: string;
     type: string;
   };
+  toAccount?: {
+    id: string;
+    name: string | null;
+    type: string;
+  } | null;
   category: {
     id: string;
     name: string;
@@ -175,13 +192,20 @@ export function EditTransactionDialog({
   const { data: accountsData = [] } = useAccounts();
   const updateMutation = useUpdateTransaction();
 
-  const accounts = accountsData.map(
-    (a: { id: string; name: string; type: string; currency: string }) => ({
-      id: a.id,
-      name: a.name,
-      type: a.type,
-      currency: a.currency,
-    })
+  const accounts = useMemo(
+    () =>
+      accountsData.map((a: AccountOption) => ({
+        id: a.id,
+        name: a.name,
+        type: a.type,
+        currency: a.currency,
+        isActive: a.isActive,
+      })),
+    [accountsData]
+  );
+  const activeAccounts = useMemo(
+    () => accounts.filter((account) => account.isActive),
+    [accounts]
   );
   const form = useForm<EditTransactionFormInput, unknown, EditTransactionFormValues>({
     resolver: zodResolver(editTransactionFormSchema),
@@ -214,19 +238,46 @@ export function EditTransactionDialog({
   });
   const splits = useWatch({ control: form.control, name: "splits" }) ?? [];
   const isSplitEnabled = splits.length > 0;
-  const selectedFromAccount = accounts.find(
-    (account) => account.id === selectedFromAccountId
+  const selectedFromAccount = useMemo(
+    () =>
+      accounts.find((account) => account.id === selectedFromAccountId) ??
+      (transaction && selectedFromAccountId === transaction.account.id
+        ? {
+            id: transaction.account.id,
+            name: transaction.account.name,
+            type: transaction.account.type,
+            currency: transaction.currency,
+            isActive: false,
+          }
+        : undefined),
+    [accounts, selectedFromAccountId, transaction]
   );
-  const selectedToAccount = accounts.find(
-    (account) => account.id === selectedToAccountId
+  const selectedToAccount = useMemo(
+    () =>
+      accounts.find((account) => account.id === selectedToAccountId) ??
+      (transaction?.toAccount && selectedToAccountId === transaction.toAccount.id
+        ? {
+            id: transaction.toAccount.id,
+            name: transaction.toAccount.name ?? "Unknown account",
+            type: transaction.toAccount.type,
+            currency: transaction.currency,
+            isActive: false,
+          }
+        : undefined),
+    [accounts, selectedToAccountId, transaction]
   );
-  const eligibleTransferAccounts = accounts.filter((account) =>
-    isTransferAccountType(account.type)
+  const eligibleTransferAccounts = useMemo(
+    () => activeAccounts.filter((account) => isTransferAccountType(account.type)),
+    [activeAccounts]
   );
-  const eligibleDestinationAccounts = eligibleTransferAccounts.filter(
-    (account) =>
-      account.id !== selectedFromAccountId &&
-      (!selectedFromAccount || account.currency === selectedFromAccount.currency)
+  const eligibleDestinationAccounts = useMemo(
+    () =>
+      eligibleTransferAccounts.filter(
+        (account) =>
+          account.id !== selectedFromAccountId &&
+          (!selectedFromAccount || account.currency === selectedFromAccount.currency)
+      ),
+    [eligibleTransferAccounts, selectedFromAccount, selectedFromAccountId]
   );
 
   // Reset form when transaction changes
@@ -499,7 +550,13 @@ export function EditTransactionDialog({
                       >
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Select source account" />
+                            {selectedFromAccount ? (
+                              <span data-slot="select-value">
+                                {formatAccountOptionLabel(selectedFromAccount, true)}
+                              </span>
+                            ) : (
+                              <SelectValue placeholder="Select source account" />
+                            )}
                           </SelectTrigger>
                       </FormControl>
                       <SelectContent>
@@ -533,7 +590,13 @@ export function EditTransactionDialog({
                       >
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Select destination account" />
+                            {selectedToAccount ? (
+                              <span data-slot="select-value">
+                                {formatAccountOptionLabel(selectedToAccount, true)}
+                              </span>
+                            ) : (
+                              <SelectValue placeholder="Select destination account" />
+                            )}
                           </SelectTrigger>
                       </FormControl>
                       <SelectContent>
@@ -562,11 +625,17 @@ export function EditTransactionDialog({
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select account" />
+                          {selectedFromAccount ? (
+                            <span data-slot="select-value">
+                              {formatAccountOptionLabel(selectedFromAccount)}
+                            </span>
+                          ) : (
+                            <SelectValue placeholder="Select account" />
+                          )}
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {accounts.map((account) => (
+                        {activeAccounts.map((account) => (
                           <SelectItem key={account.id} value={account.id}>
                             {account.name}
                           </SelectItem>

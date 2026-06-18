@@ -1,5 +1,10 @@
 # FinHealth Changelog
 
+## v4.5.8
+
+- Hid inactive accounts from Add and Edit Transaction account choices so new transaction selections stay focused on usable accounts.
+- Kept historical transaction edits working when an inactive account is already attached, without adding it back to selectable account lists.
+
 ## v4.5.7
 
 - Fixed investment sell trades so fully selling a holding now closes the position more reliably, even when precious-metal quantities use fine decimal precision.

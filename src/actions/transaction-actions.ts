@@ -197,6 +197,13 @@ export async function createTransaction(data: TransactionInput) {
       return { success: false, error: "Account not found" };
     }
 
+    if (!account.isActive) {
+      return {
+        success: false,
+        error: "Account is inactive. Please choose an active account.",
+      };
+    }
+
     // For transfers, verify both accounts belong to the user and support transfers
     let toAccount = null;
     if (type === "TRANSFER") {
@@ -210,6 +217,13 @@ export async function createTransaction(data: TransactionInput) {
 
       if (!toAccount) {
         return { success: false, error: "To account not found" };
+      }
+
+      if (!toAccount.isActive) {
+        return {
+          success: false,
+          error: "Destination account is inactive. Please choose an active account.",
+        };
       }
 
       if (!isTransferAccountType(toAccount.type)) {
@@ -512,6 +526,28 @@ export async function updateTransaction(
         return { success: false, error: "Transfer accounts not found" };
       }
 
+      const sourceRequiresActive =
+        newType !== existingTransaction.type ||
+        (accountId !== undefined && accountId !== existingTransaction.accountId);
+      const targetRequiresActive =
+        newType !== existingTransaction.type ||
+        (data.toAccountId !== undefined &&
+          data.toAccountId !== existingTransaction.toAccountId);
+
+      if (sourceRequiresActive && !newSourceAccount.isActive) {
+        return {
+          success: false,
+          error: "Source account is inactive. Please choose an active account.",
+        };
+      }
+
+      if (targetRequiresActive && !newTargetAccount.isActive) {
+        return {
+          success: false,
+          error: "Destination account is inactive. Please choose an active account.",
+        };
+      }
+
       if (
         isLoanReceivableAccountType(newSourceAccount.type) ||
         isLoanReceivableAccountType(newTargetAccount.type)
@@ -540,13 +576,26 @@ export async function updateTransaction(
             "Transfers require source and destination accounts to use the same currency.",
         };
       }
-    } else if (accountId) {
-      const newAccount = await prisma.financialAccount.findFirst({
-        where: { id: accountId, userId: session.user.id },
-      });
+    } else {
+      const newAccount = accountId
+        ? await prisma.financialAccount.findFirst({
+            where: { id: accountId, userId: session.user.id },
+          })
+        : existingTransaction.account;
 
       if (!newAccount) {
         return { success: false, error: "Account not found" };
+      }
+
+      const accountRequiresActive =
+        newType !== existingTransaction.type ||
+        (accountId !== undefined && accountId !== existingTransaction.accountId);
+
+      if (accountRequiresActive && !newAccount.isActive) {
+        return {
+          success: false,
+          error: "Account is inactive. Please choose an active account.",
+        };
       }
     }
 
