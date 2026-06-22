@@ -27,6 +27,9 @@ const userKeyCache = new Map<string, {
   context: UserEncryptionContext;
   expiresAt: number;
 }>();
+const pendingUserKeyContexts = new Map<string, Promise<UserEncryptionContext>>();
+const userKeyCacheGenerations = new Map<string, number>();
+let userKeyCacheGeneration = 0;
 
 // Cache TTL: 5 minutes
 const CACHE_TTL_MS = 5 * 60 * 1000;
@@ -46,58 +49,72 @@ export async function getUserEncryptionContext(
   if (cached && cached.expiresAt > Date.now()) {
     return cached.context;
   }
-  
-  // Get master key
-  const masterKey = getMasterKey();
-  
-  // Fetch user from database
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      id: true,
-      encryptionSalt: true,
-      encryptionVersion: true,
-    },
-  });
-  
-  if (!user) {
-    throw new Error(`User not found: ${userId}`);
+
+  const pendingContext = pendingUserKeyContexts.get(userId);
+  if (pendingContext) {
+    return pendingContext;
   }
-  
-  // Generate salt if user doesn't have one (backward compatibility)
-  let salt = user.encryptionSalt;
-  const version = user.encryptionVersion || 1;
-  
-  if (!salt) {
-    salt = generateUserSalt();
-    
-    // Save the salt to database
-    await prisma.user.update({
+
+  const cacheGeneration = userKeyCacheGeneration;
+  const userCacheGeneration = userKeyCacheGenerations.get(userId) ?? 0;
+  const contextPromise = (async (): Promise<UserEncryptionContext> => {
+    const masterKey = getMasterKey();
+    const user = await prisma.user.findUnique({
       where: { id: userId },
-      data: {
-        encryptionSalt: salt,
-        encryptionVersion: 1,
+      select: {
+        id: true,
+        encryptionSalt: true,
+        encryptionVersion: true,
       },
     });
+
+    if (!user) {
+      throw new Error(`User not found: ${userId}`);
+    }
+
+    let salt = user.encryptionSalt;
+    const version = user.encryptionVersion || 1;
+
+    if (!salt) {
+      salt = generateUserSalt();
+      await prisma.user.update({
+        where: { id: userId },
+        data: {
+          encryptionSalt: salt,
+          encryptionVersion: 1,
+        },
+      });
+    }
+
+    const context: UserEncryptionContext = {
+      userId: user.id,
+      encryptionKey: deriveUserKey(masterKey, salt),
+      salt,
+      version,
+    };
+
+    if (
+      cacheGeneration === userKeyCacheGeneration &&
+      userCacheGeneration === (userKeyCacheGenerations.get(userId) ?? 0)
+    ) {
+      userKeyCache.set(userId, {
+        context,
+        expiresAt: Date.now() + CACHE_TTL_MS,
+      });
+    }
+
+    return context;
+  })();
+
+  pendingUserKeyContexts.set(userId, contextPromise);
+
+  try {
+    return await contextPromise;
+  } finally {
+    if (pendingUserKeyContexts.get(userId) === contextPromise) {
+      pendingUserKeyContexts.delete(userId);
+    }
   }
-  
-  // Derive user encryption key
-  const encryptionKey = deriveUserKey(masterKey, salt);
-  
-  const context: UserEncryptionContext = {
-    userId: user.id,
-    encryptionKey,
-    salt,
-    version,
-  };
-  
-  // Cache the context
-  userKeyCache.set(userId, {
-    context,
-    expiresAt: Date.now() + CACHE_TTL_MS,
-  });
-  
-  return context;
 }
 
 /**
@@ -206,8 +223,16 @@ export async function decryptCurrentUserField(
 export function clearUserKeyCache(userId?: string): void {
   if (userId) {
     userKeyCache.delete(userId);
+    pendingUserKeyContexts.delete(userId);
+    userKeyCacheGenerations.set(
+      userId,
+      (userKeyCacheGenerations.get(userId) ?? 0) + 1
+    );
   } else {
     userKeyCache.clear();
+    pendingUserKeyContexts.clear();
+    userKeyCacheGenerations.clear();
+    userKeyCacheGeneration += 1;
   }
 }
 
@@ -217,7 +242,7 @@ export function clearUserKeyCache(userId?: string): void {
  * @param userId - User ID to invalidate
  */
 export function invalidateUserKey(userId: string): void {
-  userKeyCache.delete(userId);
+  clearUserKeyCache(userId);
 }
 
 /**

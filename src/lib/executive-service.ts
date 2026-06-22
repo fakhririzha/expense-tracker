@@ -1,5 +1,10 @@
 "use server";
 
+import {
+  AccountType,
+  Prisma,
+  TransactionType,
+} from "@/generated/prisma/client/client";
 import { auth } from "@/auth";
 import prisma from "@/lib/db";
 import { getExchangeRate } from "@/lib/finance-service";
@@ -10,22 +15,69 @@ import {
   type HealthTier,
 } from "./executive-types";
 
-interface AccountData {
-  type: string;
-  balance: number;
-  currency: string;
+const executiveAccountSelect = {
+  type: true,
+  balance: true,
+  currency: true,
+} satisfies Prisma.FinancialAccountSelect;
+
+const executivePersonalAssetSelect = {
+  currentValue: true,
+  currency: true,
+} satisfies Prisma.PersonalAssetSelect;
+
+const executiveTransactionSelect = {
+  type: true,
+  amount: true,
+  exchangeRate: true,
+  date: true,
+} satisfies Prisma.TransactionSelect;
+
+type ExecutiveAccountRow = Prisma.FinancialAccountGetPayload<{
+  select: typeof executiveAccountSelect;
+}>;
+
+type ExecutivePersonalAssetRow = Prisma.PersonalAssetGetPayload<{
+  select: typeof executivePersonalAssetSelect;
+}>;
+
+function getDistinctSourceCurrencies(
+  mainCurrency: string,
+  accounts: ExecutiveAccountRow[],
+  personalAssets: ExecutivePersonalAssetRow[]
+): string[] {
+  return [...new Set(
+    [...accounts, ...personalAssets]
+      .map((item) => item.currency)
+      .filter((currency) => currency !== mainCurrency)
+  )];
 }
 
-interface PersonalAssetData {
-  currentValue: number;
-  currency: string;
+async function getConversionRatesForCurrency(
+  sourceCurrencies: string[],
+  targetCurrency: string
+): Promise<Map<string, number>> {
+  const rateEntries = await Promise.all(
+    sourceCurrencies.map(async (currency) => [
+      currency,
+      (await getExchangeRate(currency, targetCurrency)) ?? 1,
+    ] as const)
+  );
+
+  return new Map(rateEntries);
 }
 
-interface TransactionData {
-  type: string;
-  amount: number;
-  exchangeRate: number;
-  date: Date;
+function normalizeToCurrency(
+  amount: number,
+  currency: string,
+  mainCurrency: string,
+  conversionRates: Map<string, number>
+): number {
+  if (currency === mainCurrency) {
+    return amount;
+  }
+
+  return amount * (conversionRates.get(currency) ?? 1);
 }
 
 export async function getExecutiveMetrics(): Promise<{
@@ -62,18 +114,30 @@ export async function getExecutiveMetrics(): Promise<{
     const [accounts, personalAssets, transactions] = await Promise.all([
       prisma.financialAccount.findMany({
         where: { userId: session.user.id, isActive: true },
+        select: executiveAccountSelect,
       }),
       prisma.personalAsset.findMany({
         where: { userId: session.user.id, disposedAt: null },
-        select: { currentValue: true, currency: true },
+        select: executivePersonalAssetSelect,
       }),
       prisma.transaction.findMany({
         where: {
           userId: session.user.id,
           date: { gte: sixMonthsAgo },
         },
+        select: executiveTransactionSelect,
       }),
     ]);
+
+    const sourceCurrencies = getDistinctSourceCurrencies(
+      mainCurrency,
+      accounts,
+      personalAssets
+    );
+    const conversionRates = await getConversionRatesForCurrency(
+      sourceCurrencies,
+      mainCurrency
+    );
 
     // Calculate account totals (normalized to main currency)
     let totalCash = 0;
@@ -82,29 +146,29 @@ export async function getExecutiveMetrics(): Promise<{
     let totalLoanReceivables = 0;
     let totalDebt = 0;
 
-    for (const account of accounts as AccountData[]) {
-      const rate =
-        account.currency === mainCurrency
-          ? 1
-          : (await getExchangeRate(account.currency, mainCurrency)) ?? 1;
-
-      const normalizedBalance = account.balance * rate;
+    for (const account of accounts) {
+      const normalizedBalance = normalizeToCurrency(
+        account.balance,
+        account.currency,
+        mainCurrency,
+        conversionRates
+      );
 
       switch (account.type) {
-        case "CASH":
+        case AccountType.CASH:
           totalCash += normalizedBalance;
           break;
-        case "BANK":
+        case AccountType.BANK:
           totalSavings += normalizedBalance;
           break;
-        case "INVESTMENT":
+        case AccountType.INVESTMENT:
           totalInvestmentCash += normalizedBalance;
           break;
-        case "LOAN_RECEIVABLE":
+        case AccountType.LOAN_RECEIVABLE:
           totalLoanReceivables += normalizedBalance;
           break;
-        case "LOAN":
-        case "CREDIT_CARD":
+        case AccountType.LOAN:
+        case AccountType.CREDIT_CARD:
           totalDebt += Math.abs(normalizedBalance);
           break;
       }
@@ -127,12 +191,13 @@ export async function getExecutiveMetrics(): Promise<{
     }
 
     let totalPersonalAssets = 0;
-    for (const asset of personalAssets as PersonalAssetData[]) {
-      const rate =
-        asset.currency === mainCurrency
-          ? 1
-          : (await getExchangeRate(asset.currency, mainCurrency)) ?? 1;
-      totalPersonalAssets += asset.currentValue * rate;
+    for (const asset of personalAssets) {
+      totalPersonalAssets += normalizeToCurrency(
+        asset.currentValue,
+        asset.currency,
+        mainCurrency,
+        conversionRates
+      );
     }
 
     // Calculate monthly averages from transactions
@@ -141,14 +206,14 @@ export async function getExecutiveMetrics(): Promise<{
     const expenseMonths = new Set<string>();
     const incomeMonths = new Set<string>();
 
-    for (const tx of transactions as TransactionData[]) {
+    for (const tx of transactions) {
       const normalizedAmount = tx.amount * tx.exchangeRate;
       const monthKey = `${tx.date.getFullYear()}-${tx.date.getMonth()}`;
 
-      if (tx.type === "EXPENSE") {
+      if (tx.type === TransactionType.EXPENSE) {
         totalExpenses += normalizedAmount;
         expenseMonths.add(monthKey);
-      } else if (tx.type === "INCOME") {
+      } else if (tx.type === TransactionType.INCOME) {
         totalIncome += normalizedAmount;
         incomeMonths.add(monthKey);
       }

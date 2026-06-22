@@ -25,6 +25,7 @@ interface CalculationUser {
 interface CurrencyConversionContext {
   targetCurrency: string;
   exchangeRates: Map<string, NetWorthExchangeRateMetadata>;
+  exchangeRateLookups: Map<string, Promise<NetWorthExchangeRateMetadata>>;
 }
 
 interface CalculationOptions {
@@ -73,7 +74,74 @@ function createCurrencyConversionContext(targetCurrency: string): CurrencyConver
   return {
     targetCurrency,
     exchangeRates: new Map<string, NetWorthExchangeRateMetadata>(),
+    exchangeRateLookups: new Map<string, Promise<NetWorthExchangeRateMetadata>>(),
   };
+}
+
+async function resolveExchangeRate(
+  fromCurrency: string,
+  context: CurrencyConversionContext
+): Promise<NetWorthExchangeRateMetadata> {
+  const toCurrency = context.targetCurrency;
+  const key = `${fromCurrency}:${toCurrency}`;
+  const liveRate = await getExchangeRate(fromCurrency, toCurrency);
+
+  if (isFinitePositiveNumber(liveRate)) {
+    const fetchedAt = new Date();
+    await prisma.exchangeRate.upsert({
+      where: {
+        fromCurrency_toCurrency: {
+          fromCurrency,
+          toCurrency,
+        },
+      },
+      create: {
+        fromCurrency,
+        toCurrency,
+        rate: liveRate,
+        fetchedAt,
+      },
+      update: {
+        rate: liveRate,
+        fetchedAt,
+      },
+    });
+
+    return {
+      pair: key,
+      fromCurrency,
+      toCurrency,
+      rate: liveRate,
+      source: "live",
+      fetchedAt: fetchedAt.toISOString(),
+    };
+  }
+
+  const exchangeRateRecord = await prisma.exchangeRate.findUnique({
+    where: {
+      fromCurrency_toCurrency: {
+        fromCurrency,
+        toCurrency,
+      },
+    },
+    select: {
+      rate: true,
+      fetchedAt: true,
+    },
+  });
+
+  if (exchangeRateRecord && isFinitePositiveNumber(exchangeRateRecord.rate)) {
+    return {
+      pair: key,
+      fromCurrency,
+      toCurrency,
+      rate: exchangeRateRecord.rate,
+      source: "cache",
+      fetchedAt: exchangeRateRecord.fetchedAt.toISOString(),
+    };
+  }
+
+  throw new Error(`Exchange rate unavailable for ${fromCurrency}/${toCurrency}`);
 }
 
 export async function convertToMainCurrency(
@@ -106,65 +174,15 @@ export async function convertToMainCurrency(
     return amount * cachedMetadata.rate;
   }
 
-  const liveRate = await getExchangeRate(fromCurrency, context.targetCurrency);
-  if (isFinitePositiveNumber(liveRate)) {
-    const fetchedAt = new Date();
-    await prisma.exchangeRate.upsert({
-      where: {
-        fromCurrency_toCurrency: {
-          fromCurrency,
-          toCurrency: context.targetCurrency,
-        },
-      },
-      create: {
-        fromCurrency,
-        toCurrency: context.targetCurrency,
-        rate: liveRate,
-        fetchedAt,
-      },
-      update: {
-        rate: liveRate,
-        fetchedAt,
-      },
-    });
-
-    context.exchangeRates.set(key, {
-      pair: key,
-      fromCurrency,
-      toCurrency: context.targetCurrency,
-      rate: liveRate,
-      source: "live",
-      fetchedAt: fetchedAt.toISOString(),
-    });
-
-    return amount * liveRate;
+  let lookup = context.exchangeRateLookups.get(key);
+  if (!lookup) {
+    lookup = resolveExchangeRate(fromCurrency, context);
+    context.exchangeRateLookups.set(key, lookup);
   }
 
-  const exchangeRateRecord = await prisma.exchangeRate.findUnique({
-    where: {
-      fromCurrency_toCurrency: {
-        fromCurrency,
-        toCurrency: context.targetCurrency,
-      },
-    },
-  });
-
-  if (exchangeRateRecord && isFinitePositiveNumber(exchangeRateRecord.rate)) {
-    context.exchangeRates.set(key, {
-      pair: key,
-      fromCurrency,
-      toCurrency: context.targetCurrency,
-      rate: exchangeRateRecord.rate,
-      source: "cache",
-      fetchedAt: exchangeRateRecord.fetchedAt.toISOString(),
-    });
-
-    return amount * exchangeRateRecord.rate;
-  }
-
-  throw new Error(
-    `Exchange rate unavailable for ${fromCurrency}/${context.targetCurrency}`
-  );
+  const metadata = await lookup;
+  context.exchangeRates.set(key, metadata);
+  return amount * metadata.rate;
 }
 
 export function buildNetWorthBreakdown(input: {

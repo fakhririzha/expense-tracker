@@ -39,71 +39,75 @@ export function createForecastCurrencyConverter(
       };
     }
 
-    const cacheKey = `${fromCurrency}:${targetCurrency}:${options?.storedRate ?? "none"}`;
-    const existing = rateCache.get(cacheKey);
-    if (existing) {
-      return existing;
+    const cacheKey = `${fromCurrency}:${targetCurrency}`;
+    let pending = rateCache.get(cacheKey);
+    if (!pending) {
+      pending = (async (): Promise<ConversionResult> => {
+        const liveRate = await getExchangeRate(fromCurrency, targetCurrency);
+        if (liveRate && Number.isFinite(liveRate) && liveRate > 0) {
+          return {
+            amountInTargetCurrency: liveRate,
+            conversionRate: liveRate,
+            conversionSource: "live",
+          };
+        }
+
+        const cachedRate = await prisma.exchangeRate.findUnique({
+          where: {
+            fromCurrency_toCurrency: {
+              fromCurrency,
+              toCurrency: targetCurrency,
+            },
+          },
+          select: {
+            rate: true,
+          },
+        });
+
+        if (cachedRate?.rate && Number.isFinite(cachedRate.rate) && cachedRate.rate > 0) {
+          return {
+            amountInTargetCurrency: cachedRate.rate,
+            conversionRate: cachedRate.rate,
+            conversionSource: "cached",
+          };
+        }
+
+        return {
+          amountInTargetCurrency: null,
+          conversionRate: null,
+          conversionSource: "missing",
+        };
+      })();
+
+      rateCache.set(cacheKey, pending);
     }
 
-    const pending = (async (): Promise<ConversionResult> => {
-      const liveRate = await getExchangeRate(fromCurrency, targetCurrency);
-      if (liveRate && Number.isFinite(liveRate) && liveRate > 0) {
-        return {
-          amountInTargetCurrency: liveRate,
-          conversionRate: liveRate,
-          conversionSource: "live",
-        };
-      }
+    const pairRate = await pending;
 
-      const cachedRate = await prisma.exchangeRate.findUnique({
-        where: {
-          fromCurrency_toCurrency: {
-            fromCurrency,
-            toCurrency: targetCurrency,
-          },
-        },
-        select: {
-          rate: true,
-        },
-      });
+    if (pairRate.conversionSource !== "missing") {
+      return pairRate;
+    }
 
-      if (cachedRate?.rate && Number.isFinite(cachedRate.rate) && cachedRate.rate > 0) {
-        return {
-          amountInTargetCurrency: cachedRate.rate,
-          conversionRate: cachedRate.rate,
-          conversionSource: "cached",
-        };
-      }
-
-      if (options?.storedRate && Number.isFinite(options.storedRate) && options.storedRate > 0) {
-        return {
-          amountInTargetCurrency: options.storedRate,
-          conversionRate: options.storedRate,
-          conversionSource: "stored_transaction_rate",
-        };
-      }
-
-      const missingKey = `${fromCurrency}:${targetCurrency}`;
-      if (!missingPairs.has(missingKey)) {
-        missingPairs.add(missingKey);
-        addWarning({
-          code: "missing_fx",
-          severity: "warning",
-          message: `Some forecast values could not be converted from ${fromCurrency} to ${targetCurrency}.`,
-          date: options?.warningDate,
-          sourceId: options?.warningSourceId,
-        });
-      }
-
+    if (options?.storedRate && Number.isFinite(options.storedRate) && options.storedRate > 0) {
       return {
-        amountInTargetCurrency: null,
-        conversionRate: null,
-        conversionSource: "missing",
+        amountInTargetCurrency: options.storedRate,
+        conversionRate: options.storedRate,
+        conversionSource: "stored_transaction_rate",
       };
-    })();
+    }
 
-    rateCache.set(cacheKey, pending);
-    return pending;
+    if (!missingPairs.has(cacheKey)) {
+      missingPairs.add(cacheKey);
+      addWarning({
+        code: "missing_fx",
+        severity: "warning",
+        message: `Some forecast values could not be converted from ${fromCurrency} to ${targetCurrency}.`,
+        date: options?.warningDate,
+        sourceId: options?.warningSourceId,
+      });
+    }
+
+    return pairRate;
   }
 
   return {

@@ -16,7 +16,11 @@ import {
   formatInvestmentQuantity,
   hasSufficientInvestmentQuantity,
 } from "@/lib/investment-quantity";
-import { FinancialAccount } from "@/generated/prisma/client/client";
+import {
+  AccountType,
+  FinancialAccount,
+  Prisma,
+} from "@/generated/prisma/client/client";
 
 /**
  * Result type for validation operations
@@ -36,6 +40,143 @@ export type AccountWithDisplayName = Omit<
   descriptionEncrypted: string | null;
 };
 
+const investmentAccountSelect = {
+  id: true,
+  nameEncrypted: true,
+  type: true,
+  currency: true,
+  balance: true,
+  descriptionEncrypted: true,
+  isActive: true,
+  lastEncryptedAt: true,
+  userId: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.FinancialAccountSelect;
+
+const investmentAssetSelect = {
+  id: true,
+  symbol: true,
+  name: true,
+  quantity: true,
+  avgBuyPrice: true,
+  currency: true,
+  accountId: true,
+  userId: true,
+} satisfies Prisma.InvestmentAssetSelect;
+
+type InvestmentAccountRow = Prisma.FinancialAccountGetPayload<{
+  select: typeof investmentAccountSelect;
+}>;
+
+type InvestmentAssetRow = Prisma.InvestmentAssetGetPayload<{
+  select: typeof investmentAssetSelect;
+}>;
+
+async function getInvestmentAccountRow(
+  userId: string,
+  accountId: string
+): Promise<InvestmentAccountRow | null> {
+  return prisma.financialAccount.findFirst({
+    where: {
+      id: accountId,
+      userId,
+      type: AccountType.INVESTMENT,
+    },
+    select: investmentAccountSelect,
+  });
+}
+
+async function getInvestmentAssetRow(
+  userId: string,
+  assetId: string
+): Promise<InvestmentAssetRow | null> {
+  return prisma.investmentAsset.findFirst({
+    where: {
+      id: assetId,
+      userId,
+    },
+    select: investmentAssetSelect,
+  });
+}
+
+async function toAccountWithDisplayName(
+  userId: string,
+  account: InvestmentAccountRow
+): Promise<AccountWithDisplayName> {
+  return {
+    ...account,
+    name: await decryptAccountName(userId, account.nameEncrypted),
+  };
+}
+
+async function getActiveInvestmentAccounts(
+  userId: string
+): Promise<AccountWithDisplayName[]> {
+  const accounts = await prisma.financialAccount.findMany({
+    where: {
+      userId,
+      type: AccountType.INVESTMENT,
+      isActive: true,
+    },
+    select: investmentAccountSelect,
+  });
+
+  return sortAccountsByName(
+    await Promise.all(
+      accounts.map((account) => toAccountWithDisplayName(userId, account))
+    )
+  );
+}
+
+function validateSufficientFundsForAccount(
+  account: InvestmentAccountRow,
+  requiredAmount: number
+): ValidationResult<{ currentBalance: number; currency: string }> {
+  if (account.balance < requiredAmount) {
+    return {
+      valid: false,
+      error: "Insufficient funds.",
+      data: { currentBalance: account.balance, currency: account.currency },
+    };
+  }
+
+  return {
+    valid: true,
+    data: { currentBalance: account.balance, currency: account.currency },
+  };
+}
+
+function validateHoldingForAsset(
+  asset: InvestmentAssetRow,
+  sellQuantity: number
+): ValidationResult<{
+  currentQuantity: number;
+  assetSymbol: string;
+  assetName: string | null;
+}> {
+  if (!hasSufficientInvestmentQuantity(asset.quantity, sellQuantity)) {
+    return {
+      valid: false,
+      error: `Insufficient holdings for ${asset.symbol}. You own ${formatInvestmentQuantity(asset.quantity)} units, but tried to sell ${formatInvestmentQuantity(sellQuantity)} units.`,
+      data: {
+        currentQuantity: asset.quantity,
+        assetSymbol: asset.symbol,
+        assetName: asset.name,
+      },
+    };
+  }
+
+  return {
+    valid: true,
+    data: {
+      currentQuantity: asset.quantity,
+      assetSymbol: asset.symbol,
+      assetName: asset.name,
+    },
+  };
+}
+
 /**
  * Ensure the user has at least one active INVESTMENT account.
  *
@@ -44,21 +185,7 @@ export type AccountWithDisplayName = Omit<
 export async function validateInvestmentAccountPrerequisite(
   userId: string
 ): Promise<ValidationResult<AccountWithDisplayName[]>> {
-  const accounts = await prisma.financialAccount.findMany({
-    where: {
-      userId,
-      type: "INVESTMENT",
-      isActive: true,
-    },
-  });
-  const decryptedAccounts = sortAccountsByName(
-    await Promise.all(
-      accounts.map(async (account) => ({
-        ...account,
-        name: await decryptAccountName(userId, account.nameEncrypted),
-      }))
-    )
-  );
+  const decryptedAccounts = await getActiveInvestmentAccounts(userId);
 
   if (decryptedAccounts.length === 0) {
     return {
@@ -84,13 +211,7 @@ export async function validateInvestmentAccountOwnership(
   userId: string,
   accountId: string
 ): Promise<ValidationResult<AccountWithDisplayName>> {
-  const account = await prisma.financialAccount.findFirst({
-    where: {
-      id: accountId,
-      userId,
-      type: "INVESTMENT",
-    },
-  });
+  const account = await getInvestmentAccountRow(userId, accountId);
 
   if (!account) {
     return {
@@ -107,11 +228,9 @@ export async function validateInvestmentAccountOwnership(
     };
   }
 
-  const accountName = await decryptAccountName(userId, account.nameEncrypted);
-
   return {
     valid: true,
-    data: { ...account, name: accountName },
+    data: await toAccountWithDisplayName(userId, account),
   };
 }
 
@@ -125,9 +244,7 @@ export async function validateSufficientFunds(
   accountId: string,
   requiredAmount: number
 ): Promise<ValidationResult<{ currentBalance: number; currency: string }>> {
-  const account = await prisma.financialAccount.findUnique({
-    where: { id: accountId },
-  });
+  const account = await getInvestmentAccountRow(userId, accountId);
 
   if (!account) {
     return {
@@ -136,19 +253,17 @@ export async function validateSufficientFunds(
     };
   }
 
-  if (account.balance < requiredAmount) {
-    const accountName = await decryptAccountName(userId, account.nameEncrypted);
+  const accountName = await decryptAccountName(userId, account.nameEncrypted);
+  const result = validateSufficientFundsForAccount(account, requiredAmount);
+
+  if (!result.valid) {
     return {
-      valid: false,
+      ...result,
       error: `Insufficient funds in "${accountName}". Available: ${account.balance.toLocaleString()} ${account.currency}, Required: ${requiredAmount.toLocaleString()} ${account.currency}`,
-      data: { currentBalance: account.balance, currency: account.currency },
     };
   }
 
-  return {
-    valid: true,
-    data: { currentBalance: account.balance, currency: account.currency },
-  };
+  return result;
 }
 
 /**
@@ -164,12 +279,7 @@ export async function validateHoldingExists(
   assetId: string,
   sellQuantity: number
 ): Promise<ValidationResult<{ currentQuantity: number; assetSymbol: string; assetName: string | null }>> {
-  const asset = await prisma.investmentAsset.findFirst({
-    where: {
-      id: assetId,
-      userId,
-    },
-  });
+  const asset = await getInvestmentAssetRow(userId, assetId);
 
   if (!asset) {
     return {
@@ -178,26 +288,7 @@ export async function validateHoldingExists(
     };
   }
 
-  if (!hasSufficientInvestmentQuantity(asset.quantity, sellQuantity)) {
-    return {
-      valid: false,
-      error: `Insufficient holdings for ${asset.symbol}. You own ${formatInvestmentQuantity(asset.quantity)} units, but tried to sell ${formatInvestmentQuantity(sellQuantity)} units.`,
-      data: {
-        currentQuantity: asset.quantity,
-        assetSymbol: asset.symbol,
-        assetName: asset.name,
-      },
-    };
-  }
-
-  return {
-    valid: true,
-    data: {
-      currentQuantity: asset.quantity,
-      assetSymbol: asset.symbol,
-      assetName: asset.name,
-    },
-  };
+  return validateHoldingForAsset(asset, sellQuantity);
 }
 
 /**
@@ -213,27 +304,33 @@ export async function validateBuyTransaction(
   accountId: string,
   totalAmount: number
 ): Promise<ValidationResult<{ account: AccountWithDisplayName; balanceBefore: number }>> {
-  // Step 1: Validate account ownership and status
-  const ownershipResult = await validateInvestmentAccountOwnership(userId, accountId);
-  if (!ownershipResult.valid || !ownershipResult.data) {
+  const accountRow = await getInvestmentAccountRow(userId, accountId);
+
+  if (!accountRow) {
     return {
       valid: false,
-      error: ownershipResult.error || "Account validation failed",
+      error: "Investment account not found or does not belong to you.",
     };
   }
 
-  const account = ownershipResult.data;
+  if (!accountRow.isActive) {
+    const accountName = await decryptAccountName(userId, accountRow.nameEncrypted);
+    return {
+      valid: false,
+      error: `Account "${accountName}" is inactive. Please activate it first.`,
+    };
+  }
 
-  // Step 2: Validate sufficient funds
-  const fundsResult = await validateSufficientFunds(
-    userId,
-    accountId,
+  const account = await toAccountWithDisplayName(userId, accountRow);
+
+  const fundsResult = validateSufficientFundsForAccount(
+    accountRow,
     totalAmount
   );
   if (!fundsResult.valid) {
     return {
       valid: false,
-      error: fundsResult.error || "Funds validation failed",
+      error: `Insufficient funds in "${account.name}". Available: ${accountRow.balance.toLocaleString()} ${accountRow.currency}, Required: ${totalAmount.toLocaleString()} ${accountRow.currency}`,
       data: fundsResult.data ? {
         account,
         balanceBefore: fundsResult.data.currentBalance
@@ -267,19 +364,33 @@ export async function validateSellTransaction(
   asset: { id: string; symbol: string; name: string | null; quantity: number; avgBuyPrice: number };
   balanceBefore: number;
 }>> {
-  // Step 1: Validate account ownership and status
-  const ownershipResult = await validateInvestmentAccountOwnership(userId, accountId);
-  if (!ownershipResult.valid || !ownershipResult.data) {
+  const accountRow = await getInvestmentAccountRow(userId, accountId);
+
+  if (!accountRow) {
     return {
       valid: false,
-      error: ownershipResult.error || "Account validation failed",
+      error: "Investment account not found or does not belong to you.",
     };
   }
 
-  const account = ownershipResult.data;
+  if (!accountRow.isActive) {
+    const accountName = await decryptAccountName(userId, accountRow.nameEncrypted);
+    return {
+      valid: false,
+      error: `Account "${accountName}" is inactive. Please activate it first.`,
+    };
+  }
 
-  // Step 2: Validate sufficient holdings
-  const holdingResult = await validateHoldingExists(userId, assetId, sellQuantity);
+  const asset = await getInvestmentAssetRow(userId, assetId);
+
+  if (!asset) {
+    return {
+      valid: false,
+      error: "Investment asset not found in your portfolio.",
+    };
+  }
+
+  const holdingResult = validateHoldingForAsset(asset, sellQuantity);
   if (!holdingResult.valid) {
     return {
       valid: false,
@@ -287,20 +398,7 @@ export async function validateSellTransaction(
     };
   }
 
-  // Fetch full asset details
-  const asset = await prisma.investmentAsset.findFirst({
-    where: {
-      id: assetId,
-      userId,
-    },
-  });
-
-  if (!asset) {
-    return {
-      valid: false,
-      error: "Investment asset not found.",
-    };
-  }
+  const account = await toAccountWithDisplayName(userId, accountRow);
 
   return {
     valid: true,
@@ -313,7 +411,7 @@ export async function validateSellTransaction(
         quantity: asset.quantity,
         avgBuyPrice: asset.avgBuyPrice,
       },
-      balanceBefore: account.balance,
+      balanceBefore: accountRow.balance,
     },
   };
 }
@@ -326,19 +424,5 @@ export async function validateSellTransaction(
 export async function getInvestmentAccounts(
   userId: string
 ): Promise<AccountWithDisplayName[]> {
-  const accounts = await prisma.financialAccount.findMany({
-    where: {
-      userId,
-      type: "INVESTMENT",
-      isActive: true,
-    },
-  });
-  return sortAccountsByName(
-    await Promise.all(
-      accounts.map(async (account) => ({
-        ...account,
-        name: await decryptAccountName(userId, account.nameEncrypted),
-      }))
-    )
-  );
+  return getActiveInvestmentAccounts(userId);
 }

@@ -1,6 +1,5 @@
 import {
   Prisma,
-  type NetWorthSnapshot as NetWorthSnapshotModel,
 } from "@/generated/prisma/client/client";
 import prisma from "@/lib/db";
 import {
@@ -25,6 +24,44 @@ import type {
 } from "@/lib/net-worth-types";
 
 const USER_BATCH_SIZE = 25;
+const SNAPSHOT_CONCURRENCY = 5;
+
+const snapshotBaseSelect = {
+  id: true,
+  periodYear: true,
+  periodMonth: true,
+  snapshotDate: true,
+  currency: true,
+  totalAssets: true,
+  totalLiabilities: true,
+  netWorth: true,
+  cashTotal: true,
+  bankTotal: true,
+  investmentCashTotal: true,
+  investmentHoldingTotal: true,
+  investmentTotal: true,
+  personalAssetTotal: true,
+  receivableTotal: true,
+  loanLiabilityTotal: true,
+  creditCardTotal: true,
+  liabilityOverpayTotal: true,
+  sourceBreakdownJson: true,
+  calculationVersion: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.NetWorthSnapshotSelect;
+
+const snapshotDetailSelect = {
+  ...snapshotBaseSelect,
+  exchangeRateJson: true,
+} satisfies Prisma.NetWorthSnapshotSelect;
+
+type SnapshotBaseRow = Prisma.NetWorthSnapshotGetPayload<{
+  select: typeof snapshotBaseSelect;
+}>;
+type SnapshotDetailRow = Prisma.NetWorthSnapshotGetPayload<{
+  select: typeof snapshotDetailSelect;
+}>;
 
 interface SnapshotCreateOptions {
   trigger?: NetWorthSnapshotTrigger;
@@ -57,7 +94,7 @@ function snapshotHasFallbacks(sourceBreakdownJson: Prisma.JsonValue | null): {
 }
 
 function mapSnapshotBase(
-  snapshot: NetWorthSnapshotModel
+  snapshot: SnapshotBaseRow
 ): NetWorthSnapshotListItem {
   const { hasFallbacks, fallbackCount } = snapshotHasFallbacks(
     snapshot.sourceBreakdownJson
@@ -95,7 +132,7 @@ function mapSnapshotBase(
 }
 
 function mapSnapshotDetail(
-  snapshot: NetWorthSnapshotModel
+  snapshot: SnapshotDetailRow
 ): NetWorthSnapshotDetail {
   return {
     ...mapSnapshotBase(snapshot),
@@ -116,22 +153,38 @@ export async function createNetWorthSnapshotIfMissing(
   skippedExisting: boolean;
   snapshot: NetWorthSnapshotDetail | null;
 }> {
-  const existing = await prisma.netWorthSnapshot.findUnique({
-    where: {
-      userId_periodYear_periodMonth: {
-        userId,
-        periodYear: period.year,
-        periodMonth: period.month,
-      },
-    },
-  });
+  return createNetWorthSnapshot(userId, period, options, false);
+}
 
-  if (existing) {
-    return {
-      created: false,
-      skippedExisting: true,
-      snapshot: mapSnapshotDetail(existing),
-    };
+async function createNetWorthSnapshot(
+  userId: string,
+  period: NetWorthPeriod,
+  options: SnapshotCreateOptions,
+  skipExistingCheck: boolean
+): Promise<{
+  created: boolean;
+  skippedExisting: boolean;
+  snapshot: NetWorthSnapshotDetail | null;
+}> {
+  if (!skipExistingCheck) {
+    const existing = await prisma.netWorthSnapshot.findUnique({
+      where: {
+        userId_periodYear_periodMonth: {
+          userId,
+          periodYear: period.year,
+          periodMonth: period.month,
+        },
+      },
+      select: snapshotDetailSelect,
+    });
+
+    if (existing) {
+      return {
+        created: false,
+        skippedExisting: true,
+        snapshot: mapSnapshotDetail(existing),
+      };
+    }
   }
 
   const calculation = await calculateCurrentNetWorthForUser(userId, {
@@ -157,6 +210,7 @@ export async function createNetWorthSnapshotIfMissing(
           calculation.calculationVersion ??
           NET_WORTH_SNAPSHOT_CALCULATION_VERSION,
       },
+      select: snapshotDetailSelect,
     });
 
     return {
@@ -177,6 +231,7 @@ export async function createNetWorthSnapshotIfMissing(
             periodMonth: period.month,
           },
         },
+        select: snapshotDetailSelect,
       });
 
       return {
@@ -188,6 +243,28 @@ export async function createNetWorthSnapshotIfMissing(
 
     throw error;
   }
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  callback: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  async function worker(): Promise<void> {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await callback(items[index]);
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, () => worker())
+  );
+  return results;
 }
 
 export async function createMissingMonthlyNetWorthSnapshots(
@@ -210,11 +287,13 @@ export async function createMissingMonthlyNetWorthSnapshots(
   let skippedExisting = 0;
   let failed = 0;
 
-  for (let skip = 0; ; skip += USER_BATCH_SIZE) {
+  let cursorId: string | undefined;
+
+  for (;;) {
     const users = await prisma.user.findMany({
       select: { id: true },
-      orderBy: { createdAt: "asc" },
-      skip,
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
       take: USER_BATCH_SIZE,
     });
 
@@ -222,26 +301,59 @@ export async function createMissingMonthlyNetWorthSnapshots(
       break;
     }
 
-    for (const user of users) {
-      attempted += 1;
-      try {
-        const result = await createNetWorthSnapshotIfMissing(user.id, period, {
-          trigger: "cron",
-          calculationMode: "live_snapshot",
-        });
+    cursorId = users.at(-1)?.id;
+    attempted += users.length;
 
-        if (result.created) {
-          created += 1;
-          createdUserIds.push(user.id);
-        } else if (result.skippedExisting) {
-          skippedExisting += 1;
+    const existingSnapshots = await prisma.netWorthSnapshot.findMany({
+      where: {
+        userId: { in: users.map((user) => user.id) },
+        periodYear: period.year,
+        periodMonth: period.month,
+      },
+      select: { userId: true },
+    });
+    const existingUserIds = new Set(
+      existingSnapshots.map((snapshot) => snapshot.userId)
+    );
+    skippedExisting += existingUserIds.size;
+
+    const missingUsers = users.filter((user) => !existingUserIds.has(user.id));
+    const results = await mapWithConcurrency(
+      missingUsers,
+      SNAPSHOT_CONCURRENCY,
+      async (user) => {
+        try {
+          const result = await createNetWorthSnapshot(
+            user.id,
+            period,
+            {
+              trigger: "cron",
+              calculationMode: "live_snapshot",
+            },
+            true
+          );
+          return { userId: user.id, result, error: null };
+        } catch (error) {
+          return { userId: user.id, result: null, error };
         }
-      } catch (error) {
+      }
+    );
+
+    for (const outcome of results) {
+      if (outcome.error) {
         failed += 1;
         errors.push({
-          userId: user.id,
-          error: error instanceof Error ? error.message : "Unknown error",
+          userId: outcome.userId,
+          error:
+            outcome.error instanceof Error
+              ? outcome.error.message
+              : "Unknown error",
         });
+      } else if (outcome.result?.created) {
+        created += 1;
+        createdUserIds.push(outcome.userId);
+      } else if (outcome.result?.skippedExisting) {
+        skippedExisting += 1;
       }
     }
   }
@@ -269,7 +381,7 @@ export async function getNetWorthSnapshotsForUser(
     baseWhere.currency = params.currency;
   }
 
-  let snapshots: NetWorthSnapshotModel[];
+  let snapshots: SnapshotBaseRow[];
 
   if (
     params.startYear &&
@@ -286,12 +398,14 @@ export async function getNetWorthSnapshotsForUser(
         },
       },
       orderBy: [{ periodYear: "asc" }, { periodMonth: "asc" }],
+      select: snapshotBaseSelect,
     });
   } else {
     snapshots = await prisma.netWorthSnapshot.findMany({
       where: baseWhere,
       orderBy: [{ periodYear: "desc" }, { periodMonth: "desc" }],
       take: months,
+      select: snapshotBaseSelect,
     });
     snapshots.reverse();
   }
@@ -311,6 +425,7 @@ export async function getNetWorthSnapshotByPeriodForUser(
         periodMonth: period.month,
       },
     },
+    select: snapshotDetailSelect,
   });
 
   return snapshot ? mapSnapshotDetail(snapshot) : null;
@@ -324,6 +439,7 @@ export async function getNetWorthSnapshotSummaryForUser(
     where: { userId },
     orderBy: [{ periodYear: "desc" }, { periodMonth: "desc" }],
     take: months,
+    select: snapshotBaseSelect,
   });
 
   if (rawSnapshots.length === 0) {

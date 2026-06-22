@@ -21,6 +21,14 @@ export interface InsightCurrencyConverter {
   getStats(): InsightCurrencyConverterStats;
 }
 
+function normalizeCurrency(currency: string): string {
+  return currency.trim().toUpperCase();
+}
+
+function getCurrencyPairKey(fromCurrency: string, toCurrency: string): string {
+  return `${normalizeCurrency(fromCurrency)}:${normalizeCurrency(toCurrency)}`;
+}
+
 export function normalizeTransactionAmount(transaction: {
   amount: number;
   exchangeRate: number;
@@ -32,11 +40,12 @@ export async function createInsightCurrencyConverter(input: {
   targetCurrency: string;
   sourceCurrencies: string[];
 }): Promise<InsightCurrencyConverter> {
+  const targetCurrency = normalizeCurrency(input.targetCurrency);
   const sourceCurrencies = Array.from(
     new Set(
       input.sourceCurrencies
-        .map((currency) => currency.trim().toUpperCase())
-        .filter((currency) => currency && currency !== input.targetCurrency)
+        .map(normalizeCurrency)
+        .filter((currency) => currency && currency !== targetCurrency)
     )
   );
 
@@ -45,7 +54,7 @@ export async function createInsightCurrencyConverter(input: {
       ? await prisma.exchangeRate.findMany({
           where: {
             fromCurrency: { in: sourceCurrencies },
-            toCurrency: input.targetCurrency,
+            toCurrency: targetCurrency,
           },
           select: {
             fromCurrency: true,
@@ -56,7 +65,10 @@ export async function createInsightCurrencyConverter(input: {
       : [];
 
   const cachedRateMap = new Map(
-    cachedRates.map((rate) => [`${rate.fromCurrency}:${rate.toCurrency}`, rate.rate])
+    cachedRates.map((rate) => [
+      getCurrencyPairKey(rate.fromCurrency, rate.toCurrency),
+      rate.rate,
+    ])
   );
   const rateCache = new Map<
     string,
@@ -69,18 +81,18 @@ export async function createInsightCurrencyConverter(input: {
   async function resolveRate(
     fromCurrency: string
   ): Promise<{ rate: number | null; source: CurrencyConversionSource }> {
-    if (fromCurrency === input.targetCurrency) {
+    if (fromCurrency === targetCurrency) {
       return { rate: 1, source: "identity" };
     }
 
-    const key = `${fromCurrency}:${input.targetCurrency}`;
+    const key = getCurrencyPairKey(fromCurrency, targetCurrency);
     const existing = rateCache.get(key);
     if (existing) {
       return existing;
     }
 
     const next = (async () => {
-      const liveRate = await getExchangeRate(fromCurrency, input.targetCurrency);
+      const liveRate = await getExchangeRate(fromCurrency, targetCurrency);
       if (liveRate && Number.isFinite(liveRate) && liveRate > 0) {
         livePairs.add(key);
         return { rate: liveRate, source: "live" as const };
@@ -101,10 +113,10 @@ export async function createInsightCurrencyConverter(input: {
   }
 
   return {
-    targetCurrency: input.targetCurrency,
+    targetCurrency,
     async convert(amount: number, fromCurrency: string) {
-      const normalizedCurrency = fromCurrency.trim().toUpperCase();
-      if (normalizedCurrency === input.targetCurrency) {
+      const normalizedCurrency = normalizeCurrency(fromCurrency);
+      if (normalizedCurrency === targetCurrency) {
         return { amount, rate: 1, source: "identity" };
       }
 

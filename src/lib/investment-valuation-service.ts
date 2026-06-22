@@ -1,4 +1,4 @@
-import { UnitType } from "@/generated/prisma/client/client";
+import { Prisma, UnitType } from "@/generated/prisma/client/client";
 import prisma from "@/lib/db";
 import {
   calculateInvestmentMetrics,
@@ -62,34 +62,104 @@ export interface PortfolioValuation {
   displayCurrency: string;
 }
 
-function createCurrencyConverter() {
-  const ratePromises = new Map<string, Promise<number>>();
+const investmentAssetSelect = {
+  id: true,
+  symbol: true,
+  name: true,
+  quantity: true,
+  avgBuyPrice: true,
+  currency: true,
+  userId: true,
+  accountId: true,
+  unitType: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.InvestmentAssetSelect;
 
-  return async (
-    amount: number,
-    fromCurrency: string,
-    toCurrency: string
-  ): Promise<number> => {
-    if (amount === 0) return 0;
-    if (fromCurrency === toCurrency) return amount;
+type InvestmentAssetRow = Prisma.InvestmentAssetGetPayload<{
+  select: typeof investmentAssetSelect;
+}>;
 
-    const key = `${fromCurrency}:${toCurrency}`;
-    let ratePromise = ratePromises.get(key);
+type CurrencyPair = {
+  fromCurrency: string;
+  toCurrency: string;
+};
 
-    if (!ratePromise) {
-      ratePromise = getExchangeRate(fromCurrency, toCurrency).then((rate) => {
-        if (!rate || !Number.isFinite(rate) || rate <= 0) {
-          throw new InvestmentValuationError(
-            `Live exchange rate unavailable for ${fromCurrency}/${toCurrency}`
-          );
-        }
-        return rate;
-      });
-      ratePromises.set(key, ratePromise);
-    }
+type LiveQuoteDetails = {
+  quote: QuoteResult;
+  quoteCurrency: string;
+};
 
-    return amount * (await ratePromise);
+function getCurrencyPairKey(fromCurrency: string, toCurrency: string): string {
+  return `${fromCurrency}:${toCurrency}`;
+}
+
+async function loadExchangeRates(
+  pairs: CurrencyPair[]
+): Promise<Map<string, number>> {
+  const uniquePairs = new Map<string, CurrencyPair>();
+
+  for (const pair of pairs) {
+    if (pair.fromCurrency === pair.toCurrency) continue;
+    uniquePairs.set(
+      getCurrencyPairKey(pair.fromCurrency, pair.toCurrency),
+      pair
+    );
+  }
+
+  const entries = await Promise.all(
+    Array.from(uniquePairs.entries()).map(async ([key, pair]) => {
+      const rate = await getExchangeRate(pair.fromCurrency, pair.toCurrency);
+
+      if (!rate || !Number.isFinite(rate) || rate <= 0) {
+        throw new InvestmentValuationError(
+          `Live exchange rate unavailable for ${pair.fromCurrency}/${pair.toCurrency}`
+        );
+      }
+
+      return [key, rate] as const;
+    })
+  );
+
+  return new Map(entries);
+}
+
+function createEmptyPortfolioValuation(
+  displayCurrency: string
+): PortfolioValuation {
+  return {
+    assets: [],
+    summary: {
+      totalValue: 0,
+      totalCost: 0,
+      totalUnrealizedPnL: 0,
+      totalUnrealizedPnLPercent: 0,
+      totalDayChange: 0,
+      totalDayChangePercent: 0,
+      totalRealizedPnL: 0,
+      assetCount: 0,
+    },
+    displayCurrency,
   };
+}
+
+function convertCurrencyAmount(
+  amount: number,
+  fromCurrency: string,
+  toCurrency: string,
+  rates: Map<string, number>
+): number {
+  if (amount === 0) return 0;
+  if (fromCurrency === toCurrency) return amount;
+
+  const rate = rates.get(getCurrencyPairKey(fromCurrency, toCurrency));
+  if (!rate || !Number.isFinite(rate) || rate <= 0) {
+    throw new InvestmentValuationError(
+      `Live exchange rate unavailable for ${fromCurrency}/${toCurrency}`
+    );
+  }
+
+  return amount * rate;
 }
 
 function assertLiveQuote(
@@ -119,18 +189,31 @@ function getQuoteCurrency(symbol: string, quote: QuoteResult): string {
   );
 }
 
-async function convertQuotePrice(
+function getLiveQuoteDetails(
+  symbol: string,
+  quote?: QuoteResult | null
+): LiveQuoteDetails {
+  const liveQuote = assertLiveQuote(symbol, quote);
+
+  return {
+    quote: liveQuote,
+    quoteCurrency: getQuoteCurrency(symbol, liveQuote),
+  };
+}
+
+function convertQuotePrice(
   symbol: string,
   price: number,
   quoteCurrency: string,
   targetCurrency: string,
   unitType: UnitType,
-  convertCurrency: ReturnType<typeof createCurrencyConverter>
-): Promise<number> {
-  const convertedCurrencyPrice = await convertCurrency(
+  rates: Map<string, number>
+): number {
+  const convertedCurrencyPrice = convertCurrencyAmount(
     price,
     quoteCurrency,
-    targetCurrency
+    targetCurrency,
+    rates
   );
 
   return isPreciousMetal(symbol) && unitType === "GRAM"
@@ -144,15 +227,20 @@ export async function getAssetPriceInCurrency(
   unitType: UnitType = "UNIT"
 ): Promise<{ currentPrice: number; rawPrice: number; currency: string }> {
   const upperSymbol = symbol.toUpperCase();
-  const quote = assertLiveQuote(upperSymbol, await getAssetPrice(upperSymbol));
-  const convertCurrency = createCurrencyConverter();
-  const currentPrice = await convertQuotePrice(
+  const { quote, quoteCurrency } = getLiveQuoteDetails(
+    upperSymbol,
+    await getAssetPrice(upperSymbol)
+  );
+  const rates = await loadExchangeRates([
+    { fromCurrency: quoteCurrency, toCurrency: targetCurrency },
+  ]);
+  const currentPrice = convertQuotePrice(
     upperSymbol,
     quote.regularMarketPrice,
-    getQuoteCurrency(upperSymbol, quote),
+    quoteCurrency,
     targetCurrency,
     unitType,
-    convertCurrency
+    rates
   );
 
   return {
@@ -166,26 +254,14 @@ export async function getCurrentPortfolioValuation(
   userId: string,
   displayCurrency: string
 ): Promise<PortfolioValuation> {
-  const assets = await prisma.investmentAsset.findMany({
+  const assets: InvestmentAssetRow[] = await prisma.investmentAsset.findMany({
     where: { userId },
+    select: investmentAssetSelect,
     orderBy: { createdAt: "desc" },
   });
 
   if (assets.length === 0) {
-    return {
-      assets: [],
-      summary: {
-        totalValue: 0,
-        totalCost: 0,
-        totalUnrealizedPnL: 0,
-        totalUnrealizedPnLPercent: 0,
-        totalDayChange: 0,
-        totalDayChangePercent: 0,
-        totalRealizedPnL: 0,
-        assetCount: 0,
-      },
-      displayCurrency,
-    };
+    return createEmptyPortfolioValuation(displayCurrency);
   }
 
   const activeAssets = assets.filter((asset) => asset.quantity > 0);
@@ -203,20 +279,36 @@ export async function getCurrentPortfolioValuation(
     }),
   ]);
 
+  const quoteDetailsByAssetId = new Map<string, LiveQuoteDetails>();
+  const exchangeRatePairs: CurrencyPair[] = assets.map((asset) => ({
+    fromCurrency: asset.currency,
+    toCurrency: displayCurrency,
+  }));
+
+  for (const asset of activeAssets) {
+    const quoteDetails = getLiveQuoteDetails(asset.symbol, prices.get(asset.symbol));
+    quoteDetailsByAssetId.set(asset.id, quoteDetails);
+    exchangeRatePairs.push({
+      fromCurrency: quoteDetails.quoteCurrency,
+      toCurrency: asset.currency,
+    });
+  }
+
+  const exchangeRates = await loadExchangeRates(exchangeRatePairs);
   const realizedPnLMap = new Map(
     realizedPnLByAsset.map((item) => [
       item.assetId,
       item._sum.realizedPnL ?? 0,
     ])
   );
-  const convertCurrency = createCurrencyConverter();
 
   const valuedAssets = await Promise.all(
     assets.map(async (asset): Promise<PortfolioValuationAsset> => {
-      const realizedPnL = await convertCurrency(
+      const realizedPnL = convertCurrencyAmount(
         realizedPnLMap.get(asset.id) ?? 0,
         asset.currency,
-        displayCurrency
+        displayCurrency,
+        exchangeRates
       );
 
       if (asset.quantity <= 0) {
@@ -235,17 +327,23 @@ export async function getCurrentPortfolioValuation(
         };
       }
 
-      const quote = assertLiveQuote(asset.symbol, prices.get(asset.symbol));
-      const quoteCurrency = getQuoteCurrency(asset.symbol, quote);
-      const currentPrice = await convertQuotePrice(
+      const quoteDetails = quoteDetailsByAssetId.get(asset.id);
+      if (!quoteDetails) {
+        throw new InvestmentValuationError(
+          `Live market price unavailable for ${asset.symbol}`
+        );
+      }
+
+      const { quote, quoteCurrency } = quoteDetails;
+      const currentPrice = convertQuotePrice(
         asset.symbol,
         quote.regularMarketPrice,
         quoteCurrency,
         asset.currency,
         asset.unitType,
-        convertCurrency
+        exchangeRates
       );
-      const previousClose = await convertQuotePrice(
+      const previousClose = convertQuotePrice(
         asset.symbol,
         quote.regularMarketPreviousClose > 0
           ? quote.regularMarketPreviousClose
@@ -253,7 +351,7 @@ export async function getCurrentPortfolioValuation(
         quoteCurrency,
         asset.currency,
         asset.unitType,
-        convertCurrency
+        exchangeRates
       );
       const localMetrics = calculateInvestmentMetrics(
         asset.quantity,
@@ -266,26 +364,30 @@ export async function getCurrentPortfolioValuation(
         ...asset,
         currentPrice,
         previousClose,
-        currentValue: await convertCurrency(
+        currentValue: convertCurrencyAmount(
           localMetrics.currentValue,
           asset.currency,
-          displayCurrency
+          displayCurrency,
+          exchangeRates
         ),
-        totalCost: await convertCurrency(
+        totalCost: convertCurrencyAmount(
           localMetrics.totalCost,
           asset.currency,
-          displayCurrency
+          displayCurrency,
+          exchangeRates
         ),
-        unrealizedPnL: await convertCurrency(
+        unrealizedPnL: convertCurrencyAmount(
           localMetrics.unrealizedPnL,
           asset.currency,
-          displayCurrency
+          displayCurrency,
+          exchangeRates
         ),
         unrealizedPnLPercent: localMetrics.unrealizedPnLPercent,
-        dayChange: await convertCurrency(
+        dayChange: convertCurrencyAmount(
           localMetrics.dayChange,
           asset.currency,
-          displayCurrency
+          displayCurrency,
+          exchangeRates
         ),
         dayChangePercent: localMetrics.dayChangePercent,
         realizedPnL,
