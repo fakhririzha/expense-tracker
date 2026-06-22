@@ -103,6 +103,78 @@ interface NotificationPreferenceRow extends NotificationPreferenceSnapshot {
   userId: string;
 }
 
+interface ActivePushSubscriptionRow {
+  id: string;
+  endpointEncrypted: string;
+  p256dhEncrypted: string;
+  authEncrypted: string;
+  expirationTime: Date | null;
+  failureCount: number;
+}
+
+interface NotificationDispatchContext {
+  preference: NotificationPreferenceSnapshot;
+  subscriptions: ActivePushSubscriptionRow[];
+}
+
+interface BudgetPeriodAggregate {
+  totalSpent: number;
+  spentByCategoryId: Map<string, number>;
+}
+
+const notificationPreferenceSelect = {
+  pushEnabled: true,
+  subscriptionRenewalEnabled: true,
+  recurringTransactionEnabled: true,
+  budgetThresholdEnabled: true,
+  lowCashForecastEnabled: true,
+  monthlySnapshotEnabled: true,
+  goalProgressEnabled: true,
+  importExportCompletionEnabled: true,
+  subscriptionReminderLeadDays: true,
+  recurringReminderLeadDays: true,
+  budgetThresholdPercent: true,
+} satisfies Prisma.NotificationPreferenceSelect;
+
+const activePushSubscriptionSelect = {
+  id: true,
+  endpointEncrypted: true,
+  p256dhEncrypted: true,
+  authEncrypted: true,
+  expirationTime: true,
+  failureCount: true,
+} satisfies Prisma.PushSubscriptionSelect;
+
+const notificationEventDispatchSelect = {
+  id: true,
+  status: true,
+  successCount: true,
+  failureCount: true,
+  skippedReason: true,
+} satisfies Prisma.NotificationEventSelect;
+
+const budgetThresholdTransactionSelect = {
+  id: true,
+  amount: true,
+  currency: true,
+  exchangeRate: true,
+  type: true,
+  date: true,
+  categoryId: true,
+  accountId: true,
+  toAccountId: true,
+  description: true,
+  splits: {
+    select: {
+      id: true,
+      amount: true,
+      description: true,
+      sortOrder: true,
+      categoryId: true,
+    },
+  },
+} satisfies Prisma.TransactionSelect;
+
 const notificationTargetPaths: Record<NotificationType, string> = {
   [NotificationType.TEST]: "/dashboard/profile",
   [NotificationType.SUBSCRIPTION_RENEWAL]: "/dashboard/subscriptions",
@@ -182,7 +254,7 @@ function normalizeDashboardPath(targetPath: string | undefined, type: Notificati
 }
 
 function mapPreferenceRow(
-  row: NotificationPreference | null | undefined
+  row: NotificationPreferenceSnapshot | NotificationPreference | null | undefined
 ): NotificationPreferenceSnapshot {
   if (!row) {
     return getDefaultPreferenceSnapshot();
@@ -206,6 +278,7 @@ function mapPreferenceRow(
 async function getNotificationPreferenceForUser(userId: string): Promise<NotificationPreferenceRow> {
   const row = await prisma.notificationPreference.findUnique({
     where: { userId },
+    select: notificationPreferenceSelect,
   });
 
   return {
@@ -239,6 +312,52 @@ async function getActiveSubscriptionCount(userId: string): Promise<number> {
       OR: [{ expirationTime: null }, { expirationTime: { gt: now } }],
     },
   });
+}
+
+async function getActiveSubscriptionsForUser(
+  userId: string,
+  now: Date = new Date()
+): Promise<ActivePushSubscriptionRow[]> {
+  return prisma.pushSubscription.findMany({
+    where: {
+      userId,
+      disabledAt: null,
+      OR: [{ expirationTime: null }, { expirationTime: { gt: now } }],
+    },
+    select: activePushSubscriptionSelect,
+  });
+}
+
+async function loadNotificationDispatchContext(
+  userId: string,
+  options?: { preference?: NotificationPreferenceSnapshot; now?: Date }
+): Promise<NotificationDispatchContext> {
+  const subscriptionsPromise = getActiveSubscriptionsForUser(userId, options?.now);
+  const preferencePromise = options?.preference
+    ? Promise.resolve(options.preference)
+    : getNotificationPreferenceForUser(userId).then((preference) => ({
+        pushEnabled: preference.pushEnabled,
+        subscriptionRenewalEnabled: preference.subscriptionRenewalEnabled,
+        recurringTransactionEnabled: preference.recurringTransactionEnabled,
+        budgetThresholdEnabled: preference.budgetThresholdEnabled,
+        lowCashForecastEnabled: preference.lowCashForecastEnabled,
+        monthlySnapshotEnabled: preference.monthlySnapshotEnabled,
+        goalProgressEnabled: preference.goalProgressEnabled,
+        importExportCompletionEnabled: preference.importExportCompletionEnabled,
+        subscriptionReminderLeadDays: preference.subscriptionReminderLeadDays,
+        recurringReminderLeadDays: preference.recurringReminderLeadDays,
+        budgetThresholdPercent: preference.budgetThresholdPercent,
+      }));
+
+  const [preference, subscriptions] = await Promise.all([
+    preferencePromise,
+    subscriptionsPromise,
+  ]);
+
+  return {
+    preference,
+    subscriptions,
+  };
 }
 
 async function decryptWebPushSubscription(
@@ -326,7 +445,7 @@ function getPreferenceFlagForType(
 }
 
 async function upsertNotificationEvent(input: NotificationDispatchInput) {
-  const existing = await prisma.notificationEvent.findUnique({
+  return prisma.notificationEvent.upsert({
     where: {
       userId_type_dedupeKey: {
         userId: input.userId,
@@ -334,14 +453,7 @@ async function upsertNotificationEvent(input: NotificationDispatchInput) {
         dedupeKey: input.dedupeKey,
       },
     },
-  });
-
-  if (existing) {
-    return existing;
-  }
-
-  return prisma.notificationEvent.create({
-    data: {
+    create: {
       userId: input.userId,
       type: input.type,
       dedupeKey: input.dedupeKey,
@@ -350,6 +462,8 @@ async function upsertNotificationEvent(input: NotificationDispatchInput) {
       targetPath: normalizeDashboardPath(input.targetPath, input.type),
       metadataJson: input.metadata,
     },
+    update: {},
+    select: notificationEventDispatchSelect,
   });
 }
 
@@ -580,11 +694,15 @@ export async function updateNotificationPreferencesForUser(
 }
 
 export async function sendUserNotification(
-  input: NotificationDispatchInput
+  input: NotificationDispatchInput,
+  context?: NotificationDispatchContext
 ): Promise<NotificationDispatchResult> {
   ensureWebPushConfigured();
 
-  const preference = await getNotificationPreferenceForUser(input.userId);
+  const dispatchContext =
+    context ?? (await loadNotificationDispatchContext(input.userId));
+
+  const preference = dispatchContext.preference;
   if (input.respectPreferences !== false) {
     if (!preference.pushEnabled) {
       return {
@@ -622,22 +740,7 @@ export async function sendUserNotification(
     };
   }
 
-  const now = new Date();
-  const subscriptions = await prisma.pushSubscription.findMany({
-    where: {
-      userId: input.userId,
-      disabledAt: null,
-      OR: [{ expirationTime: null }, { expirationTime: { gt: now } }],
-    },
-    select: {
-      id: true,
-      endpointEncrypted: true,
-      p256dhEncrypted: true,
-      authEncrypted: true,
-      expirationTime: true,
-      failureCount: true,
-    },
-  });
+  const subscriptions = dispatchContext.subscriptions;
 
   if (subscriptions.length === 0) {
     await updateNotificationEventStatus(event.id, {
@@ -718,10 +821,66 @@ function getBudgetPeriodKey(period: "MONTHLY" | "QUARTERLY" | "YEARLY", now: Dat
   return `${format(now, "yyyy")}-Q${quarter}`;
 }
 
+async function getBudgetPeriodAggregate(
+  userId: string,
+  period: "MONTHLY" | "QUARTERLY" | "YEARLY",
+  now: Date
+): Promise<BudgetPeriodAggregate> {
+  const window = getBudgetWindow(period, now);
+  const transactions = await prisma.transaction.findMany({
+    where: {
+      userId,
+      date: {
+        gte: window.start,
+        lte: window.end,
+      },
+      type: {
+        in: [TransactionType.EXPENSE, TransactionType.LIABILITY_PAYMENT],
+      },
+    },
+    select: budgetThresholdTransactionSelect,
+  });
+
+  let totalSpent = 0;
+  for (const transaction of transactions) {
+    totalSpent += transaction.amount * transaction.exchangeRate;
+  }
+
+  const expenseTransactions = transactions
+    .filter((transaction) => transaction.type === TransactionType.EXPENSE)
+    .map((transaction) => ({
+      ...transaction,
+      category: null,
+      splits: transaction.splits.map((split) => ({
+        ...split,
+        category: null,
+      })),
+    }));
+
+  const spentByCategoryId = new Map<string, number>();
+  const allocationRows = flattenTransactionAllocationRows(expenseTransactions);
+  for (const row of allocationRows) {
+    if (!row.categoryId) {
+      continue;
+    }
+
+    spentByCategoryId.set(
+      row.categoryId,
+      (spentByCategoryId.get(row.categoryId) ?? 0) + row.normalizedAmount
+    );
+  }
+
+  return {
+    totalSpent,
+    spentByCategoryId,
+  };
+}
+
 async function sendSubscriptionRenewalNotifications(
   userId: string,
   preference: NotificationPreferenceSnapshot,
-  now: Date
+  now: Date,
+  context?: NotificationDispatchContext
 ) {
   if (!preference.subscriptionRenewalEnabled) {
     return 0;
@@ -754,7 +913,7 @@ async function sendSubscriptionRenewalNotifications(
       body: "A payment is due soon.",
       targetPath: "/dashboard/subscriptions",
       dedupeKey: `subscription:${subscription.id}:${format(subscription.nextBillingDate, "yyyy-MM-dd")}`,
-    });
+    }, context);
 
     if (result.success) {
       sent += 1;
@@ -767,7 +926,8 @@ async function sendSubscriptionRenewalNotifications(
 async function sendRecurringDueNotifications(
   userId: string,
   preference: NotificationPreferenceSnapshot,
-  now: Date
+  now: Date,
+  context?: NotificationDispatchContext
 ) {
   if (!preference.recurringTransactionEnabled) {
     return 0;
@@ -802,7 +962,7 @@ async function sendRecurringDueNotifications(
       body: "A scheduled transaction is due soon.",
       targetPath: "/dashboard/recurring",
       dedupeKey: `recurring:${rule.id}:${format(rule.nextDueDate, "yyyy-MM-dd")}`,
-    });
+    }, context);
 
     if (result.success) {
       sent += 1;
@@ -815,7 +975,8 @@ async function sendRecurringDueNotifications(
 async function sendBudgetThresholdNotifications(
   userId: string,
   preference: NotificationPreferenceSnapshot,
-  now: Date
+  now: Date,
+  context?: NotificationDispatchContext
 ) {
   if (!preference.budgetThresholdEnabled) {
     return 0;
@@ -838,79 +999,31 @@ async function sendBudgetThresholdNotifications(
     return 0;
   }
 
+  const budgetsByPeriod = new Map<
+    "MONTHLY" | "QUARTERLY" | "YEARLY",
+    typeof budgets
+  >();
+  for (const budget of budgets) {
+    const existing = budgetsByPeriod.get(budget.period) ?? [];
+    existing.push(budget);
+    budgetsByPeriod.set(budget.period, existing);
+  }
+
+  const aggregates = new Map<"MONTHLY" | "QUARTERLY" | "YEARLY", BudgetPeriodAggregate>();
+  for (const period of budgetsByPeriod.keys()) {
+    aggregates.set(period, await getBudgetPeriodAggregate(userId, period, now));
+  }
+
   let sent = 0;
   for (const budget of budgets) {
-    const window = getBudgetWindow(budget.period, now);
+    const aggregate = aggregates.get(budget.period);
+    if (!aggregate) {
+      continue;
+    }
+
     const spent = budget.categoryId
-      ? flattenTransactionAllocationRows(
-          await prisma.transaction.findMany({
-            where: {
-              userId,
-              type: TransactionType.EXPENSE,
-              date: {
-                gte: window.start,
-                lte: window.end,
-              },
-            },
-            select: {
-              id: true,
-              amount: true,
-              currency: true,
-              exchangeRate: true,
-              type: true,
-              date: true,
-              categoryId: true,
-              accountId: true,
-              toAccountId: true,
-              description: true,
-              category: {
-                select: {
-                  id: true,
-                  name: true,
-                  icon: true,
-                  color: true,
-                },
-              },
-              splits: {
-                select: {
-                  id: true,
-                  amount: true,
-                  description: true,
-                  sortOrder: true,
-                  categoryId: true,
-                  category: {
-                    select: {
-                      id: true,
-                      name: true,
-                      icon: true,
-                      color: true,
-                    },
-                  },
-                },
-              },
-            },
-          })
-        )
-          .filter((transaction) => transaction.categoryId === budget.categoryId)
-          .reduce((sum, transaction) => sum + transaction.normalizedAmount, 0)
-      : (
-          await prisma.transaction.findMany({
-            where: {
-              userId,
-              date: {
-                gte: window.start,
-                lte: window.end,
-              },
-              type: {
-                in: [TransactionType.EXPENSE, TransactionType.LIABILITY_PAYMENT],
-              },
-            },
-            select: {
-              amount: true,
-              exchangeRate: true,
-            },
-          })
-        ).reduce((sum, transaction) => sum + transaction.amount * transaction.exchangeRate, 0);
+      ? aggregate.spentByCategoryId.get(budget.categoryId) ?? 0
+      : aggregate.totalSpent;
     const percentage = budget.amount > 0 ? (spent / budget.amount) * 100 : 0;
 
     const threshold =
@@ -935,7 +1048,7 @@ async function sendBudgetThresholdNotifications(
         budgetId: budget.id,
         threshold,
       },
-    });
+    }, context);
 
     if (result.success) {
       sent += 1;
@@ -948,7 +1061,8 @@ async function sendBudgetThresholdNotifications(
 async function sendLowCashForecastNotifications(
   userId: string,
   preference: NotificationPreferenceSnapshot,
-  now: Date
+  now: Date,
+  context?: NotificationDispatchContext
 ) {
   if (!preference.lowCashForecastEnabled) {
     return 0;
@@ -973,7 +1087,7 @@ async function sendLowCashForecastNotifications(
     metadata: {
       alertCount: pressure.data.length,
     },
-  });
+  }, context);
 
   return result.success ? 1 : 0;
 }
@@ -981,7 +1095,8 @@ async function sendLowCashForecastNotifications(
 async function sendGoalProgressNotifications(
   userId: string,
   preference: NotificationPreferenceSnapshot,
-  now: Date
+  now: Date,
+  context?: NotificationDispatchContext
 ) {
   if (!preference.goalProgressEnabled) {
     return 0;
@@ -1019,7 +1134,7 @@ async function sendGoalProgressNotifications(
       metadata: {
         goalId: goal.id,
       },
-    });
+    }, context);
 
     if (result.success) {
       sent += 1;
@@ -1059,17 +1174,7 @@ export async function sendDailyNotificationBatch(now: Date = new Date()) {
     },
     select: {
       userId: true,
-      pushEnabled: true,
-      subscriptionRenewalEnabled: true,
-      recurringTransactionEnabled: true,
-      budgetThresholdEnabled: true,
-      lowCashForecastEnabled: true,
-      monthlySnapshotEnabled: true,
-      goalProgressEnabled: true,
-      importExportCompletionEnabled: true,
-      subscriptionReminderLeadDays: true,
-      recurringReminderLeadDays: true,
-      budgetThresholdPercent: true,
+      ...notificationPreferenceSelect,
     },
   });
 
@@ -1083,30 +1188,44 @@ export async function sendDailyNotificationBatch(now: Date = new Date()) {
   };
 
   for (const preference of preferences) {
+    const context = await loadNotificationDispatchContext(preference.userId, {
+      preference,
+      now,
+    });
+
+    if (context.subscriptions.length === 0) {
+      continue;
+    }
+
     summary.subscriptionRenewalSent += await sendSubscriptionRenewalNotifications(
       preference.userId,
       preference,
-      now
+      now,
+      context
     );
     summary.recurringSent += await sendRecurringDueNotifications(
       preference.userId,
       preference,
-      now
+      now,
+      context
     );
     summary.budgetSent += await sendBudgetThresholdNotifications(
       preference.userId,
       preference,
-      now
+      now,
+      context
     );
     summary.lowCashSent += await sendLowCashForecastNotifications(
       preference.userId,
       preference,
-      now
+      now,
+      context
     );
     summary.goalSent += await sendGoalProgressNotifications(
       preference.userId,
       preference,
-      now
+      now,
+      context
     );
   }
 
