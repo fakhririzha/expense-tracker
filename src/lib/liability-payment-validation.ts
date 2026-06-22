@@ -13,7 +13,7 @@ import {
   sortAccountsByName,
 } from "@/lib/account-crypto";
 import prisma from "@/lib/db";
-import { FinancialAccount } from "@/generated/prisma/client/client";
+import { FinancialAccount, Prisma } from "@/generated/prisma/client/client";
 
 export interface ValidationResult<T = unknown> {
   valid: boolean;
@@ -37,6 +37,152 @@ export interface AccountValidationData {
   availableBalance: number;
 }
 
+const accountSelect = {
+  id: true,
+  nameEncrypted: true,
+  type: true,
+  currency: true,
+  balance: true,
+  descriptionEncrypted: true,
+  isActive: true,
+  lastEncryptedAt: true,
+  userId: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.FinancialAccountSelect;
+
+const accountStatusSelect = {
+  id: true,
+  userId: true,
+  nameEncrypted: true,
+  isActive: true,
+} satisfies Prisma.FinancialAccountSelect;
+
+type AccountRow = Prisma.FinancialAccountGetPayload<{
+  select: typeof accountSelect;
+}>;
+
+type AccountStatusRow = Prisma.FinancialAccountGetPayload<{
+  select: typeof accountStatusSelect;
+}>;
+
+async function toAccountWithDisplayName(
+  userId: string,
+  account: AccountRow
+): Promise<AccountWithDisplayName> {
+  const name = await decryptAccountName(userId, account.nameEncrypted);
+
+  return {
+    ...account,
+    name,
+  };
+}
+
+async function getUserOwnedSourceBankAccount(
+  userId: string,
+  accountId: string
+): Promise<AccountRow | null> {
+  return prisma.financialAccount.findFirst({
+    where: {
+      id: accountId,
+      userId,
+      type: "BANK",
+    },
+    select: accountSelect,
+  });
+}
+
+async function getUserOwnedTargetLiabilityAccount(
+  userId: string,
+  accountId: string
+): Promise<AccountRow | null> {
+  return prisma.financialAccount.findFirst({
+    where: {
+      id: accountId,
+      userId,
+      type: {
+        in: ["LOAN", "CREDIT_CARD"],
+      },
+    },
+    select: accountSelect,
+  });
+}
+
+async function getActiveAccountsForUser(
+  userId: string,
+  where: Prisma.FinancialAccountWhereInput
+): Promise<AccountWithDisplayName[]> {
+  const accounts: AccountRow[] = await prisma.financialAccount.findMany({
+    where: {
+      userId,
+      isActive: true,
+      ...where,
+    },
+    select: accountSelect,
+  });
+
+  return sortAccountsByName(
+    await Promise.all(
+      accounts.map((account) => toAccountWithDisplayName(userId, account))
+    )
+  );
+}
+
+async function validateSufficientFundsForAccount(
+  userId: string,
+  account: AccountRow,
+  requiredAmount: number
+): Promise<ValidationResult<{ currentBalance: number; currency: string }>> {
+  if (account.balance < requiredAmount) {
+    const accountName = await decryptAccountName(userId, account.nameEncrypted);
+    return {
+      valid: false,
+      errorCode: "INSUFFICIENT_FUNDS",
+      error: `Insufficient funds in "${accountName}". Available: ${account.balance.toLocaleString()} ${account.currency}, Required: ${requiredAmount.toLocaleString()} ${account.currency}`,
+      data: { currentBalance: account.balance, currency: account.currency },
+    };
+  }
+
+  return {
+    valid: true,
+    data: { currentBalance: account.balance, currency: account.currency },
+  };
+}
+
+async function validatePaymentAmountForAccount(
+  userId: string,
+  account: AccountRow,
+  paymentAmount: number,
+  allowOverpayment = false
+): Promise<ValidationResult<{ liabilityBalance: number; maxPayment: number }>> {
+  const liabilityBalance = account.balance;
+  const maxPayment = Math.abs(liabilityBalance);
+
+  if (liabilityBalance >= 0) {
+    const accountName = await decryptAccountName(userId, account.nameEncrypted);
+    return {
+      valid: false,
+      errorCode: "NO_OUTSTANDING_BALANCE",
+      error: `Account "${accountName}" has no outstanding balance to pay off.`,
+      data: { liabilityBalance, maxPayment: 0 },
+    };
+  }
+
+  if (paymentAmount > maxPayment && !allowOverpayment) {
+    return {
+      valid: false,
+      errorCode: "PAYMENT_EXCEEDS_BALANCE",
+      error: `Payment amount (${paymentAmount.toLocaleString()} ${account.currency}) exceeds outstanding balance (${maxPayment.toLocaleString()} ${account.currency}). Maximum payment allowed: ${maxPayment.toLocaleString()} ${account.currency}`,
+      data: { liabilityBalance, maxPayment },
+    };
+  }
+
+  return {
+    valid: true,
+    data: { liabilityBalance, maxPayment },
+  };
+}
+
 /**
  * Ensure the source account exists, is a BANK account owned by the given user, and is active.
  *
@@ -46,13 +192,7 @@ export async function validateSourceAccount(
   userId: string,
   accountId: string
 ): Promise<ValidationResult<AccountValidationData>> {
-  const account = await prisma.financialAccount.findFirst({
-    where: {
-      id: accountId,
-      userId,
-      type: "BANK",
-    },
-  });
+  const account = await getUserOwnedSourceBankAccount(userId, accountId);
 
   if (!account) {
     return {
@@ -72,12 +212,12 @@ export async function validateSourceAccount(
     };
   }
 
-  const accountName = await decryptAccountName(userId, account.nameEncrypted);
+  const displayAccount = await toAccountWithDisplayName(userId, account);
 
   return {
     valid: true,
     data: {
-      account: { ...account, name: accountName },
+      account: displayAccount,
       currentBalance: account.balance,
       availableBalance: account.balance,
     },
@@ -95,15 +235,7 @@ export async function validateTargetLiabilityAccount(
   userId: string,
   accountId: string
 ): Promise<ValidationResult<AccountValidationData>> {
-  const account = await prisma.financialAccount.findFirst({
-    where: {
-      id: accountId,
-      userId,
-      type: {
-        in: ["LOAN", "CREDIT_CARD"],
-      },
-    },
-  });
+  const account = await getUserOwnedTargetLiabilityAccount(userId, accountId);
 
   if (!account) {
     return {
@@ -123,12 +255,12 @@ export async function validateTargetLiabilityAccount(
     };
   }
 
-  const accountName = await decryptAccountName(userId, account.nameEncrypted);
+  const displayAccount = await toAccountWithDisplayName(userId, account);
 
   return {
     valid: true,
     data: {
-      account: { ...account, name: accountName },
+      account: displayAccount,
       currentBalance: account.balance,
       availableBalance: account.balance,
     },
@@ -147,9 +279,7 @@ export async function validateSufficientFunds(
   accountId: string,
   requiredAmount: number
 ): Promise<ValidationResult<{ currentBalance: number; currency: string }>> {
-  const account = await prisma.financialAccount.findUnique({
-    where: { id: accountId },
-  });
+  const account = await getUserOwnedSourceBankAccount(userId, accountId);
 
   if (!account) {
     return {
@@ -159,20 +289,7 @@ export async function validateSufficientFunds(
     };
   }
 
-  if (account.balance < requiredAmount) {
-    const accountName = await decryptAccountName(userId, account.nameEncrypted);
-    return {
-      valid: false,
-      errorCode: "INSUFFICIENT_FUNDS",
-      error: `Insufficient funds in "${accountName}". Available: ${account.balance.toLocaleString()} ${account.currency}, Required: ${requiredAmount.toLocaleString()} ${account.currency}`,
-      data: { currentBalance: account.balance, currency: account.currency },
-    };
-  }
-
-  return {
-    valid: true,
-    data: { currentBalance: account.balance, currency: account.currency },
-  };
+  return validateSufficientFundsForAccount(userId, account, requiredAmount);
 }
 
 /**
@@ -189,9 +306,10 @@ export async function validatePaymentAmount(
   paymentAmount: number,
   allowOverpayment = false
 ): Promise<ValidationResult<{ liabilityBalance: number; maxPayment: number }>> {
-  const account = await prisma.financialAccount.findUnique({
-    where: { id: liabilityAccountId },
-  });
+  const account = await getUserOwnedTargetLiabilityAccount(
+    userId,
+    liabilityAccountId
+  );
 
   if (!account) {
     return {
@@ -201,36 +319,12 @@ export async function validatePaymentAmount(
     };
   }
 
-  // Liability accounts typically have negative balance (debt)
-  // The maximum payment is the absolute value of the balance
-  const liabilityBalance = account.balance;
-  const maxPayment = Math.abs(liabilityBalance);
-
-  // If balance is 0 or positive (no debt), can't make a payment
-  if (liabilityBalance >= 0) {
-    const accountName = await decryptAccountName(userId, account.nameEncrypted);
-    return {
-      valid: false,
-      errorCode: "NO_OUTSTANDING_BALANCE",
-      error: `Account "${accountName}" has no outstanding balance to pay off.`,
-      data: { liabilityBalance, maxPayment: 0 },
-    };
-  }
-
-  // Check if payment exceeds balance (unless overpayment is allowed)
-  if (paymentAmount > maxPayment && !allowOverpayment) {
-    return {
-      valid: false,
-      errorCode: "PAYMENT_EXCEEDS_BALANCE",
-      error: `Payment amount (${paymentAmount.toLocaleString()} ${account.currency}) exceeds outstanding balance (${maxPayment.toLocaleString()} ${account.currency}). Maximum payment allowed: ${maxPayment.toLocaleString()} ${account.currency}`,
-      data: { liabilityBalance, maxPayment },
-    };
-  }
-
-  return {
-    valid: true,
-    data: { liabilityBalance, maxPayment },
-  };
+  return validatePaymentAmountForAccount(
+    userId,
+    account,
+    paymentAmount,
+    allowOverpayment
+  );
 }
 
 /**
@@ -268,9 +362,16 @@ export async function validateAccountStatus(
   sourceAccountId: string,
   targetAccountId: string
 ): Promise<ValidationResult<{ sourceActive: boolean; targetActive: boolean }>> {
-  const [sourceAccount, targetAccount] = await Promise.all([
-    prisma.financialAccount.findUnique({ where: { id: sourceAccountId } }),
-    prisma.financialAccount.findUnique({ where: { id: targetAccountId } }),
+  const [sourceAccount, targetAccount]: Array<AccountStatusRow | null> =
+    await Promise.all([
+      prisma.financialAccount.findUnique({
+        where: { id: sourceAccountId },
+        select: accountStatusSelect,
+      }),
+      prisma.financialAccount.findUnique({
+        where: { id: targetAccountId },
+        select: accountStatusSelect,
+      }),
   ]);
 
   if (!sourceAccount || !targetAccount) {
@@ -398,11 +499,37 @@ export async function validateLiabilityPayment(
   const sourceBalanceBefore = sourceAccount.balance;
   const targetBalanceBefore = targetAccount.balance;
 
-  // Step 4: Validate source account has sufficient funds
-  const fundsValidation = await validateSufficientFunds(
+  const sourceAccountRow = await getUserOwnedSourceBankAccount(
     userId,
-    data.sourceAccountId,
-    data.amount
+    data.sourceAccountId
+  );
+  if (!sourceAccountRow) {
+    return {
+      valid: false,
+      errorCode: "INVALID_SOURCE_ACCOUNT",
+      error:
+        "Source account not found or is not a bank account. Please select a valid bank account.",
+    };
+  }
+
+  const targetAccountRow = await getUserOwnedTargetLiabilityAccount(
+    userId,
+    data.targetAccountId
+  );
+  if (!targetAccountRow) {
+    return {
+      valid: false,
+      errorCode: "INVALID_TARGET_ACCOUNT",
+      error:
+        "Target account not found or is not a loan/credit card account. Please select a valid liability account.",
+    };
+  }
+
+  // Step 4: Validate source account has sufficient funds
+  const fundsValidation = await validateSufficientFundsForAccount(
+    userId,
+    sourceAccountRow,
+    data.amount,
   );
   if (!fundsValidation.valid) {
     return {
@@ -413,9 +540,9 @@ export async function validateLiabilityPayment(
   }
 
   // Step 5: Validate payment amount vs liability balance
-  const amountValidation = await validatePaymentAmount(
+  const amountValidation = await validatePaymentAmountForAccount(
     userId,
-    data.targetAccountId,
+    targetAccountRow,
     data.amount,
     data.allowOverpayment
   );
@@ -458,21 +585,9 @@ export async function validateLiabilityPayment(
 export async function getBankAccounts(
   userId: string
 ): Promise<AccountWithDisplayName[]> {
-  const accounts = await prisma.financialAccount.findMany({
-    where: {
-      userId,
-      type: "BANK",
-      isActive: true,
-    },
+  return getActiveAccountsForUser(userId, {
+    type: "BANK",
   });
-  return sortAccountsByName(
-    await Promise.all(
-      accounts.map(async (account) => ({
-        ...account,
-        name: await decryptAccountName(userId, account.nameEncrypted),
-      }))
-    )
-  );
 }
 
 /**
@@ -481,23 +596,11 @@ export async function getBankAccounts(
 export async function getLiabilityAccounts(
   userId: string
 ): Promise<AccountWithDisplayName[]> {
-  const accounts = await prisma.financialAccount.findMany({
-    where: {
-      userId,
-      type: {
-        in: ["LOAN", "CREDIT_CARD"],
-      },
-      isActive: true,
+  return getActiveAccountsForUser(userId, {
+    type: {
+      in: ["LOAN", "CREDIT_CARD"],
     },
   });
-  return sortAccountsByName(
-    await Promise.all(
-      accounts.map(async (account) => ({
-        ...account,
-        name: await decryptAccountName(userId, account.nameEncrypted),
-      }))
-    )
-  );
 }
 
 /**

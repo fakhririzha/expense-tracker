@@ -1,5 +1,20 @@
 # FinHealth Changelog
 
+## v4.5.10
+
+- Improved dashboard wealth and retirement summary loading so executive metrics can be prepared more efficiently behind the scenes.
+- Made multi-currency account and asset totals more efficient to calculate while keeping the same balances, runway, and health summaries visible in the dashboard and sidebar.
+- Improved investment account and holding checks behind the scenes so buy and sell validations can load more efficiently.
+- Tightened investment ownership checks while keeping the same investment flows and validation messaging available in the dashboard.
+- Improved investment portfolio valuation loading behind the scenes so live holdings can be prepared more efficiently across the dashboard and investment views.
+- Made investment currency conversion work more efficient while keeping the same portfolio totals, day-change figures, and realized gain summaries visible in the app.
+- Improved liability payment checks behind the scenes so source and target account validation can load more efficiently during payment setup.
+- Tightened liability payment ownership checks while keeping the same bank-account funding rules, payoff limits, and validation messaging available in the dashboard.
+- Improved encryption key preparation behind the scenes so concurrent requests reuse the same secure user context more reliably.
+- Made forecast and financial insight currency conversion more efficient while preserving live, saved, and missing-rate behavior.
+- Improved net-worth calculations so repeated currency conversions reuse the same rate lookup without changing reported totals.
+- Made monthly net-worth snapshot generation more scalable while keeping existing snapshots and historical reporting intact.
+
 ## v4.5.9
 
 - Improved daily notification processing so subscription reminders, recurring alerts, budget warnings, goal reminders, and cash forecast notices can be prepared more efficiently for active devices.
