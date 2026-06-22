@@ -1,5 +1,9 @@
 # FinHealth Changelog
 
+## v4.5.11
+
+- Maintenance update: switched the shared class-name helper to a lighter internal implementation while keeping the app’s styling behavior the same.
+
 ## v4.5.10
 
 - Improved dashboard wealth and retirement summary loading so executive metrics can be prepared more efficiently behind the scenes.
