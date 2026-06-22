@@ -1,5 +1,10 @@
 # FinHealth Changelog
 
+## v4.5.9
+
+- Improved daily notification processing so subscription reminders, recurring alerts, budget warnings, goal reminders, and cash forecast notices can be prepared more efficiently for active devices.
+- Made budget alert checks more efficient behind the scenes, helping notification runs stay more reliable even when users have multiple budgets and larger transaction histories.
+
 ## v4.5.8
 
 - Hid inactive accounts from Add and Edit Transaction account choices so new transaction selections stay focused on usable accounts.
