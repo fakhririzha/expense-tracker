@@ -1,18 +1,14 @@
 "use server";
 
 import { auth } from "@/auth";
+import { Prisma, type AccountType } from "@/generated/prisma/client/client";
 import { decryptAccountName } from "@/lib/account-crypto";
 import prisma from "@/lib/db";
-import { Prisma } from "@/generated/prisma/client/client";
+import { isLoanReceivableAccountType, isTransferAccountType } from "@/lib/account-types";
+import { decryptUserField, encryptUserField } from "@/lib/user-encryption";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { encryptUserField, decryptUserField } from "@/lib/user-encryption";
 import {
-  isLoanReceivableAccountType,
-  isTransferAccountType,
-} from "@/lib/account-types";
-import {
-  normalizeTransactionSplits,
   validateTransactionSplits,
   type NormalizedTransactionSplitInput,
 } from "@/lib/transaction-split-validation";
@@ -24,7 +20,6 @@ import {
   type TransactionListQueryParams,
 } from "@/types/transaction-list";
 
-// Define TransactionType enum locally since Prisma client may not be generated yet
 const TransactionTypeEnum = {
   INCOME: "INCOME",
   EXPENSE: "EXPENSE",
@@ -32,13 +27,44 @@ const TransactionTypeEnum = {
   LIABILITY_PAYMENT: "LIABILITY_PAYMENT",
 } as const;
 
-function normalizeOptionalText(value?: string) {
+type TransactionTypeValue =
+  (typeof TransactionTypeEnum)[keyof typeof TransactionTypeEnum];
+
+type OwnedAccount = {
+  id: string;
+  type: AccountType;
+  currency: string;
+  isActive: boolean;
+};
+
+type TransactionBalanceEffect = {
+  amount: number;
+  type: TransactionTypeValue;
+  accountId: string;
+  toAccountId: string | null;
+};
+
+type PreparedSplitCreateData = {
+  transactionId: string;
+  userId: string;
+  categoryId: string | null;
+  amount: number;
+  sortOrder: number;
+  description: null;
+  descriptionEncrypted: string | null;
+};
+
+function normalizeOptionalText(value?: string | null) {
   if (value === undefined) {
     return undefined;
   }
 
-  const trimmed = value.trim();
+  const trimmed = value?.trim() ?? "";
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function sanitizeOptionalForeignKey(value?: string | null) {
+  return value?.trim() || null;
 }
 
 function hasMatchingTransferCurrency(
@@ -48,71 +74,128 @@ function hasMatchingTransferCurrency(
   return sourceAccount.currency === destinationAccount.currency;
 }
 
-const transactionSchema = z
-  .object({
-    clientMutationId: z.string().uuid().optional(),
-    amount: z.number().positive("Amount must be positive"),
-    currency: z.string().default("IDR"),
-    exchangeRate: z.number().positive().default(1),
-    type: z.enum(["INCOME", "EXPENSE", "TRANSFER", "LIABILITY_PAYMENT"]),
-    description: z.string().optional(),
-    location: z.string().optional(),
-    latitude: z.number().optional(),
-    longitude: z.number().optional(),
-    googleMapsLink: z.string().optional(),
-    date: z.date().default(() => new Date()),
-    accountId: z.string().min(1, "From account is required"),
-    toAccountId: z.string().optional(),
-    categoryId: z.string().optional(),
-    isRecurring: z.boolean().default(false),
-    recurringRuleId: z.string().optional(),
-    splits: z
-      .array(
-        z.object({
-          categoryId: z.string().optional().nullable(),
-          amount: z.number().positive("Amount must be positive"),
-          description: z.string().optional().nullable(),
-          sortOrder: z.number().int().optional(),
-        })
-      )
-      .optional(),
-    // Liability payment specific fields
-    referenceNumber: z.string().optional(),
-    // Audit field
-    createdBy: z.string().optional(),
-  })
-  .refine(
-    (data) => {
-      // For TRANSFER type, toAccountId is required
-      if (data.type === "TRANSFER") {
-        return data.toAccountId && data.toAccountId.length > 0;
-      }
-      // For LIABILITY_PAYMENT type, toAccountId is required (target liability account)
-      if (data.type === "LIABILITY_PAYMENT") {
-        return data.toAccountId && data.toAccountId.length > 0;
-      }
-      return true;
-    },
-    {
-      message: "To account is required for transfers and liability payments",
-      path: ["toAccountId"],
-    }
-  )
-  .refine(
-    (data) => {
-      // From and To accounts must be different for transfers and liability payments
-      if ((data.type === "TRANSFER" || data.type === "LIABILITY_PAYMENT") && data.toAccountId) {
-        return data.accountId !== data.toAccountId;
-      }
-      return true;
-    },
-    {
-      message: "From and To accounts must be different",
-      path: ["toAccountId"],
-    }
-  );
+function getBalanceChange(amount: number, type: TransactionTypeValue) {
+  return type === TransactionTypeEnum.INCOME ? amount : -amount;
+}
 
-export type TransactionInput = z.infer<typeof transactionSchema>;
+function getEmptyTransactionPage(): PaginatedTransactionsData {
+  return {
+    transactions: [],
+    total: 0,
+    page: DEFAULT_TRANSACTION_PAGE,
+    pageSize: DEFAULT_TRANSACTION_PAGE_SIZE,
+    totalPages: 1,
+  };
+}
+
+function normalizeTransactionPageSize(pageSize?: number) {
+  if (
+    pageSize &&
+    TRANSACTION_PAGE_SIZES.includes(
+      pageSize as (typeof TRANSACTION_PAGE_SIZES)[number]
+    )
+  ) {
+    return pageSize;
+  }
+
+  return DEFAULT_TRANSACTION_PAGE_SIZE;
+}
+
+function normalizeTransactionPage(page?: number) {
+  if (page && Number.isInteger(page) && page > 0) {
+    return page;
+  }
+
+  return DEFAULT_TRANSACTION_PAGE;
+}
+
+function updateChangesBalances(
+  existingTransaction: {
+    amount: number;
+    type: TransactionTypeValue;
+    accountId: string;
+    toAccountId: string | null;
+  },
+  nextTransaction: TransactionBalanceEffect
+) {
+  return (
+    existingTransaction.amount !== nextTransaction.amount ||
+    existingTransaction.type !== nextTransaction.type ||
+    existingTransaction.accountId !== nextTransaction.accountId ||
+    existingTransaction.toAccountId !== nextTransaction.toAccountId
+  );
+}
+
+async function assertAuthenticatedUser() {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return { success: false as const, error: "Unauthorized" };
+  }
+
+  return { success: true as const, userId: session.user.id };
+}
+
+async function loadOwnedAccounts(userId: string, accountIds: string[]) {
+  const uniqueIds = Array.from(new Set(accountIds.filter(Boolean)));
+  if (uniqueIds.length === 0) {
+    return new Map<string, OwnedAccount>();
+  }
+
+  const accounts = await prisma.financialAccount.findMany({
+    where: {
+      userId,
+      id: { in: uniqueIds },
+    },
+    select: {
+      id: true,
+      type: true,
+      currency: true,
+      isActive: true,
+    },
+  });
+
+  return new Map(accounts.map((account) => [account.id, account]));
+}
+
+async function validateOwnedCategory(userId: string, categoryId: string | null) {
+  if (!categoryId) {
+    return { success: true as const };
+  }
+
+  const category = await prisma.category.findFirst({
+    where: {
+      id: categoryId,
+      userId,
+    },
+    select: { id: true },
+  });
+
+  if (!category) {
+    return { success: false as const, error: "Category not found" };
+  }
+
+  return { success: true as const };
+}
+
+async function validateOwnedRecurringRule(
+  userId: string,
+  recurringRuleId: string | null
+) {
+  if (!recurringRuleId) {
+    return { success: true as const };
+  }
+
+  const recurringRule = await prisma.recurringRule.findFirst({
+    where: { id: recurringRuleId, userId },
+    select: { id: true },
+  });
+
+  if (!recurringRule) {
+    return { success: false as const, error: "Recurring rule not found" };
+  }
+
+  return { success: true as const };
+}
 
 async function validateOwnedSplitCategories(
   userId: string,
@@ -149,33 +232,169 @@ async function buildSplitCreateData(
   userId: string,
   transactionId: string,
   splits: NormalizedTransactionSplitInput[]
-) {
-  return Promise.all(
-    splits.map(async (split) => ({
-      transactionId,
-      userId,
-      categoryId: split.categoryId,
-      amount: split.amount,
-      sortOrder: split.sortOrder,
-      description: null,
-      descriptionEncrypted: split.description
-        ? await encryptUserField(userId, "transactionSplit.description", split.description)
-        : null,
-    }))
+): Promise<PreparedSplitCreateData[]> {
+  const encryptedDescriptions = await Promise.all(
+    splits.map((split) =>
+      split.description
+        ? encryptUserField(
+            userId,
+            "transactionSplit.description",
+            split.description
+          )
+        : Promise.resolve(null)
+    )
   );
+
+  return splits.map((split, index) => ({
+    transactionId,
+    userId,
+    categoryId: split.categoryId,
+    amount: split.amount,
+    sortOrder: split.sortOrder,
+    description: null,
+    descriptionEncrypted: encryptedDescriptions[index],
+  }));
 }
 
-/**
- * Creates a financial transaction, adjusts the related account balance(s), and revalidates relevant caches.
- *
- * @param data - Transaction input validated by the file's `transactionSchema`. For transfers, `toAccountId` must be provided and differ from `accountId`.
- * @returns An object with `success: true` and the created transaction in `data` on success, or `success: false` and an `error` message on failure.
- */
+async function decryptOptionalField(
+  userId: string,
+  fieldName:
+    | "transaction.description"
+    | "transaction.referenceNumber"
+    | "transaction.createdBy"
+    | "transactionSplit.description",
+  encryptedValue: string | null,
+  fallbackValue: string | null
+) {
+  if (!encryptedValue) {
+    return fallbackValue;
+  }
+
+  try {
+    return await decryptUserField(userId, fieldName, encryptedValue);
+  } catch {
+    return fallbackValue;
+  }
+}
+
+async function reverseBalanceEffect(
+  tx: Prisma.TransactionClient,
+  transaction: TransactionBalanceEffect
+) {
+  if (transaction.type === TransactionTypeEnum.TRANSFER && transaction.toAccountId) {
+    await tx.financialAccount.update({
+      where: { id: transaction.accountId },
+      data: { balance: { increment: transaction.amount } },
+    });
+    await tx.financialAccount.update({
+      where: { id: transaction.toAccountId },
+      data: { balance: { decrement: transaction.amount } },
+    });
+    return;
+  }
+
+  await tx.financialAccount.update({
+    where: { id: transaction.accountId },
+    data: { balance: { increment: -getBalanceChange(transaction.amount, transaction.type) } },
+  });
+}
+
+async function applyBalanceEffect(
+  tx: Prisma.TransactionClient,
+  transaction: TransactionBalanceEffect
+) {
+  if (transaction.type === TransactionTypeEnum.TRANSFER) {
+    if (!transaction.toAccountId) {
+      throw new Error("To account is required for transfers");
+    }
+
+    await tx.financialAccount.update({
+      where: { id: transaction.accountId },
+      data: { balance: { decrement: transaction.amount } },
+    });
+    await tx.financialAccount.update({
+      where: { id: transaction.toAccountId },
+      data: { balance: { increment: transaction.amount } },
+    });
+    return;
+  }
+
+  await tx.financialAccount.update({
+    where: { id: transaction.accountId },
+    data: { balance: { increment: getBalanceChange(transaction.amount, transaction.type) } },
+  });
+}
+
+const transactionSchema = z
+  .object({
+    clientMutationId: z.string().uuid().optional(),
+    amount: z.number().positive("Amount must be positive"),
+    currency: z.string().default("IDR"),
+    exchangeRate: z.number().positive().default(1),
+    type: z.enum(["INCOME", "EXPENSE", "TRANSFER", "LIABILITY_PAYMENT"]),
+    description: z.string().optional(),
+    location: z.string().optional(),
+    latitude: z.number().optional(),
+    longitude: z.number().optional(),
+    googleMapsLink: z.string().optional(),
+    date: z.date().default(() => new Date()),
+    accountId: z.string().min(1, "From account is required"),
+    toAccountId: z.string().optional(),
+    categoryId: z.string().optional(),
+    isRecurring: z.boolean().default(false),
+    recurringRuleId: z.string().optional(),
+    splits: z
+      .array(
+        z.object({
+          categoryId: z.string().optional().nullable(),
+          amount: z.number().positive("Amount must be positive"),
+          description: z.string().optional().nullable(),
+          sortOrder: z.number().int().optional(),
+        })
+      )
+      .optional(),
+    referenceNumber: z.string().optional(),
+    createdBy: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      if (
+        data.type === TransactionTypeEnum.TRANSFER ||
+        data.type === TransactionTypeEnum.LIABILITY_PAYMENT
+      ) {
+        return Boolean(data.toAccountId && data.toAccountId.length > 0);
+      }
+      return true;
+    },
+    {
+      message: "To account is required for transfers and liability payments",
+      path: ["toAccountId"],
+    }
+  )
+  .refine(
+    (data) => {
+      if (
+        (data.type === TransactionTypeEnum.TRANSFER ||
+          data.type === TransactionTypeEnum.LIABILITY_PAYMENT) &&
+        data.toAccountId
+      ) {
+        return data.accountId !== data.toAccountId;
+      }
+      return true;
+    },
+    {
+      message: "From and To accounts must be different",
+      path: ["toAccountId"],
+    }
+  );
+
+export type TransactionInput = z.infer<typeof transactionSchema>;
+
 export async function createTransaction(data: TransactionInput) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized" };
+    const authResult = await assertAuthenticatedUser();
+    if (!authResult.success) {
+      return { success: false, error: authResult.error };
     }
 
     const validatedFields = transactionSchema.safeParse(data);
@@ -186,12 +405,17 @@ export async function createTransaction(data: TransactionInput) {
       };
     }
 
+    const userId = authResult.userId;
     const { amount, type, accountId, toAccountId, splits, ...rest } = validatedFields.data;
+    const categoryId = sanitizeOptionalForeignKey(rest.categoryId);
+    const recurringRuleId = sanitizeOptionalForeignKey(rest.recurringRuleId);
 
-    // Verify account belongs to user
-    const account = await prisma.financialAccount.findFirst({
-      where: { id: accountId, userId: session.user.id },
-    });
+    const accountIds =
+      type === TransactionTypeEnum.TRANSFER && toAccountId
+        ? [accountId, toAccountId]
+        : [accountId];
+    const accountMap = await loadOwnedAccounts(userId, accountIds);
+    const account = accountMap.get(accountId);
 
     if (!account) {
       return { success: false, error: "Account not found" };
@@ -204,16 +428,13 @@ export async function createTransaction(data: TransactionInput) {
       };
     }
 
-    // For transfers, verify both accounts belong to the user and support transfers
-    let toAccount = null;
-    if (type === "TRANSFER") {
+    let toAccount: OwnedAccount | null = null;
+    if (type === TransactionTypeEnum.TRANSFER) {
       if (!toAccountId) {
         return { success: false, error: "To account is required for transfers" };
       }
 
-      toAccount = await prisma.financialAccount.findFirst({
-        where: { id: toAccountId, userId: session.user.id },
-      });
+      toAccount = accountMap.get(toAccountId) ?? null;
 
       if (!toAccount) {
         return { success: false, error: "To account not found" };
@@ -253,12 +474,6 @@ export async function createTransaction(data: TransactionInput) {
       }
     }
 
-    // Calculate balance change (for non-transfer types)
-    const balanceChange = type === "INCOME" ? amount : -amount;
-
-    // Sanitize optional FKs: empty string causes foreign key violation, use null
-    const categoryId = rest.categoryId?.trim() || null;
-    const recurringRuleId = rest.recurringRuleId?.trim() || null;
     const splitValidation = validateTransactionSplits({
       type,
       amount,
@@ -272,109 +487,95 @@ export async function createTransaction(data: TransactionInput) {
 
     const normalizedSplits = splitValidation.data;
 
-    // Validate category belongs to the current user (IDOR prevention)
-    if (categoryId && normalizedSplits.length === 0) {
-      const category = await prisma.category.findFirst({
-        where: {
-          id: categoryId,
-          userId: session.user.id,
-        },
-      });
-      if (!category) {
-        return { success: false, error: "Category not found" };
-      }
+    const [
+      categoryValidation,
+      splitCategoryValidation,
+      recurringRuleValidation,
+      encryptedDescription,
+      encryptedReferenceNumber,
+      encryptedCreatedBy,
+      preparedSplitData,
+    ] = await Promise.all([
+      normalizedSplits.length === 0
+        ? validateOwnedCategory(userId, categoryId)
+        : Promise.resolve({ success: true as const }),
+      normalizedSplits.length > 0
+        ? validateOwnedSplitCategories(userId, normalizedSplits)
+        : Promise.resolve({ success: true as const }),
+      validateOwnedRecurringRule(userId, recurringRuleId),
+      rest.description
+        ? encryptUserField(userId, "transaction.description", rest.description)
+        : Promise.resolve(null),
+      rest.referenceNumber
+        ? encryptUserField(
+            userId,
+            "transaction.referenceNumber",
+            rest.referenceNumber
+          )
+        : Promise.resolve(null),
+      rest.createdBy
+        ? encryptUserField(userId, "transaction.createdBy", rest.createdBy)
+        : Promise.resolve(null),
+      normalizedSplits.length > 0
+        ? buildSplitCreateData(userId, "", normalizedSplits)
+        : Promise.resolve([] as PreparedSplitCreateData[]),
+    ]);
+
+    if (!categoryValidation.success) {
+      return { success: false, error: categoryValidation.error };
     }
 
-    if (normalizedSplits.length > 0) {
-      const categoryValidation = await validateOwnedSplitCategories(
-        session.user.id,
-        normalizedSplits
-      );
-      if (!categoryValidation.success) {
-        return { success: false, error: categoryValidation.error };
-      }
+    if (!splitCategoryValidation.success) {
+      return { success: false, error: splitCategoryValidation.error };
     }
 
-    // Validate recurring rule belongs to user (IDOR prevention)
-    if (recurringRuleId) {
-      const recurringRule = await prisma.recurringRule.findFirst({
-        where: { id: recurringRuleId, userId: session.user.id },
-      });
-      if (!recurringRule) {
-        return { success: false, error: "Recurring rule not found" };
-      }
+    if (!recurringRuleValidation.success) {
+      return { success: false, error: recurringRuleValidation.error };
     }
-
-    // Encrypt sensitive fields
-    const encryptedDescription = rest.description 
-      ? await encryptUserField(session.user.id, "transaction.description", rest.description)
-      : null;
-    
-    const encryptedReferenceNumber = rest.referenceNumber
-      ? await encryptUserField(session.user.id, "transaction.referenceNumber", rest.referenceNumber)
-      : null;
-    
-    const encryptedCreatedBy = rest.createdBy
-      ? await encryptUserField(session.user.id, "transaction.createdBy", rest.createdBy)
-      : null;
 
     const createData = {
       amount,
       type,
       accountId,
-      userId: session.user.id,
-      toAccountId: type === "TRANSFER" ? toAccountId : null,
+      userId,
+      toAccountId: type === TransactionTypeEnum.TRANSFER ? toAccountId : null,
       ...rest,
       location: normalizeOptionalText(rest.location) ?? null,
       latitude: rest.latitude ?? null,
       longitude: rest.longitude ?? null,
       googleMapsLink: normalizeOptionalText(rest.googleMapsLink) ?? null,
-      description: null, // Nullify plaintext after encryption
+      description: null,
       descriptionEncrypted: encryptedDescription,
-      referenceNumber: null, // Nullify plaintext after encryption
+      referenceNumber: null,
       referenceNumberEncrypted: encryptedReferenceNumber,
-      createdBy: null, // Nullify plaintext after encryption
+      createdBy: null,
       createdByEncrypted: encryptedCreatedBy,
       categoryId: normalizedSplits.length > 0 ? null : categoryId,
       recurringRuleId,
     };
 
-    // Use transaction to ensure atomicity
+    const balanceEffect: TransactionBalanceEffect = {
+      amount,
+      type,
+      accountId,
+      toAccountId: type === TransactionTypeEnum.TRANSFER ? toAccountId ?? null : null,
+    };
+
     const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      // Create transaction record
       const transaction = await tx.transaction.create({
         data: createData,
       });
 
-      if (normalizedSplits.length > 0) {
-        const splitData = await buildSplitCreateData(
-          session.user.id,
-          transaction.id,
-          normalizedSplits
-        );
+      if (preparedSplitData.length > 0) {
         await tx.transactionSplit.createMany({
-          data: splitData,
+          data: preparedSplitData.map((split) => ({
+            ...split,
+            transactionId: transaction.id,
+          })),
         });
       }
 
-      if (type === "TRANSFER") {
-        // For transfers: decrement from source account, increment to destination account
-        await tx.financialAccount.update({
-          where: { id: accountId },
-          data: { balance: { decrement: amount } },
-        });
-
-        await tx.financialAccount.update({
-          where: { id: toAccountId },
-          data: { balance: { increment: amount } },
-        });
-      } else {
-        // For income/expense: update single account balance
-        await tx.financialAccount.update({
-          where: { id: accountId },
-          data: { balance: { increment: balanceChange } },
-        });
-      }
+      await applyBalanceEffect(tx, balanceEffect);
 
       return transaction;
     });
@@ -396,29 +597,43 @@ export async function createTransaction(data: TransactionInput) {
   }
 }
 
-/**
- * Update an existing transaction and adjust affected account balances.
- *
- * Validates that the transaction and provided references belong to the current user, prevents editing of `LIABILITY_PAYMENT` transactions, requires a `toAccountId` when changing a transaction to `TRANSFER`, and revalidates related dashboard caches after applying balance changes and updating the record.
- *
- * @param id - The ID of the transaction to update
- * @param data - Partial transaction fields to apply; `categoryId` and `recurringRuleId` will be validated for ownership and normalized to `null` when empty
- * @returns `{ success: true }` on success, `{ success: false, error: string }` on failure
- */
-export async function updateTransaction(
-  id: string,
-  data: Partial<TransactionInput>
-) {
+export async function updateTransaction(id: string, data: Partial<TransactionInput>) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized" };
+    const authResult = await assertAuthenticatedUser();
+    if (!authResult.success) {
+      return { success: false, error: authResult.error };
     }
 
-    // Get existing transaction
+    const userId = authResult.userId;
     const existingTransaction = await prisma.transaction.findFirst({
-      where: { id, userId: session.user.id },
-      include: { account: true, toAccount: true, splits: true },
+      where: { id, userId },
+      include: {
+        account: {
+          select: {
+            id: true,
+            type: true,
+            currency: true,
+            isActive: true,
+          },
+        },
+        toAccount: {
+          select: {
+            id: true,
+            type: true,
+            currency: true,
+            isActive: true,
+          },
+        },
+        splits: {
+          select: {
+            id: true,
+            amount: true,
+            description: true,
+            sortOrder: true,
+            categoryId: true,
+          },
+        },
+      },
     });
 
     if (!existingTransaction) {
@@ -426,39 +641,17 @@ export async function updateTransaction(
     }
 
     const { amount, type, accountId, categoryId, recurringRuleId } = data;
-
-    // Compute the new type (either from the patch or keep existing)
-    const newType = type ?? existingTransaction.type;
-
-    // Block editing of LIABILITY_PAYMENT transactions - they should be managed through the liability payment module
-    // Also block any attempt to change a transaction's type TO LIABILITY_PAYMENT
-    if (existingTransaction.type === "LIABILITY_PAYMENT" || newType === "LIABILITY_PAYMENT") {
-      return { 
-        success: false, 
-        error: "Liability payment transactions cannot be edited here. Please use the Liabilities page to manage payments." 
-      };
-    }
-
-    if (
-      existingTransaction.type === "TRANSFER" &&
-      (isLoanReceivableAccountType(existingTransaction.account.type) ||
-        isLoanReceivableAccountType(existingTransaction.toAccount?.type ?? ""))
-    ) {
-      return {
-        success: false,
-        error:
-          "Loans Receivable transfers cannot be edited here. Please manage them from the Loans Receivable page.",
-      };
-    }
-
     const nextAmount = amount ?? existingTransaction.amount;
+    const nextType = (type ?? existingTransaction.type) as TransactionTypeValue;
     const nextCurrency = data.currency ?? existingTransaction.currency;
-    const normalizedIncomingSplits =
-      data.splits !== undefined
-        ? normalizeTransactionSplits(data.splits)
-        : normalizeTransactionSplits(existingTransaction.splits);
+    const nextAccountId = accountId ?? existingTransaction.accountId;
+    const nextToAccountId =
+      nextType === TransactionTypeEnum.TRANSFER
+        ? data.toAccountId ?? existingTransaction.toAccountId
+        : null;
+    const shouldReplaceSplits = data.splits !== undefined;
     const splitValidation = validateTransactionSplits({
-      type: newType,
+      type: nextType,
       amount: nextAmount,
       currency: nextCurrency,
       splits: data.splits !== undefined ? data.splits : existingTransaction.splits,
@@ -469,79 +662,96 @@ export async function updateTransaction(
     }
 
     const normalizedSplits = splitValidation.data;
+    const sanitizedCategoryId =
+      categoryId !== undefined ? sanitizeOptionalForeignKey(categoryId) : undefined;
+    const sanitizedRecurringRuleId =
+      recurringRuleId !== undefined
+        ? sanitizeOptionalForeignKey(recurringRuleId)
+        : undefined;
 
-    // Validate category belongs to the current user (IDOR prevention)
-    if (categoryId !== undefined && normalizedSplits.length === 0) {
-      const sanitizedCategoryId = categoryId?.trim() || null;
-      if (sanitizedCategoryId) {
-        const category = await prisma.category.findFirst({
-          where: {
-            id: sanitizedCategoryId,
-            userId: session.user.id,
-          },
-        });
-        if (!category) {
-          return { success: false, error: "Category not found" };
+    if (
+      existingTransaction.type === TransactionTypeEnum.LIABILITY_PAYMENT ||
+      nextType === TransactionTypeEnum.LIABILITY_PAYMENT
+    ) {
+      return {
+        success: false,
+        error:
+          "Liability payment transactions cannot be edited here. Please use the Liabilities page to manage payments.",
+      };
+    }
+
+    if (
+      existingTransaction.type === TransactionTypeEnum.TRANSFER &&
+      (isLoanReceivableAccountType(existingTransaction.account.type) ||
+        isLoanReceivableAccountType(existingTransaction.toAccount?.type ?? ""))
+    ) {
+      return {
+        success: false,
+        error:
+          "Loans Receivable transfers cannot be edited here. Please manage them from the Loans Receivable page.",
+      };
+    }
+
+    let nextSourceAccount = existingTransaction.account;
+    let nextTargetAccount = existingTransaction.toAccount;
+
+    const accountsToLoad: string[] = [];
+    if (nextAccountId !== existingTransaction.accountId) {
+      accountsToLoad.push(nextAccountId);
+    }
+    if (
+      nextType === TransactionTypeEnum.TRANSFER &&
+      nextToAccountId &&
+      nextToAccountId !== existingTransaction.toAccountId
+    ) {
+      accountsToLoad.push(nextToAccountId);
+    }
+
+    if (accountsToLoad.length > 0) {
+      const accountMap = await loadOwnedAccounts(userId, accountsToLoad);
+      if (nextAccountId !== existingTransaction.accountId) {
+        const loadedSourceAccount = accountMap.get(nextAccountId);
+        if (!loadedSourceAccount) {
+          return {
+            success: false,
+            error:
+              nextType === TransactionTypeEnum.TRANSFER
+                ? "Transfer accounts not found"
+                : "Account not found",
+          };
         }
+        nextSourceAccount = loadedSourceAccount;
+      }
+
+      if (
+        nextType === TransactionTypeEnum.TRANSFER &&
+        nextToAccountId &&
+        nextToAccountId !== existingTransaction.toAccountId
+      ) {
+        nextTargetAccount = accountMap.get(nextToAccountId) ?? null;
       }
     }
 
-    if (normalizedIncomingSplits.length > 0) {
-      const categoryValidation = await validateOwnedSplitCategories(
-        session.user.id,
-        normalizedIncomingSplits
-      );
-      if (!categoryValidation.success) {
-        return { success: false, error: categoryValidation.error };
-      }
-    }
-
-    // Validate recurring rule belongs to user (IDOR prevention)
-    if (recurringRuleId !== undefined) {
-      const sanitizedRecurringRuleId = recurringRuleId?.trim() || null;
-      if (sanitizedRecurringRuleId) {
-        const recurringRule = await prisma.recurringRule.findFirst({
-          where: { id: sanitizedRecurringRuleId, userId: session.user.id },
-        });
-        if (!recurringRule) {
-          return { success: false, error: "Recurring rule not found" };
-        }
-      }
-    }
-
-    if (newType === "TRANSFER") {
-      const newSourceAccount = accountId
-        ? await prisma.financialAccount.findFirst({
-            where: { id: accountId, userId: session.user.id },
-          })
-        : existingTransaction.account;
-      const newToAccountId = data.toAccountId ?? existingTransaction.toAccountId;
-      const newTargetAccount = newToAccountId
-        ? await prisma.financialAccount.findFirst({
-            where: { id: newToAccountId, userId: session.user.id },
-          })
-        : null;
-
-      if (!newSourceAccount || !newTargetAccount) {
+    if (nextType === TransactionTypeEnum.TRANSFER) {
+      if (!nextToAccountId || !nextTargetAccount) {
         return { success: false, error: "Transfer accounts not found" };
       }
 
       const sourceRequiresActive =
-        newType !== existingTransaction.type ||
-        (accountId !== undefined && accountId !== existingTransaction.accountId);
+        nextType !== existingTransaction.type ||
+        nextAccountId !== existingTransaction.accountId;
       const targetRequiresActive =
-        newType !== existingTransaction.type ||
-        (data.toAccountId !== undefined &&
-          data.toAccountId !== existingTransaction.toAccountId);
+        nextType !== existingTransaction.type ||
+        nextToAccountId !== existingTransaction.toAccountId;
 
-      if (sourceRequiresActive && !newSourceAccount.isActive) {
+      if (sourceRequiresActive && !nextSourceAccount.isActive) {
         return {
           success: false,
           error: "Source account is inactive. Please choose an active account.",
         };
       }
 
-      if (targetRequiresActive && !newTargetAccount.isActive) {
+      if (targetRequiresActive && !nextTargetAccount.isActive) {
         return {
           success: false,
           error: "Destination account is inactive. Please choose an active account.",
@@ -549,8 +759,8 @@ export async function updateTransaction(
       }
 
       if (
-        isLoanReceivableAccountType(newSourceAccount.type) ||
-        isLoanReceivableAccountType(newTargetAccount.type)
+        isLoanReceivableAccountType(nextSourceAccount.type) ||
+        isLoanReceivableAccountType(nextTargetAccount.type)
       ) {
         return {
           success: false,
@@ -560,8 +770,8 @@ export async function updateTransaction(
       }
 
       if (
-        !isTransferAccountType(newSourceAccount.type) ||
-        !isTransferAccountType(newTargetAccount.type)
+        !isTransferAccountType(nextSourceAccount.type) ||
+        !isTransferAccountType(nextTargetAccount.type)
       ) {
         return {
           success: false,
@@ -569,7 +779,7 @@ export async function updateTransaction(
         };
       }
 
-      if (!hasMatchingTransferCurrency(newSourceAccount, newTargetAccount)) {
+      if (!hasMatchingTransferCurrency(nextSourceAccount, nextTargetAccount)) {
         return {
           success: false,
           error:
@@ -577,21 +787,11 @@ export async function updateTransaction(
         };
       }
     } else {
-      const newAccount = accountId
-        ? await prisma.financialAccount.findFirst({
-            where: { id: accountId, userId: session.user.id },
-          })
-        : existingTransaction.account;
-
-      if (!newAccount) {
-        return { success: false, error: "Account not found" };
-      }
-
       const accountRequiresActive =
-        newType !== existingTransaction.type ||
-        (accountId !== undefined && accountId !== existingTransaction.accountId);
+        nextType !== existingTransaction.type ||
+        nextAccountId !== existingTransaction.accountId;
 
-      if (accountRequiresActive && !newAccount.isActive) {
+      if (accountRequiresActive && !nextSourceAccount.isActive) {
         return {
           success: false,
           error: "Account is inactive. Please choose an active account.",
@@ -599,16 +799,49 @@ export async function updateTransaction(
       }
     }
 
-    let encryptedDescription: string | null | undefined;
-    if (data.description !== undefined) {
-      const sanitizedDescription = normalizeOptionalText(data.description);
-      encryptedDescription = sanitizedDescription
-        ? await encryptUserField(
-            session.user.id,
-            "transaction.description",
-            sanitizedDescription
-          )
-        : null;
+    const [
+      categoryValidation,
+      splitCategoryValidation,
+      recurringRuleValidation,
+      encryptedDescription,
+      preparedSplitData,
+    ] = await Promise.all([
+      sanitizedCategoryId !== undefined && normalizedSplits.length === 0
+        ? validateOwnedCategory(userId, sanitizedCategoryId)
+        : Promise.resolve({ success: true as const }),
+      shouldReplaceSplits && normalizedSplits.length > 0
+        ? validateOwnedSplitCategories(userId, normalizedSplits)
+        : Promise.resolve({ success: true as const }),
+      sanitizedRecurringRuleId !== undefined
+        ? validateOwnedRecurringRule(userId, sanitizedRecurringRuleId)
+        : Promise.resolve({ success: true as const }),
+      data.description !== undefined
+        ? (() => {
+            const sanitizedDescription = normalizeOptionalText(data.description);
+            return sanitizedDescription
+              ? encryptUserField(
+                  userId,
+                  "transaction.description",
+                  sanitizedDescription
+                )
+              : Promise.resolve(null);
+          })()
+        : Promise.resolve(undefined),
+      shouldReplaceSplits && normalizedSplits.length > 0
+        ? buildSplitCreateData(userId, id, normalizedSplits)
+        : Promise.resolve([] as PreparedSplitCreateData[]),
+    ]);
+
+    if (!categoryValidation.success) {
+      return { success: false, error: categoryValidation.error };
+    }
+
+    if (!splitCategoryValidation.success) {
+      return { success: false, error: splitCategoryValidation.error };
+    }
+
+    if (!recurringRuleValidation.success) {
+      return { success: false, error: recurringRuleValidation.error };
     }
 
     const sanitizedLocation =
@@ -618,74 +851,43 @@ export async function updateTransaction(
         ? normalizeOptionalText(data.googleMapsLink)
         : undefined;
 
+    const nextBalanceEffect: TransactionBalanceEffect = {
+      amount: nextAmount,
+      type: nextType,
+      accountId: nextAccountId,
+      toAccountId: nextToAccountId,
+    };
+
+    const requiresBalanceRecalculation = updateChangesBalances(
+      {
+        amount: existingTransaction.amount,
+        type: existingTransaction.type as TransactionTypeValue,
+        accountId: existingTransaction.accountId,
+        toAccountId: existingTransaction.toAccountId,
+      },
+      nextBalanceEffect
+    );
+
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      // Reverse old balance change
-      if (existingTransaction.type === "TRANSFER" && existingTransaction.toAccountId) {
-        // For transfers: reverse by incrementing source account and decrementing destination account
-        await tx.financialAccount.update({
-          where: { id: existingTransaction.accountId },
-          data: { balance: { increment: existingTransaction.amount } },
+      if (requiresBalanceRecalculation) {
+        await reverseBalanceEffect(tx, {
+          amount: existingTransaction.amount,
+          type: existingTransaction.type as TransactionTypeValue,
+          accountId: existingTransaction.accountId,
+          toAccountId: existingTransaction.toAccountId,
         });
-        await tx.financialAccount.update({
-          where: { id: existingTransaction.toAccountId },
-          data: { balance: { decrement: existingTransaction.amount } },
-        });
-      } else {
-        // For income/expense: reverse against single account
-        const oldBalanceChange =
-          existingTransaction.type === "INCOME"
-            ? -existingTransaction.amount
-            : existingTransaction.amount;
-        await tx.financialAccount.update({
-          where: { id: existingTransaction.accountId },
-          data: { balance: { increment: oldBalanceChange } },
-        });
+        await applyBalanceEffect(tx, nextBalanceEffect);
       }
 
-      // Apply new balance change
-      const newAmount = amount ?? existingTransaction.amount;
-      const newType = type ?? existingTransaction.type;
-      const newAccountId = accountId ?? existingTransaction.accountId;
-
-      if (newType === "TRANSFER") {
-        // For transfers: we need toAccountId - but current UI doesn't support editing transfers
-        // This is a safeguard - transfers should be deleted and recreated if account changes needed
-        const newToAccountId = data.toAccountId ?? existingTransaction.toAccountId;
-        if (!newToAccountId) {
-          throw new Error("To account is required for transfers");
-        }
-        // Decrement source account
-        await tx.financialAccount.update({
-          where: { id: newAccountId },
-          data: { balance: { decrement: newAmount } },
-        });
-        // Increment destination account
-        await tx.financialAccount.update({
-          where: { id: newToAccountId },
-          data: { balance: { increment: newAmount } },
-        });
-      } else {
-        // For income/expense: apply to single account
-        const newBalanceChange = newType === "INCOME" ? newAmount : -newAmount;
-        await tx.financialAccount.update({
-          where: { id: newAccountId },
-          data: { balance: { increment: newBalanceChange } },
-        });
-      }
-
-      // Update transaction
       await tx.transaction.update({
         where: { id },
         data: {
-          amount: newAmount,
+          amount: nextAmount,
           currency: data.currency ?? existingTransaction.currency,
           exchangeRate: data.exchangeRate ?? existingTransaction.exchangeRate,
-          type: newType,
-          accountId: newAccountId,
-          toAccountId:
-            newType === "TRANSFER"
-              ? data.toAccountId ?? existingTransaction.toAccountId
-              : null,
+          type: nextType,
+          accountId: nextAccountId,
+          toAccountId: nextToAccountId,
           date: data.date ?? existingTransaction.date,
           description: data.description !== undefined ? null : undefined,
           descriptionEncrypted:
@@ -697,26 +899,26 @@ export async function updateTransaction(
           categoryId:
             normalizedSplits.length > 0
               ? null
-              : categoryId !== undefined
-                ? (categoryId?.trim() || null)
+              : sanitizedCategoryId !== undefined
+                ? sanitizedCategoryId
                 : existingTransaction.categoryId,
-          recurringRuleId: recurringRuleId !== undefined ? (recurringRuleId?.trim() || null) : undefined,
+          recurringRuleId:
+            sanitizedRecurringRuleId !== undefined
+              ? sanitizedRecurringRuleId
+              : undefined,
         },
       });
 
-      await tx.transactionSplit.deleteMany({
-        where: { transactionId: id, userId: session.user.id },
-      });
-
-      if (normalizedSplits.length > 0) {
-        const splitData = await buildSplitCreateData(
-          session.user.id,
-          id,
-          normalizedSplits
-        );
-        await tx.transactionSplit.createMany({
-          data: splitData,
+      if (shouldReplaceSplits) {
+        await tx.transactionSplit.deleteMany({
+          where: { transactionId: id, userId },
         });
+
+        if (preparedSplitData.length > 0) {
+          await tx.transactionSplit.createMany({
+            data: preparedSplitData,
+          });
+        }
       }
     });
 
@@ -734,14 +936,20 @@ export async function updateTransaction(
 
 export async function deleteTransaction(id: string) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized" };
+    const authResult = await assertAuthenticatedUser();
+    if (!authResult.success) {
+      return { success: false, error: authResult.error };
     }
 
     const transaction = await prisma.transaction.findFirst({
-      where: { id, userId: session.user.id },
-      select: { id: true, amount: true, type: true, accountId: true, toAccountId: true },
+      where: { id, userId: authResult.userId },
+      select: {
+        id: true,
+        amount: true,
+        type: true,
+        accountId: true,
+        toAccountId: true,
+      },
     });
 
     if (!transaction) {
@@ -749,30 +957,13 @@ export async function deleteTransaction(id: string) {
     }
 
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      // Reverse balance change
-      if (transaction.type === "TRANSFER" && transaction.toAccountId) {
-        // For transfers: reverse by incrementing source account and decrementing destination account
-        await tx.financialAccount.update({
-          where: { id: transaction.accountId },
-          data: { balance: { increment: transaction.amount } },
-        });
-        await tx.financialAccount.update({
-          where: { id: transaction.toAccountId },
-          data: { balance: { decrement: transaction.amount } },
-        });
-      } else {
-        // For income/expense: reverse against single account
-        const balanceChange =
-          transaction.type === "INCOME"
-            ? -transaction.amount
-            : transaction.amount;
-        await tx.financialAccount.update({
-          where: { id: transaction.accountId },
-          data: { balance: { increment: balanceChange } },
-        });
-      }
+      await reverseBalanceEffect(tx, {
+        amount: transaction.amount,
+        type: transaction.type as TransactionTypeValue,
+        accountId: transaction.accountId,
+        toAccountId: transaction.toAccountId,
+      });
 
-      // Delete transaction
       await tx.transaction.delete({ where: { id } });
     });
 
@@ -786,57 +977,42 @@ export async function deleteTransaction(id: string) {
   }
 }
 
-function getEmptyTransactionPage(): PaginatedTransactionsData {
-  return {
-    transactions: [],
-    total: 0,
-    page: DEFAULT_TRANSACTION_PAGE,
-    pageSize: DEFAULT_TRANSACTION_PAGE_SIZE,
-    totalPages: 1,
-  };
-}
-
-function normalizeTransactionPageSize(pageSize?: number) {
-  if (pageSize && TRANSACTION_PAGE_SIZES.includes(pageSize as (typeof TRANSACTION_PAGE_SIZES)[number])) {
-    return pageSize;
-  }
-
-  return DEFAULT_TRANSACTION_PAGE_SIZE;
-}
-
-function normalizeTransactionPage(page?: number) {
-  if (page && Number.isInteger(page) && page > 0) {
-    return page;
-  }
-
-  return DEFAULT_TRANSACTION_PAGE;
-}
-
 export async function getTransactions(options?: TransactionListQueryParams) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized", data: getEmptyTransactionPage() };
+    const authResult = await assertAuthenticatedUser();
+    if (!authResult.success) {
+      return {
+        success: false,
+        error: authResult.error,
+        data: getEmptyTransactionPage(),
+      };
     }
 
-    const where: Record<string, unknown> = {
-      userId: session.user.id,
+    const userId = authResult.userId;
+    const where: Prisma.TransactionWhereInput = {
+      userId,
     };
 
-    if (options?.accountId) where.accountId = options.accountId;
+    if (options?.accountId) {
+      where.accountId = options.accountId;
+    }
     if (options?.categoryId) {
       where.OR = [
         { categoryId: options.categoryId },
         { splits: { some: { categoryId: options.categoryId } } },
       ];
     }
-    if (options?.type) where.type = options.type;
+    if (options?.type) {
+      where.type = options.type;
+    }
     if (options?.startDate || options?.endDate) {
       where.date = {};
-      if (options?.startDate)
-        (where.date as Record<string, Date>).gte = options.startDate;
-      if (options?.endDate)
-        (where.date as Record<string, Date>).lte = options.endDate;
+      if (options.startDate) {
+        where.date.gte = options.startDate;
+      }
+      if (options.endDate) {
+        where.date.lte = options.endDate;
+      }
     }
 
     const pageSize = normalizeTransactionPageSize(options?.pageSize);
@@ -844,122 +1020,170 @@ export async function getTransactions(options?: TransactionListQueryParams) {
     const sortBy = options?.sortBy === "amount" ? "amount" : "date";
     const sortOrder = options?.sortOrder === "asc" ? "asc" : "desc";
 
-    const total = await prisma.transaction.count({ where });
-    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const initialTotal = await prisma.transaction.count({ where });
+    const totalPages = Math.max(1, Math.ceil(initialTotal / pageSize));
     const page = Math.min(requestedPage, totalPages);
     const skip = (page - 1) * pageSize;
     const orderBy: Prisma.TransactionOrderByWithRelationInput =
       sortBy === "amount" ? { amount: sortOrder } : { date: sortOrder };
 
-    const transactions = await prisma.transaction.findMany({
-      where,
-      include: {
-        account: true,
-        toAccount: true,
-        category: true,
-        splits: {
-          include: {
-            category: true,
+    const [total, transactions] = await prisma.$transaction([
+      prisma.transaction.count({ where }),
+      prisma.transaction.findMany({
+        where,
+        select: {
+          id: true,
+          amount: true,
+          currency: true,
+          exchangeRate: true,
+          type: true,
+          description: true,
+          descriptionEncrypted: true,
+          location: true,
+          latitude: true,
+          longitude: true,
+          googleMapsLink: true,
+          date: true,
+          isRecurring: true,
+          toAccountId: true,
+          referenceNumber: true,
+          referenceNumberEncrypted: true,
+          createdBy: true,
+          createdByEncrypted: true,
+          account: {
+            select: {
+              id: true,
+              nameEncrypted: true,
+              type: true,
+            },
           },
-          orderBy: { sortOrder: "asc" },
+          toAccount: {
+            select: {
+              id: true,
+              nameEncrypted: true,
+              type: true,
+            },
+          },
+          category: {
+            select: {
+              id: true,
+              name: true,
+              icon: true,
+              color: true,
+            },
+          },
+          splits: {
+            select: {
+              id: true,
+              amount: true,
+              description: true,
+              descriptionEncrypted: true,
+              sortOrder: true,
+              categoryId: true,
+              category: {
+                select: {
+                  id: true,
+                  name: true,
+                  icon: true,
+                  color: true,
+                },
+              },
+            },
+            orderBy: { sortOrder: "asc" },
+          },
         },
-      },
-      orderBy,
-      take: pageSize,
-      skip,
-    });
+        orderBy,
+        take: pageSize,
+        skip,
+      }),
+    ]);
 
-    // Decrypt sensitive fields
+    const accountNameCache = new Map<string, Promise<string>>();
+    const decryptAccountNameCached = (account: {
+      id: string;
+      nameEncrypted: string;
+    }) => {
+      const cached = accountNameCache.get(account.id);
+      if (cached) {
+        return cached;
+      }
+
+      const pending = decryptAccountName(userId, account.nameEncrypted);
+      accountNameCache.set(account.id, pending);
+      return pending;
+    };
+
+    const decryptOptionalAccountNameCached = (account: {
+      id: string;
+      nameEncrypted: string;
+    } | null) => {
+      if (!account) {
+        return Promise.resolve(null);
+      }
+
+      return decryptAccountNameCached(account);
+    };
+
     const decryptedTransactions = await Promise.all(
-      transactions.map(async (tx) => {
-        // Use encrypted description if available, otherwise fall back to plaintext
-        let finalDescription = tx.description;
-        if (tx.descriptionEncrypted) {
-          try {
-            finalDescription = await decryptUserField(
-              session.user.id,
-              "transaction.description",
-              tx.descriptionEncrypted
-            );
-          } catch {
-            // If decryption fails, fall back to plaintext
-            finalDescription = tx.description;
-          }
-        }
-
-        // Use encrypted referenceNumber if available, otherwise fall back to plaintext
-        let finalReferenceNumber = tx.referenceNumber;
-        if (tx.referenceNumberEncrypted) {
-          try {
-            finalReferenceNumber = await decryptUserField(
-              session.user.id,
-              "transaction.referenceNumber",
-              tx.referenceNumberEncrypted
-            );
-          } catch {
-            // If decryption fails, fall back to plaintext
-            finalReferenceNumber = tx.referenceNumber;
-          }
-        }
-
-        // Use encrypted createdBy if available, otherwise fall back to plaintext
-        let finalCreatedBy = tx.createdBy;
-        if (tx.createdByEncrypted) {
-          try {
-            finalCreatedBy = await decryptUserField(
-              session.user.id,
-              "transaction.createdBy",
-              tx.createdByEncrypted
-            );
-          } catch {
-            // If decryption fails, fall back to plaintext
-            finalCreatedBy = tx.createdBy;
-          }
-        }
-
-        const [accountName, toAccountName, decryptedSplits] = await Promise.all([
-          decryptAccountName(session.user.id, tx.account.nameEncrypted),
-          tx.toAccount
-            ? decryptAccountName(session.user.id, tx.toAccount.nameEncrypted)
-            : Promise.resolve(null),
+      transactions.map(async (transaction) => {
+        const [
+          description,
+          referenceNumber,
+          createdBy,
+          accountName,
+          toAccountName,
+          decryptedSplits,
+        ] = await Promise.all([
+          decryptOptionalField(
+            userId,
+            "transaction.description",
+            transaction.descriptionEncrypted,
+            transaction.description
+          ),
+          decryptOptionalField(
+            userId,
+            "transaction.referenceNumber",
+            transaction.referenceNumberEncrypted,
+            transaction.referenceNumber
+          ),
+          decryptOptionalField(
+            userId,
+            "transaction.createdBy",
+            transaction.createdByEncrypted,
+            transaction.createdBy
+          ),
+          decryptAccountNameCached(transaction.account),
+          decryptOptionalAccountNameCached(transaction.toAccount),
           Promise.all(
-            tx.splits.map(async (split) => {
-              let finalSplitDescription = split.description;
-              if (split.descriptionEncrypted) {
-                try {
-                  finalSplitDescription = await decryptUserField(
-                    session.user.id,
-                    "transactionSplit.description",
-                    split.descriptionEncrypted
-                  );
-                } catch {
-                  finalSplitDescription = split.description;
-                }
-              }
-
-              return {
-                ...split,
-                description: finalSplitDescription,
-              };
-            })
+            transaction.splits.map(async (split) => ({
+              ...split,
+              description: await decryptOptionalField(
+                userId,
+                "transactionSplit.description",
+                split.descriptionEncrypted,
+                split.description
+              ),
+            }))
           ),
         ]);
 
         return {
-          ...tx,
+          ...transaction,
           account: {
-            ...tx.account,
+            id: transaction.account.id,
             name: accountName,
+            type: transaction.account.type,
           },
-          toAccount: tx.toAccount
+          toAccount: transaction.toAccount
             ? {
-                ...tx.toAccount,
+                id: transaction.toAccount.id,
                 name: toAccountName,
+                type: transaction.toAccount.type,
               }
             : null,
-          description: finalDescription,
-          referenceNumber: finalReferenceNumber,
-          createdBy: finalCreatedBy,
+          description,
+          referenceNumber,
+          createdBy,
           splits: decryptedSplits,
         };
       })
@@ -977,7 +1201,11 @@ export async function getTransactions(options?: TransactionListQueryParams) {
     };
   } catch (error) {
     console.error("Get transactions error:", error);
-    return { success: false, error: "Failed to fetch transactions", data: getEmptyTransactionPage() };
+    return {
+      success: false,
+      error: "Failed to fetch transactions",
+      data: getEmptyTransactionPage(),
+    };
   }
 }
 
@@ -987,24 +1215,25 @@ interface TransactionSummaryItem {
   exchangeRate: number;
 }
 
-export async function getTransactionSummary(
-  startDate?: Date,
-  endDate?: Date
-) {
+export async function getTransactionSummary(startDate?: Date, endDate?: Date) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized" };
+    const authResult = await assertAuthenticatedUser();
+    if (!authResult.success) {
+      return { success: false, error: authResult.error };
     }
 
-    const where: Record<string, unknown> = {
-      userId: session.user.id,
+    const where: Prisma.TransactionWhereInput = {
+      userId: authResult.userId,
     };
 
     if (startDate || endDate) {
       where.date = {};
-      if (startDate) (where.date as Record<string, Date>).gte = startDate;
-      if (endDate) (where.date as Record<string, Date>).lte = endDate;
+      if (startDate) {
+        where.date.gte = startDate;
+      }
+      if (endDate) {
+        where.date.lte = endDate;
+      }
     }
 
     const transactions = await prisma.transaction.findMany({
@@ -1017,11 +1246,14 @@ export async function getTransactionSummary(
     });
 
     const summary = transactions.reduce(
-      (acc: { totalIncome: number; totalExpense: number }, t: TransactionSummaryItem) => {
-        const normalizedAmount = t.amount * t.exchangeRate;
-        if (t.type === "INCOME") {
+      (
+        acc: { totalIncome: number; totalExpense: number },
+        transaction: TransactionSummaryItem
+      ) => {
+        const normalizedAmount = transaction.amount * transaction.exchangeRate;
+        if (transaction.type === TransactionTypeEnum.INCOME) {
           acc.totalIncome += normalizedAmount;
-        } else if (t.type === "EXPENSE") {
+        } else if (transaction.type === TransactionTypeEnum.EXPENSE) {
           acc.totalExpense += normalizedAmount;
         }
         return acc;
