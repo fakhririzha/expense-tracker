@@ -1,5 +1,9 @@
 # FinHealth Changelog
 
+## v4.5.12
+
+- Maintenance update: improved transaction loading and editing efficiency behind the scenes so transaction history, split details, and balance updates can be processed more efficiently without changing how they work in the app.
+
 ## v4.5.11
 
 - Maintenance update: switched the shared class-name helper to a lighter internal implementation while keeping the app’s styling behavior the same.
