@@ -3,7 +3,6 @@ import {
   getSpendingTrends,
   getCategoryBreakdown,
   getIncomeVsExpense,
-  getNetWorthHistory,
   getMonthlySummary,
 } from "@/actions/report-actions";
 
@@ -18,8 +17,6 @@ export const reportKeys = {
     [...reportKeys.all, "categoryBreakdown", params] as const,
   incomeVsExpense: (months: number) =>
     [...reportKeys.all, "incomeVsExpense", { months }] as const,
-  netWorthHistory: (months: number) =>
-    [...reportKeys.all, "netWorthHistory", { months }] as const,
   monthlySummary: (year: number, month: number) =>
     [...reportKeys.all, "monthlySummary", { year, month }] as const,
 };
@@ -69,18 +66,6 @@ export function useIncomeVsExpense(months: number, enabled: boolean = true) {
     queryKey: reportKeys.incomeVsExpense(months),
     queryFn: async () => {
       const result = await getIncomeVsExpense({ months });
-      if (!result.success) throw new Error(result.error);
-      return result.data!;
-    },
-    enabled,
-  });
-}
-
-export function useNetWorthHistory(months: number, enabled: boolean = true) {
-  return useQuery({
-    queryKey: reportKeys.netWorthHistory(months),
-    queryFn: async () => {
-      const result = await getNetWorthHistory({ months });
       if (!result.success) throw new Error(result.error);
       return result.data!;
     },
