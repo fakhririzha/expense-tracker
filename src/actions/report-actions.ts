@@ -1,11 +1,72 @@
 "use server";
 
+import { z } from "zod";
+
 import { auth } from "@/auth";
 import prisma from "@/lib/db";
 import { getExchangeRate } from "@/lib/finance-service";
-import { flattenTransactionAllocationRows } from "@/lib/transaction-allocation-service";
+import {
+  flattenTransactionAllocationRows,
+  type TransactionAllocationRow,
+  type TransactionAllocationTransaction,
+} from "@/lib/transaction-allocation-service";
 
-// ==================== TYPES ====================
+const DEFAULT_REPORT_CURRENCY = "IDR";
+const MAX_REPORT_RANGE_DAYS = 3660;
+const MAX_REPORT_MONTHS = 120;
+const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
+
+const reportDateRangeSchema = z
+  .object({
+    startDate: z.date(),
+    endDate: z.date(),
+  })
+  .superRefine(({ startDate, endDate }, ctx) => {
+    if (startDate > endDate) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Start date must be on or before end date",
+        path: ["startDate"],
+      });
+    }
+
+    const rangeDays =
+      (endDate.getTime() - startDate.getTime()) / MILLISECONDS_PER_DAY;
+    if (rangeDays > MAX_REPORT_RANGE_DAYS) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Date range cannot exceed ${MAX_REPORT_RANGE_DAYS} days`,
+        path: ["endDate"],
+      });
+    }
+  });
+
+const spendingTrendsSchema = reportDateRangeSchema.extend({
+  groupBy: z.enum(["day", "week", "month"]),
+});
+
+const categoryBreakdownSchema = reportDateRangeSchema.extend({
+  type: z.enum(["INCOME", "EXPENSE"]),
+});
+
+const incomeVsExpenseSchema = z.object({
+  months: z.number().int().min(1).max(MAX_REPORT_MONTHS),
+});
+
+const monthlySummarySchema = z.object({
+  year: z.number().int().min(2000).max(9999),
+  month: z.number().int().min(1).max(12),
+});
+
+interface ReportUser {
+  id: string;
+  mainCurrency: string;
+}
+
+interface ReportCurrencyConverter {
+  targetCurrency: string;
+  convert(amount: number, fromCurrency: string, fallbackRate: number): Promise<number>;
+}
 
 export interface SpendingTrendPoint {
   date: string;
@@ -32,13 +93,6 @@ export interface IncomeVsExpensePoint {
   net: number;
 }
 
-export interface NetWorthPoint {
-  date: string;
-  netWorth: number;
-  assets: number;
-  liabilities: number;
-}
-
 export interface MonthlySummary {
   year: number;
   month: number;
@@ -55,67 +109,372 @@ export interface MonthlySummary {
   } | null;
 }
 
-// ==================== HELPER FUNCTIONS ====================
+type ReportTransactionWithCategories = TransactionAllocationTransaction;
 
-/**
- * Retrieves the current user's main currency from the active session or user record.
- *
- * @returns The user's main currency code (e.g., "USD"); returns "IDR" if there is no authenticated user or no currency is set.
- */
-async function getUserCurrency(): Promise<string> {
+type ReportTransactionSummaryRow = {
+  date: Date;
+  amount: number;
+  currency: string;
+  exchangeRate: number;
+  type: "INCOME" | "EXPENSE";
+};
+
+function normalizeCurrency(currency: string): string {
+  return currency.trim().toUpperCase();
+}
+
+function getCurrencyPairKey(fromCurrency: string, toCurrency: string): string {
+  return `${normalizeCurrency(fromCurrency)}:${normalizeCurrency(toCurrency)}`;
+}
+
+function isFinitePositiveNumber(
+  value: number | null | undefined
+): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
+async function getAuthenticatedReportUser(): Promise<ReportUser | null> {
   const session = await auth();
-  if (!session?.user?.id) return "IDR";
-  
+  if (!session?.user?.id) {
+    return null;
+  }
+
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { mainCurrency: true },
+    select: {
+      id: true,
+      mainCurrency: true,
+    },
   });
-  
-  return user?.mainCurrency || "IDR";
+
+  if (!user) {
+    return null;
+  }
+
+  return {
+    id: user.id,
+    mainCurrency: user.mainCurrency || DEFAULT_REPORT_CURRENCY,
+  };
 }
 
-/**
- * Convert an amount from a source currency into the current user's main currency.
- *
- * Attempts to use a direct exchange rate lookup when the source currency differs from the user's currency; falls back to the provided `exchangeRate` when no direct rate is available.
- *
- * @param amount - The numeric amount in `fromCurrency`
- * @param fromCurrency - The ISO currency code of the input amount
- * @param exchangeRate - Fallback or stored exchange rate to use if a direct rate cannot be obtained
- * @returns The amount converted into the user's main currency
- */
-async function convertToUserCurrency(
-  amount: number,
-  fromCurrency: string,
-  exchangeRate: number
-): Promise<number> {
-  const userCurrency = await getUserCurrency();
-  if (fromCurrency === userCurrency) return amount;
-  
-  // Try to get exchange rate
-  const rate = await getExchangeRate(fromCurrency, userCurrency);
-  if (rate) return amount * rate;
-  
-  // Fallback to stored exchange rate
-  return amount * exchangeRate;
+async function createReportCurrencyConverter(input: {
+  targetCurrency: string;
+  sourceCurrencies: string[];
+}): Promise<ReportCurrencyConverter> {
+  const targetCurrency = normalizeCurrency(input.targetCurrency);
+  const sourceCurrencies = Array.from(
+    new Set(
+      input.sourceCurrencies
+        .map(normalizeCurrency)
+        .filter((currency) => currency && currency !== targetCurrency)
+    )
+  );
+
+  const cachedRates =
+    sourceCurrencies.length > 0
+      ? await prisma.exchangeRate.findMany({
+          where: {
+            fromCurrency: { in: sourceCurrencies },
+            toCurrency: targetCurrency,
+          },
+          select: {
+            fromCurrency: true,
+            toCurrency: true,
+            rate: true,
+          },
+        })
+      : [];
+
+  const cachedRateMap = new Map(
+    cachedRates.map((rate) => [
+      getCurrencyPairKey(rate.fromCurrency, rate.toCurrency),
+      rate.rate,
+    ])
+  );
+  const rateLookups = new Map<string, Promise<number | null>>();
+
+  async function resolveRate(fromCurrency: string): Promise<number | null> {
+    if (fromCurrency === targetCurrency) {
+      return 1;
+    }
+
+    const key = getCurrencyPairKey(fromCurrency, targetCurrency);
+    const existingLookup = rateLookups.get(key);
+    if (existingLookup) {
+      return existingLookup;
+    }
+
+    const lookup = (async () => {
+      const liveRate = await getExchangeRate(fromCurrency, targetCurrency);
+      if (isFinitePositiveNumber(liveRate)) {
+        return liveRate;
+      }
+
+      const cachedRate = cachedRateMap.get(key);
+      if (isFinitePositiveNumber(cachedRate)) {
+        return cachedRate;
+      }
+
+      return null;
+    })();
+
+    rateLookups.set(key, lookup);
+    return lookup;
+  }
+
+  return {
+    targetCurrency,
+    async convert(amount: number, fromCurrency: string, fallbackRate: number) {
+      if (amount === 0) {
+        return 0;
+      }
+
+      const normalizedCurrency = normalizeCurrency(fromCurrency);
+      if (normalizedCurrency === targetCurrency) {
+        return amount;
+      }
+
+      const rate = await resolveRate(normalizedCurrency);
+      if (isFinitePositiveNumber(rate)) {
+        return amount * rate;
+      }
+
+      return isFinitePositiveNumber(fallbackRate)
+        ? amount * fallbackRate
+        : amount;
+    },
+  };
 }
 
-/**
- * Produce a string key representing the given date according to the specified grouping.
- *
- * @param date - The date to format.
- * @param groupBy - The granularity to use: "day" yields `YYYY-MM-DD`, "week" yields the start-of-week date `YYYY-MM-DD` (week starts on Sunday), and "month" yields `YYYY-MM`.
- * @returns The formatted date key for the specified group.
- */
-function formatDateByGroup(date: Date, groupBy: "day" | "week" | "month"): string {
+async function convertAmounts<T extends { amount: number; currency: string; exchangeRate: number }>(
+  items: T[],
+  converter: ReportCurrencyConverter
+): Promise<number[]> {
+  return Promise.all(
+    items.map((item) =>
+      converter.convert(item.amount, item.currency, item.exchangeRate)
+    )
+  );
+}
+
+async function fetchCategorizedTransactions(input: {
+  userId: string;
+  startDate: Date;
+  endDate: Date;
+  types: Array<"INCOME" | "EXPENSE">;
+}): Promise<ReportTransactionWithCategories[]> {
+  return prisma.transaction.findMany({
+    where: {
+      userId: input.userId,
+      type: { in: input.types },
+      date: {
+        gte: input.startDate,
+        lte: input.endDate,
+      },
+    },
+    select: {
+      id: true,
+      amount: true,
+      currency: true,
+      exchangeRate: true,
+      type: true,
+      categoryId: true,
+      category: {
+        select: {
+          id: true,
+          name: true,
+          color: true,
+          icon: true,
+        },
+      },
+      date: true,
+      accountId: true,
+      toAccountId: true,
+      description: true,
+      splits: {
+        select: {
+          id: true,
+          amount: true,
+          description: true,
+          categoryId: true,
+          sortOrder: true,
+          category: {
+            select: {
+              id: true,
+              name: true,
+              color: true,
+              icon: true,
+            },
+          },
+        },
+        orderBy: {
+          sortOrder: "asc",
+        },
+      },
+    },
+    orderBy: {
+      date: "asc",
+    },
+  });
+}
+
+async function fetchSummaryTransactions(input: {
+  userId: string;
+  startDate: Date;
+  endDate: Date;
+}): Promise<ReportTransactionSummaryRow[]> {
+  const transactions = await prisma.transaction.findMany({
+    where: {
+      userId: input.userId,
+      type: { in: ["INCOME", "EXPENSE"] },
+      date: {
+        gte: input.startDate,
+        lte: input.endDate,
+      },
+    },
+    select: {
+      date: true,
+      amount: true,
+      currency: true,
+      exchangeRate: true,
+      type: true,
+    },
+    orderBy: {
+      date: "asc",
+    },
+  });
+
+  return transactions.map((transaction) => ({
+    ...transaction,
+    type: transaction.type as "INCOME" | "EXPENSE",
+  }));
+}
+
+function getAllocationRows(
+  transactions: ReportTransactionWithCategories[],
+  type: "INCOME" | "EXPENSE"
+): Array<
+  Pick<
+    TransactionAllocationRow,
+    "categoryId" | "category" | "amount" | "currency" | "exchangeRate"
+  >
+> {
+  if (type === "EXPENSE") {
+    return flattenTransactionAllocationRows(transactions);
+  }
+
+  return transactions.map((transaction) => ({
+    categoryId: transaction.categoryId,
+    category: transaction.category,
+    amount: transaction.amount,
+    currency: transaction.currency,
+    exchangeRate: transaction.exchangeRate,
+  }));
+}
+
+async function buildCategoryBreakdownFromTransactions(input: {
+  transactions: ReportTransactionWithCategories[];
+  type: "INCOME" | "EXPENSE";
+  converter: ReportCurrencyConverter;
+}): Promise<CategoryBreakdownItem[]> {
+  const rows = getAllocationRows(input.transactions, input.type);
+  const normalizedAmounts = await convertAmounts(rows, input.converter);
+  const categoryMap = new Map<
+    string | null,
+    {
+      categoryId: string | null;
+      categoryName: string;
+      categoryColor: string | null;
+      categoryIcon: string | null;
+      amount: number;
+      transactionCount: number;
+    }
+  >();
+
+  let totalAmount = 0;
+
+  rows.forEach((row, index) => {
+    const normalizedAmount = normalizedAmounts[index] ?? 0;
+    totalAmount += normalizedAmount;
+
+    const existing = categoryMap.get(row.categoryId);
+    if (existing) {
+      existing.amount += normalizedAmount;
+      existing.transactionCount += 1;
+      return;
+    }
+
+    categoryMap.set(row.categoryId, {
+      categoryId: row.categoryId,
+      categoryName: row.category?.name || "Uncategorized",
+      categoryColor: row.category?.color || null,
+      categoryIcon: row.category?.icon || null,
+      amount: normalizedAmount,
+      transactionCount: 1,
+    });
+  });
+
+  return Array.from(categoryMap.values())
+    .map((item) => ({
+      ...item,
+      percentage: totalAmount > 0 ? (item.amount / totalAmount) * 100 : 0,
+    }))
+    .sort((left, right) => right.amount - left.amount);
+}
+
+async function buildMonthlyTotals(input: {
+  transactions: ReportTransactionSummaryRow[];
+  converter: ReportCurrencyConverter;
+}): Promise<{ totalIncome: number; totalExpense: number }> {
+  const normalizedAmounts = await convertAmounts(
+    input.transactions,
+    input.converter
+  );
+
+  return input.transactions.reduce(
+    (totals, transaction, index) => {
+      const normalizedAmount = normalizedAmounts[index] ?? 0;
+      if (transaction.type === "INCOME") {
+        totals.totalIncome += normalizedAmount;
+      } else {
+        totals.totalExpense += normalizedAmount;
+      }
+
+      return totals;
+    },
+    { totalIncome: 0, totalExpense: 0 }
+  );
+}
+
+function getMonthRange(year: number, month: number): {
+  startDate: Date;
+  endDate: Date;
+} {
+  return {
+    startDate: new Date(year, month - 1, 1),
+    endDate: new Date(year, month, 0, 23, 59, 59, 999),
+  };
+}
+
+function collectSourceCurrencies(
+  collections: Array<Array<{ currency: string }>>
+): string[] {
+  return collections.flatMap((items) => items.map((item) => item.currency));
+}
+
+function formatDateByGroup(
+  date: Date,
+  groupBy: "day" | "week" | "month"
+): string {
   const d = new Date(date);
   switch (groupBy) {
     case "day":
       return d.toISOString().split("T")[0];
-    case "week":
+    case "week": {
       const weekStart = new Date(d);
       weekStart.setDate(d.getDate() - d.getDay());
       return weekStart.toISOString().split("T")[0];
+    }
     case "month":
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     default:
@@ -123,17 +482,26 @@ function formatDateByGroup(date: Date, groupBy: "day" | "week" | "month"): strin
   }
 }
 
-/**
- * Produce a human-friendly label for a date according to the requested grouping.
- *
- * @param date - The date to format into a label.
- * @param groupBy - Grouping granularity: `"day"` -> `D Mon` (e.g., `12 Feb`), `"week"` -> `Week of D Mon` (e.g., `Week of 12 Feb`), `"month"` -> `Mon YYYY` (e.g., `Feb 2026`).
- * @returns The formatted label string for the given date and grouping.
- */
-function getLabelForGroup(date: Date, groupBy: "day" | "week" | "month"): string {
+function getLabelForGroup(
+  date: Date,
+  groupBy: "day" | "week" | "month"
+): string {
   const d = new Date(date);
-  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  
+  const monthNames = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
+
   switch (groupBy) {
     case "day":
       return `${d.getDate()} ${monthNames[d.getMonth()]}`;
@@ -146,33 +514,26 @@ function getLabelForGroup(date: Date, groupBy: "day" | "week" | "month"): string
   }
 }
 
-// ==================== SERVER ACTIONS ====================
-
-/**
- * Aggregate expense transactions into a time series grouped by day, week, or month.
- *
- * @param startDate - Inclusive start date for the range to analyze
- * @param endDate - Inclusive end date for the range to analyze
- * @param groupBy - Grouping granularity: `"day"`, `"week"`, or `"month"`
- * @returns An array of spending trend points where each point contains a period key, the total amount converted to the user's main currency, and a human-friendly label
- */
 export async function getSpendingTrends(params: {
   startDate: Date;
   endDate: Date;
   groupBy: "day" | "week" | "month";
 }): Promise<{ success: boolean; data?: SpendingTrendPoint[]; error?: string }> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
+    const user = await getAuthenticatedReportUser();
+    if (!user) {
       return { success: false, error: "Unauthorized" };
     }
 
-    const { startDate, endDate, groupBy } = params;
+    const validated = spendingTrendsSchema.safeParse(params);
+    if (!validated.success) {
+      return { success: false, error: validated.error.issues[0].message };
+    }
 
-    // Fetch all expense transactions in the date range
+    const { startDate, endDate, groupBy } = validated.data;
     const transactions = await prisma.transaction.findMany({
       where: {
-        userId: session.user.id,
+        userId: user.id,
         type: "EXPENSE",
         date: {
           gte: startDate,
@@ -185,36 +546,41 @@ export async function getSpendingTrends(params: {
         currency: true,
         exchangeRate: true,
       },
-      orderBy: { date: "asc" },
+      orderBy: {
+        date: "asc",
+      },
     });
 
-    // Group transactions by period
+    const converter = await createReportCurrencyConverter({
+      targetCurrency: user.mainCurrency,
+      sourceCurrencies: collectSourceCurrencies([transactions]),
+    });
+    const normalizedAmounts = await convertAmounts(transactions, converter);
     const groupedData = new Map<string, { amount: number; date: Date }>();
 
-    for (const t of transactions) {
-      const normalizedAmount = await convertToUserCurrency(
-        t.amount,
-        t.currency,
-        t.exchangeRate
-      );
-      const key = formatDateByGroup(t.date, groupBy);
-      
+    transactions.forEach((transaction, index) => {
+      const key = formatDateByGroup(transaction.date, groupBy);
       const existing = groupedData.get(key);
+      const normalizedAmount = normalizedAmounts[index] ?? 0;
+
       if (existing) {
         existing.amount += normalizedAmount;
-      } else {
-        groupedData.set(key, { amount: normalizedAmount, date: t.date });
+        return;
       }
-    }
 
-    // Convert to array and sort by date
+      groupedData.set(key, {
+        amount: normalizedAmount,
+        date: transaction.date,
+      });
+    });
+
     const result: SpendingTrendPoint[] = Array.from(groupedData.entries())
       .map(([date, data]) => ({
         date,
         amount: data.amount,
         label: getLabelForGroup(data.date, groupBy),
       }))
-      .sort((a, b) => a.date.localeCompare(b.date));
+      .sort((left, right) => left.date.localeCompare(right.date));
 
     return { success: true, data: result };
   } catch (error) {
@@ -223,112 +589,39 @@ export async function getSpendingTrends(params: {
   }
 }
 
-/**
- * Aggregate transactions within a date range by category and compute totals and percentages.
- *
- * @param startDate - Inclusive start of the date range to include transactions from
- * @param endDate - Inclusive end of the date range to include transactions up to
- * @param type - Transaction type to include (`"INCOME"` or `"EXPENSE"`)
- * @returns An object with a `success` flag; when `success` is `true`, `data` is an array of CategoryBreakdownItem objects (one per category, including amount, transactionCount, and percentage) sorted by amount descending
- */
 export async function getCategoryBreakdown(params: {
   startDate: Date;
   endDate: Date;
   type: "INCOME" | "EXPENSE";
 }): Promise<{ success: boolean; data?: CategoryBreakdownItem[]; error?: string }> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
+    const user = await getAuthenticatedReportUser();
+    if (!user) {
       return { success: false, error: "Unauthorized" };
     }
 
-    const { startDate, endDate, type } = params;
-
-    // Fetch transactions with category info
-    const transactions = await prisma.transaction.findMany({
-      where: {
-        userId: session.user.id,
-        type,
-        date: {
-          gte: startDate,
-          lte: endDate,
-        },
-      },
-      include: {
-        category: true,
-        splits: {
-          include: {
-            category: true,
-          },
-          orderBy: { sortOrder: "asc" },
-        },
-      },
-    });
-
-    // Group by category
-    const categoryMap = new Map<string | null, {
-      categoryId: string | null;
-      categoryName: string;
-      categoryColor: string | null;
-      categoryIcon: string | null;
-      amount: number;
-      transactionCount: number;
-    }>();
-
-    let totalAmount = 0;
-
-    const rows =
-      type === "EXPENSE"
-        ? flattenTransactionAllocationRows(transactions)
-        : transactions.map((transaction) => ({
-            transactionId: transaction.id,
-            splitId: null,
-            amount: transaction.amount,
-            normalizedAmount: transaction.amount * transaction.exchangeRate,
-            currency: transaction.currency,
-            exchangeRate: transaction.exchangeRate,
-            type: transaction.type,
-            date: transaction.date,
-            accountId: transaction.accountId,
-            toAccountId: transaction.toAccountId,
-            categoryId: transaction.categoryId,
-            category: transaction.category,
-            description: transaction.description,
-            isSplit: false,
-          }));
-
-    for (const row of rows) {
-      const normalizedAmount =
-        type === "EXPENSE"
-          ? row.normalizedAmount
-          : await convertToUserCurrency(row.amount, row.currency, row.exchangeRate);
-      totalAmount += normalizedAmount;
-
-      const key = row.categoryId;
-      const existing = categoryMap.get(key);
-
-      if (existing) {
-        existing.amount += normalizedAmount;
-        existing.transactionCount += 1;
-      } else {
-        categoryMap.set(key, {
-          categoryId: row.categoryId,
-          categoryName: row.category?.name || "Uncategorized",
-          categoryColor: row.category?.color || null,
-          categoryIcon: row.category?.icon || null,
-          amount: normalizedAmount,
-          transactionCount: 1,
-        });
-      }
+    const validated = categoryBreakdownSchema.safeParse(params);
+    if (!validated.success) {
+      return { success: false, error: validated.error.issues[0].message };
     }
 
-    // Convert to array and calculate percentages
-    const result: CategoryBreakdownItem[] = Array.from(categoryMap.values())
-      .map((item) => ({
-        ...item,
-        percentage: totalAmount > 0 ? (item.amount / totalAmount) * 100 : 0,
-      }))
-      .sort((a, b) => b.amount - a.amount);
+    const { startDate, endDate, type } = validated.data;
+    const transactions = await fetchCategorizedTransactions({
+      userId: user.id,
+      startDate,
+      endDate,
+      types: [type],
+    });
+    const rows = getAllocationRows(transactions, type);
+    const converter = await createReportCurrencyConverter({
+      targetCurrency: user.mainCurrency,
+      sourceCurrencies: collectSourceCurrencies([rows]),
+    });
+    const result = await buildCategoryBreakdownFromTransactions({
+      transactions,
+      type,
+      converter,
+    });
 
     return { success: true, data: result };
   } catch (error) {
@@ -337,82 +630,79 @@ export async function getCategoryBreakdown(params: {
   }
 }
 
-/**
- * Compute monthly totals of income and expense over a recent span of months.
- *
- * Aggregates all INCOME and EXPENSE transactions in the window and returns a sorted
- * month-by-month breakdown including income, expense, and net values.
- *
- * @param months - Number of months to include, counting the current month (for example, `1` includes only the current month).
- * @returns An array of `IncomeVsExpensePoint` objects sorted by month; each entry contains `month` (YYYY-MM), `year`, `monthLabel`, `income`, `expense`, and `net`.
- */
 export async function getIncomeVsExpense(params: {
   months: number;
 }): Promise<{ success: boolean; data?: IncomeVsExpensePoint[]; error?: string }> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
+    const user = await getAuthenticatedReportUser();
+    if (!user) {
       return { success: false, error: "Unauthorized" };
     }
 
-    const { months } = params;
+    const validated = incomeVsExpenseSchema.safeParse(params);
+    if (!validated.success) {
+      return { success: false, error: validated.error.issues[0].message };
+    }
+
+    const { months } = validated.data;
     const endDate = new Date();
     const startDate = new Date();
     startDate.setMonth(startDate.getMonth() - months + 1);
     startDate.setDate(1);
     startDate.setHours(0, 0, 0, 0);
 
-    // Fetch all income and expense transactions
-    const transactions = await prisma.transaction.findMany({
-      where: {
-        userId: session.user.id,
-        type: { in: ["INCOME", "EXPENSE"] },
-        date: {
-          gte: startDate,
-          lte: endDate,
-        },
-      },
-      select: {
-        date: true,
-        amount: true,
-        currency: true,
-        exchangeRate: true,
-        type: true,
-      },
+    const transactions = await fetchSummaryTransactions({
+      userId: user.id,
+      startDate,
+      endDate,
     });
+    const converter = await createReportCurrencyConverter({
+      targetCurrency: user.mainCurrency,
+      sourceCurrencies: collectSourceCurrencies([transactions]),
+    });
+    const normalizedAmounts = await convertAmounts(transactions, converter);
+    const monthMap = new Map<
+      string,
+      { income: number; expense: number; year: number; month: number }
+    >();
+    const monthNames = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
+    ];
 
-    // Group by month
-    const monthMap = new Map<string, { income: number; expense: number; year: number; month: number }>();
-    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-    for (const t of transactions) {
-      const normalizedAmount = await convertToUserCurrency(
-        t.amount,
-        t.currency,
-        t.exchangeRate
-      );
-      
-      const date = new Date(t.date);
+    transactions.forEach((transaction, index) => {
+      const date = new Date(transaction.date);
       const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-      
+      const normalizedAmount = normalizedAmounts[index] ?? 0;
       const existing = monthMap.get(key);
+
       if (existing) {
-        if (t.type === "INCOME") {
+        if (transaction.type === "INCOME") {
           existing.income += normalizedAmount;
         } else {
           existing.expense += normalizedAmount;
         }
-      } else {
-        monthMap.set(key, {
-          income: t.type === "INCOME" ? normalizedAmount : 0,
-          expense: t.type === "EXPENSE" ? normalizedAmount : 0,
-          year: date.getFullYear(),
-          month: date.getMonth(),
-        });
+        return;
       }
-    }
 
-    // Convert to array and sort by date
+      monthMap.set(key, {
+        income: transaction.type === "INCOME" ? normalizedAmount : 0,
+        expense: transaction.type === "EXPENSE" ? normalizedAmount : 0,
+        year: date.getFullYear(),
+        month: date.getMonth(),
+      });
+    });
+
     const result: IncomeVsExpensePoint[] = Array.from(monthMap.entries())
       .map(([month, data]) => ({
         month,
@@ -422,7 +712,7 @@ export async function getIncomeVsExpense(params: {
         expense: data.expense,
         net: data.income - data.expense,
       }))
-      .sort((a, b) => a.month.localeCompare(b.month));
+      .sort((left, right) => left.month.localeCompare(right.month));
 
     return { success: true, data: result };
   } catch (error) {
@@ -431,336 +721,113 @@ export async function getIncomeVsExpense(params: {
   }
 }
 
-/**
- * Reconstructs monthly net worth history for a past span of months.
- *
- * Builds a month-by-month series by combining current account balances with historical transactions (converted to the user's main currency) to produce assets, liabilities, and net worth for each month in the requested window.
- *
- * @param months - Number of months to include, counting backward from the current month (defines the start of the window)
- * @returns An array of `NetWorthPoint` objects (one per month) containing `date` (YYYY-MM), `assets`, `liabilities`, and `netWorth`
- */
-export async function getNetWorthHistory(params: {
-  months: number;
-}): Promise<{ success: boolean; data?: NetWorthPoint[]; error?: string }> {
-  try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
-
-    const { months } = params;
-
-    // Validate months parameter to prevent DoS attacks
-    const MAX_MONTHS = 120; // 10 years maximum
-    if (!Number.isInteger(months) || months < 1 || months > MAX_MONTHS) {
-      return { success: false, error: `Months must be between 1 and ${MAX_MONTHS}` };
-    }
-
-    // Get current account balances
-    const accounts = await prisma.financialAccount.findMany({
-      where: {
-        userId: session.user.id,
-        isActive: true,
-      },
-      select: {
-        id: true,
-        type: true,
-        balance: true,
-        currency: true,
-      },
-    });
-
-    const personalAssets = await prisma.personalAsset.findMany({
-      where: { userId: session.user.id },
-      select: {
-        disposedAt: true,
-        valuations: {
-          select: {
-            value: true,
-            currency: true,
-            valuedAt: true,
-          },
-          orderBy: [{ valuedAt: "desc" }, { createdAt: "desc" }],
-        },
-      },
-    });
-
-    // Calculate current assets and liabilities
-    let currentAssets = 0;
-    let currentLiabilities = 0;
-
-    for (const account of accounts) {
-      const normalizedBalance = await convertToUserCurrency(
-        Math.abs(account.balance),
-        account.currency,
-        1
-      );
-      
-      const isAsset = ["BANK", "CASH", "INVESTMENT", "LOAN_RECEIVABLE"].includes(account.type);
-      const isLiability = ["LOAN", "CREDIT_CARD"].includes(account.type);
-      
-      if (isAsset) {
-        currentAssets += normalizedBalance;
-      } else if (isLiability) {
-        currentLiabilities += normalizedBalance;
-      }
-    }
-
-    // Get historical transactions to reconstruct past balances
-    const endDate = new Date();
-    const startDate = new Date();
-    startDate.setMonth(startDate.getMonth() - months);
-    startDate.setDate(1);
-
-    const transactions = await prisma.transaction.findMany({
-      where: {
-        userId: session.user.id,
-        date: {
-          gte: startDate,
-          lte: endDate,
-        },
-      },
-      select: {
-        date: true,
-        amount: true,
-        currency: true,
-        exchangeRate: true,
-        type: true,
-        account: {
-          select: { type: true },
-        },
-      },
-      orderBy: { date: "desc" },
-    });
-
-    // Group by month and calculate net worth changes
-    const monthMap = new Map<string, { assets: number; liabilities: number }>();
-    
-    // Initialize with current values
-    let runningAssets = currentAssets;
-    let runningLiabilities = currentLiabilities;
-
-    // Create month keys for the period
-    const monthKeys: string[] = [];
-    const tempDate = new Date(endDate);
-    while (tempDate >= startDate) {
-      monthKeys.unshift(`${tempDate.getFullYear()}-${String(tempDate.getMonth() + 1).padStart(2, "0")}`);
-      tempDate.setMonth(tempDate.getMonth() - 1);
-    }
-
-    // Process transactions in reverse chronological order
-    for (const t of transactions) {
-      const date = new Date(t.date);
-      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-      
-      const normalizedAmount = await convertToUserCurrency(
-        t.amount,
-        t.currency,
-        t.exchangeRate
-      );
-
-      // Reverse the transaction effect
-      if (t.type === "INCOME") {
-        runningAssets -= normalizedAmount;
-      } else if (t.type === "EXPENSE") {
-        runningAssets += normalizedAmount;
-      } else if (t.type === "TRANSFER") {
-        // Transfers don't affect net worth
-      } else if (t.type === "LIABILITY_PAYMENT") {
-        runningAssets += normalizedAmount;
-        runningLiabilities += normalizedAmount;
-      }
-
-      if (!monthMap.has(monthKey)) {
-        monthMap.set(monthKey, {
-          assets: runningAssets,
-          liabilities: runningLiabilities,
-        });
-      }
-    }
-
-    // Build result with end-of-month balances
-    // The monthMap[M] stores the balance at the START of month M (after reversing all transactions in M)
-    // This equals the balance at the END of month M-1
-    // So for month M's end-of-month balance, we look at monthMap[M+1] (start of next month = end of current month)
-    // For the last month, we use current balances
-    const result: NetWorthPoint[] = [];
-
-    // Pre-calculate next available data points in O(N) using a backward pass
-    // nextAvailableData[i] stores the next month's data for monthKeys[i]
-    const nextAvailableData = new Array<{ assets: number; liabilities: number } | null>(monthKeys.length).fill(null);
-    let lastSeenData: { assets: number; liabilities: number } | null = null;
-
-    for (let i = monthKeys.length - 1; i >= 0; i--) {
-      const monthData = monthMap.get(monthKeys[i]);
-      if (monthData) {
-        lastSeenData = monthData;
-      }
-      nextAvailableData[i] = lastSeenData;
-    }
-
-    for (let i = 0; i < monthKeys.length; i++) {
-      const monthKey = monthKeys[i];
-      
-      // For month M's end-of-month balance:
-      // - Use the next month with data (monthMap[M+1], M+2, etc.)
-      // - If no future month has data, use current balances (end of last month)
-      
-      const nextData = nextAvailableData[i];
-      const accountAssets: number = nextData?.assets ?? currentAssets;
-      const liabilities: number = nextData?.liabilities ?? currentLiabilities;
-      const [year, month] = monthKey.split("-").map(Number);
-      const monthEnd = new Date(year, month, 0, 23, 59, 59, 999);
-      let personalAssetValue = 0;
-
-      for (const asset of personalAssets) {
-        if (asset.disposedAt && asset.disposedAt <= monthEnd) continue;
-        const valuation = asset.valuations.find(
-          (item) => item.valuedAt <= monthEnd
-        );
-        if (!valuation) continue;
-
-        personalAssetValue += await convertToUserCurrency(
-          valuation.value,
-          valuation.currency,
-          1
-        );
-      }
-
-      const assets = accountAssets + personalAssetValue;
-      
-      result.push({
-        date: monthKey,
-        netWorth: assets - liabilities,
-        assets,
-        liabilities,
-      });
-    }
-
-    return { success: true, data: result };
-  } catch (error) {
-    console.error("Get net worth history error:", error);
-    return { success: false, error: "Failed to fetch net worth history" };
-  }
-}
-
-/**
- * Compute a currency-normalized financial summary for a specific month.
- *
- * Produces totals for income and expenses, net flow, transaction count, top income and expense categories (up to 5 each), and an optional comparison to the previous month.
- *
- * @param year - The four-digit year for the summary (e.g., 2026)
- * @param month - The month number (1-12) for the summary
- * @returns An object containing the `MonthlySummary` for the requested month when successful; otherwise an error message is returned in the wrapper object.
- */
 export async function getMonthlySummary(params: {
   year: number;
   month: number;
 }): Promise<{ success: boolean; data?: MonthlySummary; error?: string }> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
+    const user = await getAuthenticatedReportUser();
+    if (!user) {
       return { success: false, error: "Unauthorized" };
     }
 
-    const { year, month } = params;
-
-    // Calculate date range for the month
-    const startDate = new Date(year, month - 1, 1);
-    const endDate = new Date(year, month, 0, 23, 59, 59, 999);
-
-    // Get transaction summary
-    const transactions = await prisma.transaction.findMany({
-      where: {
-        userId: session.user.id,
-        date: {
-          gte: startDate,
-          lte: endDate,
-        },
-        type: { in: ["INCOME", "EXPENSE"] },
-      },
-      include: {
-        category: true,
-      },
-    });
-
-    // Calculate totals
-    let totalIncome = 0;
-    let totalExpense = 0;
-
-    for (const t of transactions) {
-      const normalizedAmount = await convertToUserCurrency(
-        t.amount,
-        t.currency,
-        t.exchangeRate
-      );
-
-      if (t.type === "INCOME") {
-        totalIncome += normalizedAmount;
-      } else {
-        totalExpense += normalizedAmount;
-      }
+    const validated = monthlySummarySchema.safeParse(params);
+    if (!validated.success) {
+      return { success: false, error: validated.error.issues[0].message };
     }
 
-    // Get category breakdowns
-    const [expenseCategories, incomeCategories] = await Promise.all([
-      getCategoryBreakdown({ startDate, endDate, type: "EXPENSE" }),
-      getCategoryBreakdown({ startDate, endDate, type: "INCOME" }),
-    ]);
-
-    // Get previous month data for comparison
+    const { year, month } = validated.data;
+    const { startDate, endDate } = getMonthRange(year, month);
     const prevMonth = month === 1 ? 12 : month - 1;
     const prevYear = month === 1 ? year - 1 : year;
-    const prevStartDate = new Date(prevYear, prevMonth - 1, 1);
-    const prevEndDate = new Date(prevYear, prevMonth, 0, 23, 59, 59, 999);
+    const { startDate: prevStartDate, endDate: prevEndDate } = getMonthRange(
+      prevYear,
+      prevMonth
+    );
 
-    const prevTransactions = await prisma.transaction.findMany({
-      where: {
-        userId: session.user.id,
-        date: {
-          gte: prevStartDate,
-          lte: prevEndDate,
-        },
-        type: { in: ["INCOME", "EXPENSE"] },
-      },
+    const [currentTransactions, previousTransactions] = await Promise.all([
+      fetchCategorizedTransactions({
+        userId: user.id,
+        startDate,
+        endDate,
+        types: ["INCOME", "EXPENSE"],
+      }),
+      fetchSummaryTransactions({
+        userId: user.id,
+        startDate: prevStartDate,
+        endDate: prevEndDate,
+      }),
+    ]);
+
+    const currentSummaryTransactions: ReportTransactionSummaryRow[] =
+      currentTransactions.map((transaction) => ({
+        date: transaction.date,
+        amount: transaction.amount,
+        currency: transaction.currency,
+        exchangeRate: transaction.exchangeRate,
+        type: transaction.type as "INCOME" | "EXPENSE",
+      }));
+    const converter = await createReportCurrencyConverter({
+      targetCurrency: user.mainCurrency,
+      sourceCurrencies: collectSourceCurrencies([
+        currentTransactions,
+        previousTransactions,
+      ]),
     });
+    const [
+      { totalIncome, totalExpense },
+      { totalIncome: prevIncome, totalExpense: prevExpense },
+      topExpenseCategories,
+      topIncomeCategories,
+    ] = await Promise.all([
+      buildMonthlyTotals({
+        transactions: currentSummaryTransactions,
+        converter,
+      }),
+      buildMonthlyTotals({
+        transactions: previousTransactions,
+        converter,
+      }),
+      buildCategoryBreakdownFromTransactions({
+        transactions: currentTransactions.filter(
+          (transaction) => transaction.type === "EXPENSE"
+        ),
+        type: "EXPENSE",
+        converter,
+      }),
+      buildCategoryBreakdownFromTransactions({
+        transactions: currentTransactions.filter(
+          (transaction) => transaction.type === "INCOME"
+        ),
+        type: "INCOME",
+        converter,
+      }),
+    ]);
 
-    let prevIncome = 0;
-    let prevExpense = 0;
+    const previousMonthComparison =
+      previousTransactions.length > 0
+        ? {
+            incomeChange: totalIncome - prevIncome,
+            expenseChange: totalExpense - prevExpense,
+            netChange:
+              totalIncome - totalExpense - (prevIncome - prevExpense),
+          }
+        : null;
 
-    for (const t of prevTransactions) {
-      const normalizedAmount = await convertToUserCurrency(
-        t.amount,
-        t.currency,
-        t.exchangeRate
-      );
-
-      if (t.type === "INCOME") {
-        prevIncome += normalizedAmount;
-      } else {
-        prevExpense += normalizedAmount;
-      }
-    }
-
-    const previousMonthComparison = prevTransactions.length > 0 ? {
-      incomeChange: totalIncome - prevIncome,
-      expenseChange: totalExpense - prevExpense,
-      netChange: (totalIncome - totalExpense) - (prevIncome - prevExpense),
-    } : null;
-
-    const result: MonthlySummary = {
-      year,
-      month,
-      totalIncome,
-      totalExpense,
-      netFlow: totalIncome - totalExpense,
-      transactionCount: transactions.length,
-      topExpenseCategories: expenseCategories.data?.slice(0, 5) || [],
-      topIncomeCategories: incomeCategories.data?.slice(0, 5) || [],
-      previousMonthComparison,
+    return {
+      success: true,
+      data: {
+        year,
+        month,
+        totalIncome,
+        totalExpense,
+        netFlow: totalIncome - totalExpense,
+        transactionCount: currentTransactions.length,
+        topExpenseCategories: topExpenseCategories.slice(0, 5),
+        topIncomeCategories: topIncomeCategories.slice(0, 5),
+        previousMonthComparison,
+      },
     };
-
-    return { success: true, data: result };
   } catch (error) {
     console.error("Get monthly summary error:", error);
     return { success: false, error: "Failed to fetch monthly summary" };

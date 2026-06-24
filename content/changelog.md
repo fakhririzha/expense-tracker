@@ -1,5 +1,10 @@
 # FinHealth Changelog
 
+## v4.5.13
+
+- Maintenance update: improved report loading behind the scenes so spending trends, category summaries, and monthly comparisons can be prepared more efficiently across larger transaction histories.
+- Kept multi-currency report totals aligned to the latest available exchange rates, with saved conversion data used as fallback when live rates are unavailable.
+
 ## v4.5.12
 
 - Maintenance update: improved transaction loading and editing efficiency behind the scenes so transaction history, split details, and balance updates can be processed more efficiently without changing how they work in the app.
