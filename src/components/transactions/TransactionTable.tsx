@@ -313,17 +313,26 @@ export function TransactionTable({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => onEdit?.(transaction)}>
+              <DropdownMenuItem
+                disabled={transaction.isManagedByDeposito}
+                onClick={() => onEdit?.(transaction)}
+              >
                 <Pencil className="mr-2 h-4 w-4" />
                 Edit
               </DropdownMenuItem>
               <DropdownMenuItem
+                disabled={transaction.isManagedByDeposito}
                 onClick={() => onDelete?.(transaction.id)}
                 className="text-red-600"
               >
                 <Trash2 className="mr-2 h-4 w-4" />
                 Delete
               </DropdownMenuItem>
+              {transaction.isManagedByDeposito ? (
+                <DropdownMenuItem disabled>
+                  Managed by Deposito Tracker
+                </DropdownMenuItem>
+              ) : null}
             </DropdownMenuContent>
           </DropdownMenu>
         );

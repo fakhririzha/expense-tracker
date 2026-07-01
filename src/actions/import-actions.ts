@@ -717,6 +717,15 @@ export async function importAccounts(
 
         const accountType = acc.type.toUpperCase() as AccountTypeValue;
 
+        if (accountType === "DEPOSITO") {
+          result.failed++;
+          result.errors.push({
+            row: rowNumber,
+            error: "Deposito accounts must be created from Deposito Tracker.",
+          });
+          continue;
+        }
+
         await prisma.financialAccount.create({
           data: {
             nameEncrypted: await encryptAccountName(session.user.id, acc.name),

@@ -37,6 +37,7 @@ export interface NetWorthAccountBreakdownItem {
   bucket:
     | "cash"
     | "bank"
+    | "deposito"
     | "investment_cash"
     | "receivable"
     | "loan_liability"

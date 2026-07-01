@@ -40,6 +40,7 @@ interface CalculationTotals {
   netWorth: number;
   cashTotal: number;
   bankTotal: number;
+  depositoTotal: number;
   investmentCashTotal: number;
   investmentHoldingTotal: number;
   investmentTotal: number;
@@ -479,6 +480,7 @@ export async function calculateCurrentNetWorthForUser(
     netWorth: 0,
     cashTotal: 0,
     bankTotal: 0,
+    depositoTotal: 0,
     investmentCashTotal: 0,
     investmentHoldingTotal: investmentHoldings.total,
     investmentTotal: 0,
@@ -517,6 +519,17 @@ export async function calculateCurrentNetWorthForUser(
           rawBalance: account.balance,
           convertedBalance,
           bucket: "bank",
+        });
+        break;
+      case "DEPOSITO":
+        totals.depositoTotal += convertedBalance;
+        accountBreakdown.push({
+          accountId: account.id,
+          type: account.type,
+          currency: account.currency,
+          rawBalance: account.balance,
+          convertedBalance,
+          bucket: "deposito",
         });
         break;
       case "INVESTMENT":
@@ -599,6 +612,7 @@ export async function calculateCurrentNetWorthForUser(
   totals.totalAssets =
     totals.cashTotal +
     totals.bankTotal +
+    totals.depositoTotal +
     totals.investmentTotal +
     totals.personalAssetTotal +
     totals.receivableTotal +

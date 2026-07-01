@@ -18,6 +18,7 @@ export interface TransactionListItem {
   googleMapsLink: string | null;
   date: Date;
   isRecurring: boolean;
+  isManagedByDeposito: boolean;
   toAccountId: string | null;
   account: {
     id: string;

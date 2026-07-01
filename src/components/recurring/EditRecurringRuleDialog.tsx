@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { MoneyInput } from "@/components/ui/money-input";
+import { isDepositoAccountType } from "@/lib/account-types";
 import { cn } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
@@ -133,10 +134,12 @@ export function EditRecurringRuleDialog({
   });
   const { data: categoriesData = [], isLoading: isLoadingCategories } = useCategories(selectedType);
 
-  const accounts = accountsData.map((a: { id: string; name: string }) => ({
-    id: a.id,
-    name: a.name,
-  }));
+  const accounts = accountsData
+    .filter((account: { type: string }) => !isDepositoAccountType(account.type))
+    .map((a: { id: string; name: string }) => ({
+      id: a.id,
+      name: a.name,
+    }));
   const categories = categoriesData.map((category: CategoryOption) => ({
     id: category.id,
     name: category.name,

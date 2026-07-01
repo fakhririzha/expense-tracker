@@ -49,6 +49,7 @@ model User {
   savingsGoals      SavingsGoal[]
   personalAssets    PersonalAsset[]
   personalAssetValuations PersonalAssetValuation[]
+  depositoAccounts  DepositoAccount[]
   netWorthSnapshots NetWorthSnapshot[]
   pushSubscriptions PushSubscription[]
   notificationPreference NotificationPreference?
@@ -103,9 +104,27 @@ enum AccountType {
   BANK
   CASH
   INVESTMENT
+  DEPOSITO
   LOAN
   CREDIT_CARD
   LOAN_RECEIVABLE
+}
+
+enum DepositoInterestFrequency {
+  DAILY
+  MONTHLY
+  YEARLY
+}
+
+enum DepositoTermMode {
+  OPEN_ENDED
+  FIXED_TERM
+}
+
+enum DepositoStatus {
+  ACTIVE
+  MATURED
+  CLOSED
 }
 
 model FinancialAccount {
@@ -133,8 +152,63 @@ model FinancialAccount {
   transactions     Transaction[]
   subscriptions    Subscription[]
   savingsGoals     SavingsGoal[]
+  depositoAccount  DepositoAccount?
 
   @@index([userId])
+}
+
+model DepositoAccount {
+  id                String                    @id @default(cuid())
+  startDate         DateTime
+  principalAmount   Float
+  interestFrequency DepositoInterestFrequency
+  interestRate      Float
+  taxRate           Float?
+  termMode          DepositoTermMode         @default(OPEN_ENDED)
+  maturityDate      DateTime?
+  nextInterestDate  DateTime?
+  status            DepositoStatus           @default(ACTIVE)
+  closedAt          DateTime?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  accountId String           @unique
+  account   FinancialAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  openingTransactionId String?      @unique
+  openingTransaction   Transaction? @relation("DepositoOpeningTransaction", fields: [openingTransactionId], references: [id], onDelete: SetNull)
+  closingTransactionId String?      @unique
+  closingTransaction   Transaction? @relation("DepositoClosingTransaction", fields: [closingTransactionId], references: [id], onDelete: SetNull)
+
+  interestPostings DepositoInterestPosting[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status, nextInterestDate])
+}
+
+model DepositoInterestPosting {
+  id            String   @id @default(cuid())
+  postingDate   DateTime
+  grossInterest Float
+  taxAmount     Float    @default(0)
+  netInterest   Float
+  balanceBefore Float
+  balanceAfter  Float
+
+  depositoAccountId String
+  depositoAccount   DepositoAccount @relation(fields: [depositoAccountId], references: [id], onDelete: Cascade)
+
+  transactionId String      @unique
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([depositoAccountId, postingDate])
+  @@index([depositoAccountId, postingDate])
 }
 
 enum TransactionType {
@@ -225,6 +299,9 @@ model Transaction {
 
   // Reverse relation for audit
   liabilityPaymentAudit LiabilityPaymentAudit?
+  depositoOpening      DepositoAccount?        @relation("DepositoOpeningTransaction")
+  depositoClosing      DepositoAccount?        @relation("DepositoClosingTransaction")
+  depositoInterestPosting DepositoInterestPosting?
 
   @@index([userId])
   @@unique([userId, clientMutationId])

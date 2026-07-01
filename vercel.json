@@ -2,19 +2,23 @@
     "crons": [
         {
             "path": "/api/cron/monthly-net-worth-snapshots",
-            "schedule": "0 0 * * *"
+            "schedule": "0 17 * * *"
         },
         {
             "path": "/api/cron/recurring",
-            "schedule": "15 0 * * *"
+            "schedule": "15 17 * * *"
         },
         {
             "path": "/api/cron/notifications",
-            "schedule": "30 0 * * *"
+            "schedule": "30 17 * * *"
+        },
+        {
+            "path": "/api/cron/deposito",
+            "schedule": "0 18 * * *"
         },
         {
             "path": "/api/cron/pegadaian-gold-prices",
-            "schedule": "45 0 * * *"
+            "schedule": "45 17 * * *"
         }
     ]
 }
