@@ -14,6 +14,7 @@ import {
   useCreateSubscription,
   useUpdateSubscription,
 } from "@/hooks/useSubscriptionQueries";
+import { isDepositoAccountType } from "@/lib/account-types";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -191,7 +192,9 @@ export function SubscriptionFormDialog({
   const updateMutation = useUpdateSubscription();
   const { data: accountsData = [] } = useAccounts();
   const { data: categoriesData = [] } = useCategories("EXPENSE");
-  const accounts = accountsData as Array<{ id: string; name: string }>;
+  const accounts = (accountsData as Array<{ id: string; name: string; type: string }>).filter(
+    (account) => !isDepositoAccountType(account.type)
+  );
   const categories = categoriesData as Array<{
     id: string;
     name: string;

@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { decryptAccountRecords, sortAccountsByName } from "@/lib/account-crypto";
 import prisma from "@/lib/db";
 import {
+  isDepositoAccountType,
   isAssetAccountType,
   isLiabilityAccountType,
   isLiquidAccountType,
@@ -45,6 +46,9 @@ export async function GET() {
     const receivableAccounts = decryptedAccounts.filter((account) =>
       isLoanReceivableAccountType(account.type)
     );
+    const depositoAccounts = decryptedAccounts.filter((account) =>
+      isDepositoAccountType(account.type)
+    );
 
     return NextResponse.json({
       accounts: decryptedAccounts,
@@ -54,6 +58,7 @@ export async function GET() {
       assetAccounts,
       liabilityAccounts,
       receivableAccounts,
+      depositoAccounts,
     });
   } catch (error) {
     console.error("Error fetching accounts by type:", error);

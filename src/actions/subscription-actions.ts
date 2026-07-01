@@ -13,6 +13,7 @@ import {
   TransactionType,
   type RecurringInterval,
 } from "@/generated/prisma/client/client";
+import { isDepositoAccountType } from "@/lib/account-types";
 import prisma from "@/lib/db";
 import { getExchangeRate } from "@/lib/finance-service";
 import {
@@ -258,6 +259,13 @@ async function validateOwnedAccount(userId: string, accountId?: string | null) {
 
   if (!account) {
     return { success: false as const, error: "Account not found" };
+  }
+
+  if (isDepositoAccountType(account.type)) {
+    return {
+      success: false as const,
+      error: "Deposito accounts cannot be used for subscriptions.",
+    };
   }
 
   return {

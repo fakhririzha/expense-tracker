@@ -36,7 +36,10 @@ import {
 } from "@/components/ui/select";
 import { MoneyInput } from "@/components/ui/money-input";
 import { TransactionSplitEditor } from "@/components/transactions/TransactionSplitEditor";
-import { isTransferAccountType } from "@/lib/account-types";
+import {
+  isDepositoAccountType,
+  isTransferAccountType,
+} from "@/lib/account-types";
 import { cn } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
@@ -204,7 +207,10 @@ export function EditTransactionDialog({
     [accountsData]
   );
   const activeAccounts = useMemo(
-    () => accounts.filter((account) => account.isActive),
+    () =>
+      accounts.filter(
+        (account) => account.isActive && !isDepositoAccountType(account.type)
+      ),
     [accounts]
   );
   const form = useForm<EditTransactionFormInput, unknown, EditTransactionFormValues>({

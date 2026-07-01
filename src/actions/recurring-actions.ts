@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import prisma from "@/lib/db";
 import { Prisma } from "@/generated/prisma/client/client";
 import { addDays, addMonths, addWeeks, addYears } from "date-fns";
+import { isDepositoAccountType } from "@/lib/account-types";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { encryptUserField, decryptUserField } from "@/lib/user-encryption";
@@ -23,6 +24,33 @@ const recurringRuleSchema = z.object({
 });
 
 export type RecurringRuleInput = z.infer<typeof recurringRuleSchema>;
+
+async function validateOwnedRecurringAccount(
+  userId: string,
+  accountId?: string | null
+) {
+  if (!accountId) {
+    return { success: true as const };
+  }
+
+  const account = await prisma.financialAccount.findFirst({
+    where: { id: accountId, userId },
+    select: { id: true, type: true },
+  });
+
+  if (!account) {
+    return { success: false as const, error: "Account not found" };
+  }
+
+  if (isDepositoAccountType(account.type)) {
+    return {
+      success: false as const,
+      error: "Deposito accounts cannot be used by recurring rules.",
+    };
+  }
+
+  return { success: true as const };
+}
 
 export async function createRecurringRule(data: RecurringRuleInput) {
   try {
@@ -54,6 +82,14 @@ export async function createRecurringRule(data: RecurringRuleInput) {
       if (!category) {
         return { success: false, error: "Category not found" };
       }
+    }
+
+    const accountValidation = await validateOwnedRecurringAccount(
+      session.user.id,
+      restData.accountId
+    );
+    if (!accountValidation.success) {
+      return { success: false, error: accountValidation.error };
     }
 
     // Encrypt sensitive fields
@@ -137,6 +173,14 @@ export async function updateRecurringRule(
       if (!category) {
         return { success: false, error: "Category not found" };
       }
+    }
+
+    const accountValidation = await validateOwnedRecurringAccount(
+      session.user.id,
+      data.accountId !== undefined ? data.accountId : existingRule.accountId
+    );
+    if (!accountValidation.success) {
+      return { success: false, error: accountValidation.error };
     }
 
     // Encrypt sensitive fields if provided
@@ -344,6 +388,32 @@ export async function processRecurringTransactions() {
 
         // Create the transaction
         await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+          const account = await tx.financialAccount.findFirst({
+            where: {
+              id: rule.accountId!,
+              userId: rule.userId,
+            },
+            select: {
+              id: true,
+              type: true,
+              isActive: true,
+            },
+          });
+
+          if (!account) {
+            throw new Error("Account not found");
+          }
+
+          if (!account.isActive) {
+            throw new Error("Account is inactive");
+          }
+
+          if (isDepositoAccountType(account.type)) {
+            throw new Error(
+              "Deposito accounts cannot be used by recurring rules."
+            );
+          }
+
           // Create transaction
           await tx.transaction.create({
             data: {

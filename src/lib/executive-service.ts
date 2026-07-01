@@ -143,6 +143,7 @@ export async function getExecutiveMetrics(): Promise<{
     let totalCash = 0;
     let totalSavings = 0;
     let totalInvestmentCash = 0;
+    let totalDepositos = 0;
     let totalLoanReceivables = 0;
     let totalDebt = 0;
 
@@ -163,6 +164,9 @@ export async function getExecutiveMetrics(): Promise<{
           break;
         case AccountType.INVESTMENT:
           totalInvestmentCash += normalizedBalance;
+          break;
+        case AccountType.DEPOSITO:
+          totalDepositos += normalizedBalance;
           break;
         case AccountType.LOAN_RECEIVABLE:
           totalLoanReceivables += normalizedBalance;
@@ -229,6 +233,7 @@ export async function getExecutiveMetrics(): Promise<{
       ? totalCash +
         totalSavings +
         totalInvestmentCash +
+        totalDepositos +
         totalLoanReceivables +
         portfolioSummary.totalValue +
         totalPersonalAssets
@@ -268,6 +273,7 @@ export async function getExecutiveMetrics(): Promise<{
         totalCash,
         totalSavings,
         totalInvestmentCash,
+        totalDepositos,
         totalInvestments: portfolioSummary?.totalValue ?? null,
         totalPersonalAssets,
         totalLoanReceivables,

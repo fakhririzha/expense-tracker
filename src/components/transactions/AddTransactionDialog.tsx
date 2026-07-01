@@ -36,7 +36,10 @@ import {
 } from "@/components/ui/select";
 import { MoneyInput } from "@/components/ui/money-input";
 import { TransactionSplitEditor } from "@/components/transactions/TransactionSplitEditor";
-import { isTransferAccountType } from "@/lib/account-types";
+import {
+  isDepositoAccountType,
+  isTransferAccountType,
+} from "@/lib/account-types";
 import { cn, formatCurrency } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
@@ -123,7 +126,9 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
       isActive: a.isActive,
     })
   );
-  const activeAccounts = accounts.filter((account) => account.isActive);
+  const activeAccounts = accounts.filter(
+    (account) => account.isActive && !isDepositoAccountType(account.type)
+  );
   const form = useForm<TransactionFormInput, unknown, TransactionFormValues>({
     resolver: zodResolver(transactionFormSchema),
     defaultValues: {

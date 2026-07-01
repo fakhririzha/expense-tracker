@@ -2,9 +2,17 @@
 
 import { auth } from "@/auth";
 import { Prisma, type AccountType } from "@/generated/prisma/client/client";
+import {
+  getManagedDepositoTransactionIds,
+  isManagedDepositoTransaction,
+} from "@/actions/deposito-actions";
 import { decryptAccountName } from "@/lib/account-crypto";
 import prisma from "@/lib/db";
-import { isLoanReceivableAccountType, isTransferAccountType } from "@/lib/account-types";
+import {
+  isDepositoAccountType,
+  isLoanReceivableAccountType,
+  isTransferAccountType,
+} from "@/lib/account-types";
 import { decryptUserField, encryptUserField } from "@/lib/user-encryption";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -428,6 +436,14 @@ export async function createTransaction(data: TransactionInput) {
       };
     }
 
+    if (isDepositoAccountType(account.type)) {
+      return {
+        success: false,
+        error:
+          "Deposito transactions must be managed from the Deposito Tracker page.",
+      };
+    }
+
     let toAccount: OwnedAccount | null = null;
     if (type === TransactionTypeEnum.TRANSFER) {
       if (!toAccountId) {
@@ -444,6 +460,14 @@ export async function createTransaction(data: TransactionInput) {
         return {
           success: false,
           error: "Destination account is inactive. Please choose an active account.",
+        };
+      }
+
+      if (isDepositoAccountType(toAccount.type)) {
+        return {
+          success: false,
+          error:
+            "Deposito transfers must be managed from the Deposito Tracker page.",
         };
       }
 
@@ -640,6 +664,14 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
       return { success: false, error: "Transaction not found" };
     }
 
+    if (await isManagedDepositoTransaction(userId, id)) {
+      return {
+        success: false,
+        error:
+          "Deposito-managed transactions cannot be edited here. Please use the Deposito Tracker page.",
+      };
+    }
+
     const { amount, type, accountId, categoryId, recurringRuleId } = data;
     const nextAmount = amount ?? existingTransaction.amount;
     const nextType = (type ?? existingTransaction.type) as TransactionTypeValue;
@@ -668,6 +700,17 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
       recurringRuleId !== undefined
         ? sanitizeOptionalForeignKey(recurringRuleId)
         : undefined;
+
+    if (
+      isDepositoAccountType(existingTransaction.account.type) ||
+      isDepositoAccountType(existingTransaction.toAccount?.type ?? "")
+    ) {
+      return {
+        success: false,
+        error:
+          "Deposito-managed transactions cannot be edited here. Please use the Deposito Tracker page.",
+      };
+    }
 
     if (
       existingTransaction.type === TransactionTypeEnum.LIABILITY_PAYMENT ||
@@ -759,6 +802,17 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
       }
 
       if (
+        isDepositoAccountType(nextSourceAccount.type) ||
+        isDepositoAccountType(nextTargetAccount.type)
+      ) {
+        return {
+          success: false,
+          error:
+            "Deposito transfers must be managed from the Deposito Tracker page.",
+        };
+      }
+
+      if (
         isLoanReceivableAccountType(nextSourceAccount.type) ||
         isLoanReceivableAccountType(nextTargetAccount.type)
       ) {
@@ -787,6 +841,14 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
         };
       }
     } else {
+      if (isDepositoAccountType(nextSourceAccount.type)) {
+        return {
+          success: false,
+          error:
+            "Deposito transactions must be managed from the Deposito Tracker page.",
+        };
+      }
+
       const accountRequiresActive =
         nextType !== existingTransaction.type ||
         nextAccountId !== existingTransaction.accountId;
@@ -939,6 +1001,14 @@ export async function deleteTransaction(id: string) {
     const authResult = await assertAuthenticatedUser();
     if (!authResult.success) {
       return { success: false, error: authResult.error };
+    }
+
+    if (await isManagedDepositoTransaction(authResult.userId, id)) {
+      return {
+        success: false,
+        error:
+          "Deposito-managed transactions cannot be deleted here. Please use the Deposito Tracker page.",
+      };
     }
 
     const transaction = await prisma.transaction.findFirst({
@@ -1124,6 +1194,8 @@ export async function getTransactions(options?: TransactionListQueryParams) {
       return decryptAccountNameCached(account);
     };
 
+    const managedTransactionIds = await getManagedDepositoTransactionIds(userId);
+
     const decryptedTransactions = await Promise.all(
       transactions.map(async (transaction) => {
         const [
@@ -1169,6 +1241,7 @@ export async function getTransactions(options?: TransactionListQueryParams) {
 
         return {
           ...transaction,
+          isManagedByDeposito: managedTransactionIds.has(transaction.id),
           account: {
             id: transaction.account.id,
             name: accountName,

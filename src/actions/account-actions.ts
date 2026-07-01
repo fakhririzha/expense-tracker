@@ -9,6 +9,7 @@ import {
 import {
   ACCOUNT_TYPES,
   type AccountTypeValue,
+  isDepositoAccountType,
   isAssetAccountType,
   isLiabilityAccountType,
   normalizeAccountBalanceForType,
@@ -42,6 +43,13 @@ export async function createAccount(data: AccountInput) {
       return {
         success: false,
         error: validatedFields.error.issues[0].message,
+      };
+    }
+
+    if (isDepositoAccountType(validatedFields.data.type)) {
+      return {
+        success: false,
+        error: "Use Deposito Tracker to create deposito accounts.",
       };
     }
 
@@ -93,6 +101,16 @@ export async function updateAccount(id: string, data: Partial<AccountInput>) {
 
     if (!existingAccount) {
       return { success: false, error: "Account not found" };
+    }
+
+    if (
+      isDepositoAccountType(existingAccount.type) ||
+      isDepositoAccountType(data.type ?? existingAccount.type)
+    ) {
+      return {
+        success: false,
+        error: "Manage deposito accounts from the Deposito Tracker page.",
+      };
     }
 
     // Encrypt sensitive fields if provided
@@ -156,10 +174,22 @@ export async function deleteAccount(id: string) {
 
     const account = await prisma.financialAccount.findFirst({
       where: { id, userId: session.user.id },
+      include: {
+        depositoAccount: {
+          select: { id: true },
+        },
+      },
     });
 
     if (!account) {
       return { success: false, error: "Account not found" };
+    }
+
+    if (account.depositoAccount) {
+      return {
+        success: false,
+        error: "Manage deposito accounts from the Deposito Tracker page.",
+      };
     }
 
     // Check if account has transactions

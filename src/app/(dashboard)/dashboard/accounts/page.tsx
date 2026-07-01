@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { AddAccountDialog } from "@/components/accounts/AddAccountDialog";
 import { EditAccountDialog } from "@/components/accounts/EditAccountDialog";
 import { Button } from "@/components/ui/button";
@@ -20,7 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ACCOUNT_TYPE_LABELS } from "@/lib/account-types";
+import { ACCOUNT_TYPE_LABELS, isDepositoAccountType } from "@/lib/account-types";
 import { useAccounts, useAccountsSummary, useDeleteAccount } from "@/hooks/useAccountQueries";
 import { formatCurrency } from "@/lib/utils";
 import { Pencil, Trash2, Wallet } from "lucide-react";
@@ -97,22 +99,28 @@ function AccountRows({
         </span>
       </TableCell>
       <TableCell className="text-right">
-        <div className="flex justify-end gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onEdit(account)}
-          >
-            <Pencil className="h-4 w-4" />
+        {isDepositoAccountType(account.type) ? (
+          <Button asChild variant="outline" size="sm">
+            <Link href="/dashboard/deposito">Manage in Deposito</Link>
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onDelete(account.id, account.name)}
-          >
-            <Trash2 className="h-4 w-4 text-red-600" />
-          </Button>
-        </div>
+        ) : (
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onEdit(account)}
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onDelete(account.id, account.name)}
+            >
+              <Trash2 className="h-4 w-4 text-red-600" />
+            </Button>
+          </div>
+        )}
       </TableCell>
     </TableRow>
   ));
@@ -369,7 +377,7 @@ export default function AccountsPage() {
               <p className="text-xs text-muted-foreground">
                 {summary.valuationError
                   ? "Live investment valuation unavailable"
-                  : "Bank, Cash, Investments, Receivables, Personal Assets"}
+                  : "Bank, Cash, Deposito, Investments, Receivables, Personal Assets"}
               </p>
             </CardContent>
           </Card>

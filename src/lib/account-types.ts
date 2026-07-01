@@ -2,6 +2,7 @@ export const ACCOUNT_TYPES = [
   "BANK",
   "CASH",
   "INVESTMENT",
+  "DEPOSITO",
   "LOAN",
   "CREDIT_CARD",
   "LOAN_RECEIVABLE",
@@ -13,6 +14,7 @@ export const ACCOUNT_TYPE_LABELS: Record<AccountTypeValue, string> = {
   BANK: "Bank Account",
   CASH: "Cash",
   INVESTMENT: "Investment",
+  DEPOSITO: "Deposito",
   LOAN: "Loan",
   CREDIT_CARD: "Credit Card",
   LOAN_RECEIVABLE: "Loans Receivable",
@@ -22,6 +24,7 @@ export const ASSET_ACCOUNT_TYPES = [
   "BANK",
   "CASH",
   "INVESTMENT",
+  "DEPOSITO",
   "LOAN_RECEIVABLE",
 ] as const satisfies readonly AccountTypeValue[];
 
@@ -59,6 +62,10 @@ export function isTransferAccountType(type: string): boolean {
 
 export function isLoanReceivableAccountType(type: string): boolean {
   return type === "LOAN_RECEIVABLE";
+}
+
+export function isDepositoAccountType(type: string): boolean {
+  return type === "DEPOSITO";
 }
 
 export function normalizeAccountBalanceForType(
