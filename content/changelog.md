@@ -1,5 +1,10 @@
 # FinHealth Changelog
 
+## v4.5.15
+
+- Added Pegadaian Tabungan Emas reference prices to gold holdings so GC=F positions can show local buy and sell prices alongside the existing market valuation.
+- Added a scheduled Pegadaian price refresh every three hours while keeping portfolio value and P&L based on the existing Yahoo Finance price feed.
+
 ## v4.5.14
 
 - Split the Accounts page into separate Active Accounts and Inactive Accounts sections so older account records are easier to review without mixing them into your current working list.

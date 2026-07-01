@@ -8,6 +8,10 @@ import {
   type QuoteResult,
 } from "@/lib/finance-service";
 import {
+  getLatestPegadaianGoldPriceSnapshot,
+  type PegadaianGoldPriceSnapshot,
+} from "@/lib/pegadaian-gold-service";
+import {
   convertPrice,
   getUnitLabel,
   isPreciousMetal,
@@ -43,6 +47,7 @@ export interface PortfolioValuationAsset {
   realizedPnL: number;
   quote?: QuoteResult;
   unitLabel: string;
+  pegadaianGoldPrice?: PegadaianGoldPriceSnapshot | null;
 }
 
 export interface PortfolioValuationSummary {
@@ -89,6 +94,8 @@ type LiveQuoteDetails = {
   quote: QuoteResult;
   quoteCurrency: string;
 };
+
+const PEGADAIAN_GOLD_SYMBOL = "GC=F";
 
 function getCurrencyPairKey(fromCurrency: string, toCurrency: string): string {
   return `${fromCurrency}:${toCurrency}`;
@@ -221,6 +228,16 @@ function convertQuotePrice(
     : convertedCurrencyPrice;
 }
 
+function getPegadaianGoldPriceForAsset(
+  asset: Pick<InvestmentAssetRow, "symbol" | "quantity">,
+  pegadaianGoldPrice: PegadaianGoldPriceSnapshot | null
+): PegadaianGoldPriceSnapshot | null {
+  if (asset.quantity <= 0) return null;
+  if (asset.symbol.toUpperCase() !== PEGADAIAN_GOLD_SYMBOL) return null;
+
+  return pegadaianGoldPrice;
+}
+
 export async function getAssetPriceInCurrency(
   symbol: string,
   targetCurrency: string,
@@ -265,7 +282,16 @@ export async function getCurrentPortfolioValuation(
   }
 
   const activeAssets = assets.filter((asset) => asset.quantity > 0);
-  const [prices, realizedPnLByAsset] = await Promise.all([
+  const hasActivePegadaianGoldAsset = activeAssets.some(
+    (asset) => asset.symbol.toUpperCase() === PEGADAIAN_GOLD_SYMBOL
+  );
+  const pegadaianGoldPricePromise = hasActivePegadaianGoldAsset
+    ? getLatestPegadaianGoldPriceSnapshot().catch((error) => {
+        console.error("Get Pegadaian gold price error:", error);
+        return null;
+      })
+    : Promise.resolve(null);
+  const [prices, realizedPnLByAsset, pegadaianGoldPrice] = await Promise.all([
     getMultipleAssetPrices(activeAssets.map((asset) => asset.symbol)),
     prisma.tradeHistory.groupBy({
       by: ["assetId"],
@@ -277,6 +303,7 @@ export async function getCurrentPortfolioValuation(
       },
       _sum: { realizedPnL: true },
     }),
+    pegadaianGoldPricePromise,
   ]);
 
   const quoteDetailsByAssetId = new Map<string, LiveQuoteDetails>();
@@ -324,6 +351,7 @@ export async function getCurrentPortfolioValuation(
           dayChangePercent: 0,
           realizedPnL,
           unitLabel: getUnitLabel(asset.unitType),
+          pegadaianGoldPrice: null,
         };
       }
 
@@ -393,6 +421,10 @@ export async function getCurrentPortfolioValuation(
         realizedPnL,
         quote,
         unitLabel: getUnitLabel(asset.unitType),
+        pegadaianGoldPrice: getPegadaianGoldPriceForAsset(
+          asset,
+          pegadaianGoldPrice
+        ),
       };
     })
   );
