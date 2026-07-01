@@ -33,6 +33,15 @@ import { formatCurrency, formatPercentage } from "@/lib/utils";
 import { UnitType } from "@/generated/prisma/client/client";
 import { TradeHistoryDialog } from "./TradeHistoryDialog";
 
+export interface PegadaianGoldPrice {
+  currency: string;
+  customerBuyPrice: number;
+  customerSellPrice: number;
+  unitGram: number;
+  sourceUpdatedAt: Date | string | null;
+  fetchedAt: Date | string;
+}
+
 export interface PortfolioAsset {
   id: string;
   symbol: string;
@@ -51,6 +60,7 @@ export interface PortfolioAsset {
   unitType: UnitType;
   unitLabel: string;
   realizedPnL: number;
+  pegadaianGoldPrice?: PegadaianGoldPrice | null;
 }
 
 interface PortfolioTableProps {
@@ -59,6 +69,35 @@ interface PortfolioTableProps {
   onRefresh?: () => void;
   isRefreshing?: boolean;
   lastUpdated?: Date;
+}
+
+function formatGoldPrice(amount: number, currency: string): string {
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
+function formatGoldUnit(unitGram: number): string {
+  return new Intl.NumberFormat("id-ID", {
+    maximumFractionDigits: 4,
+  }).format(unitGram);
+}
+
+function formatGoldUpdatedAt(date: Date | string | null): string | null {
+  if (!date) return null;
+
+  const parsed = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(parsed);
 }
 
 /**
@@ -185,6 +224,13 @@ export function PortfolioTable({
         const isPositive = dayChangePercent >= 0;
         const unitLabel = row.original.unitLabel;
         const isNonUnit = row.original.unitType !== "UNIT";
+        const pegadaianGoldPrice = row.original.pegadaianGoldPrice;
+        const pegadaianUpdatedAt = pegadaianGoldPrice
+          ? formatGoldUpdatedAt(
+              pegadaianGoldPrice.sourceUpdatedAt ??
+                pegadaianGoldPrice.fetchedAt
+            )
+          : null;
 
         // For sold assets, show dash
         if (isSold) {
@@ -227,6 +273,29 @@ export function PortfolioTable({
               )}
               {formatPercentage(dayChangePercent)}
             </div>
+            {pegadaianGoldPrice && (
+              <div className="mt-2 border-l-2 border-amber-500 pl-2 text-xs leading-5 text-muted-foreground">
+                <div>
+                  <span className="font-medium text-foreground">
+                    Pegadaian
+                  </span>{" "}
+                  Beli{" "}
+                  {formatGoldPrice(
+                    pegadaianGoldPrice.customerBuyPrice,
+                    pegadaianGoldPrice.currency
+                  )}{" "}
+                  | Jual{" "}
+                  {formatGoldPrice(
+                    pegadaianGoldPrice.customerSellPrice,
+                    pegadaianGoldPrice.currency
+                  )}
+                </div>
+                <div>
+                  / {formatGoldUnit(pegadaianGoldPrice.unitGram)} gr
+                  {pegadaianUpdatedAt && ` | Updated ${pegadaianUpdatedAt}`}
+                </div>
+              </div>
+            )}
           </div>
         );
       },

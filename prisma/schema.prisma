@@ -454,6 +454,24 @@ model ExchangeRate {
   @@index([fetchedAt])
 }
 
+model GoldPriceSnapshot {
+  id                        String    @id @default(cuid())
+  provider                  String
+  source                    String
+  currency                  String    @default("IDR")
+  customerBuyPrice          Float
+  customerSellPrice         Float
+  customerBuyChangePercent  Float?
+  customerSellChangePercent Float?
+  unitGram                  Float
+  effectiveDate             DateTime
+  sourceUpdatedAt           DateTime?
+  fetchedAt                 DateTime  @default(now())
+
+  @@index([provider, source, fetchedAt])
+  @@index([provider, source, effectiveDate])
+}
+
 model NetWorthSnapshot {
   id String @id @default(cuid())
 
