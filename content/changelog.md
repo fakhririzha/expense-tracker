@@ -1,5 +1,9 @@
 # FinHealth Changelog
 
+## v4.5.16
+
+- Change pegadaian cron runs to be daily.
+
 ## v4.5.15
 
 - Added Pegadaian Tabungan Emas reference prices to gold holdings so GC=F positions can show local buy and sell prices alongside the existing market valuation.

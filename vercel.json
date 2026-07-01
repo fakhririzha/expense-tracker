@@ -14,7 +14,7 @@
         },
         {
             "path": "/api/cron/pegadaian-gold-prices",
-            "schedule": "0 */3 * * *"
+            "schedule": "45 0 * * *"
         }
     ]
 }
