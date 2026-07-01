@@ -228,8 +228,8 @@ export function DepositoManager() {
                     <TableHead>Status</TableHead>
                     <TableHead>Current Balance</TableHead>
                     <TableHead>Principal</TableHead>
-                    <TableHead>Rate</TableHead>
-                    <TableHead>Schedule</TableHead>
+                    <TableHead>Rate (p.a.)</TableHead>
+                    <TableHead>Posting Schedule</TableHead>
                     <TableHead>Next Interest</TableHead>
                     <TableHead>Maturity</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
@@ -267,7 +267,7 @@ export function DepositoManager() {
                         )}
                       </TableCell>
                       <TableCell>
-                        {deposito.interestRate.toFixed(2)}%
+                        {deposito.interestRate.toFixed(2)}% p.a.
                         {deposito.taxRate !== null ? (
                           <div className="text-xs text-muted-foreground">
                             Tax {deposito.taxRate.toFixed(2)}%

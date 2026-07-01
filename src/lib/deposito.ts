@@ -31,6 +31,15 @@ export const DEPOSITO_INTEREST_FREQUENCY_LABELS: Record<
   YEARLY: "Yearly",
 };
 
+export const DEPOSITO_INTEREST_POSTINGS_PER_YEAR: Record<
+  DepositoInterestFrequencyValue,
+  number
+> = {
+  DAILY: 365,
+  MONTHLY: 12,
+  YEARLY: 1,
+};
+
 export const DEPOSITO_TERM_MODE_LABELS: Record<DepositoTermModeValue, string> = {
   OPEN_ENDED: "Open ended",
   FIXED_TERM: "Fixed term",
@@ -181,13 +190,27 @@ export function roundDepositoMoney(value: number): number {
   return Math.round((value + Number.EPSILON) * 10000) / 10000;
 }
 
+export function getDepositoPeriodicRatePercent(
+  annualRatePercent: number,
+  frequency: DepositoInterestFrequencyValue
+): number {
+  return (
+    annualRatePercent / DEPOSITO_INTEREST_POSTINGS_PER_YEAR[frequency]
+  );
+}
+
 export function calculateDepositoInterestAmount(input: {
   balance: number;
-  ratePercent: number;
+  annualRatePercent: number;
+  frequency: DepositoInterestFrequencyValue;
   taxRatePercent?: number | null;
 }) {
+  const periodicRatePercent = getDepositoPeriodicRatePercent(
+    input.annualRatePercent,
+    input.frequency
+  );
   const grossInterest = roundDepositoMoney(
-    input.balance * (input.ratePercent / 100)
+    input.balance * (periodicRatePercent / 100)
   );
   const taxAmount = roundDepositoMoney(
     grossInterest * ((input.taxRatePercent ?? 0) / 100)

@@ -3,7 +3,7 @@
 ## v4.6.0
 
 - Added a dedicated Deposito Tracker so locked deposito balances can now be opened from bank or cash accounts, monitored from their own dashboard page, and closed back into liquid accounts without manual balance work.
-- Added scheduled deposito interest posting with support for daily, monthly, or yearly crediting, optional tax handling, compounding balance growth, and automatic maturity pausing for fixed-term depositos.
+- Added scheduled deposito interest posting with support for daily, monthly, or yearly crediting, annualized rate entry with clearer in-form guidance, optional tax handling, compounding balance growth, and automatic maturity pausing for fixed-term depositos.
 - Kept deposito records visible across Accounts and Transactions while protecting deposito-managed balances and interest history from being edited through the wrong workflows.
 
 ## v4.5.16

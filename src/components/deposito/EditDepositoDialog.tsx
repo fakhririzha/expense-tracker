@@ -5,6 +5,7 @@ import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
+import { DepositoAnnualRateTooltip } from "@/components/deposito/DepositoAnnualRateTooltip";
 import { useUpdateDeposito } from "@/hooks/useDepositoQueries";
 import {
   DEPOSITO_INTEREST_FREQUENCIES,
@@ -24,6 +25,7 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -181,7 +183,7 @@ export function EditDepositoDialog({
                 name="interestFrequency"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Interest Schedule</FormLabel>
+                    <FormLabel>Interest Posting Schedule</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
@@ -196,6 +198,9 @@ export function EditDepositoDialog({
                         ))}
                       </SelectContent>
                     </Select>
+                    <FormDescription>
+                      This only controls how often interest is credited.
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -206,7 +211,10 @@ export function EditDepositoDialog({
                 name="interestRate"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Interest Rate (%)</FormLabel>
+                    <div className="flex items-center gap-1">
+                      <FormLabel>Interest Rate (% p.a.)</FormLabel>
+                      <DepositoAnnualRateTooltip />
+                    </div>
                     <FormControl>
                       <Input
                         type="number"
@@ -218,6 +226,10 @@ export function EditDepositoDialog({
                         }
                       />
                     </FormControl>
+                    <FormDescription>
+                      Enter the annual rate. FinHealth prorates it by the posting
+                      schedule.
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

@@ -1044,7 +1044,8 @@ export async function processDepositoInterest() {
               const { grossInterest, taxAmount, netInterest } =
                 calculateDepositoInterestAmount({
                   balance: currentBalance,
-                  ratePercent: deposito.interestRate,
+                  annualRatePercent: deposito.interestRate,
+                  frequency: deposito.interestFrequency,
                   taxRatePercent: deposito.taxRate,
                 });
 
