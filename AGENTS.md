@@ -4,7 +4,7 @@ This file describes the current repository state for AI coding agents working on
 
 ## Project Overview
 
-FinHealth is a personal finance dashboard built with Next.js 16 and React 19. It covers day-to-day money tracking, portfolio valuation, liabilities, loans receivable, personal assets, subscriptions, budgets, goals, cash-flow forecasting, rule-based insights, month-end net-worth snapshots, PWA install support, and browser push notifications.
+FinHealth is a personal finance dashboard built with Next.js 16 and React 19. It covers day-to-day money tracking, portfolio valuation, liabilities, loans receivable, personal assets, subscriptions, budgets, goals, cash-flow forecasting, rule-based insights, month-end net-worth snapshots, PWA install support, browser push notifications, and supplementary Pegadaian gold reference prices.
 
 ### Current Feature Set
 
@@ -12,7 +12,7 @@ FinHealth is a personal finance dashboard built with Next.js 16 and React 19. It
 - **Transactions**: Income, expense, transfer, and liability-payment flows with optional location metadata.
 - **Split Expenses**: Manual split rows for expense transactions, with exact amount matching and category-level reporting support.
 - **Categories**: System and user-defined categories with icon and color metadata.
-- **Investments**: Holdings, buy/sell trade history, realized PnL, valuation, account linkage, and precious-metal unit conversion.
+- **Investments**: Holdings, buy/sell trade history, realized PnL, Yahoo Finance valuation, account linkage, precious-metal unit conversion, and Pegadaian Tabungan Emas buy/sell reference prices for eligible active gold holdings.
 - **Liabilities**: Loan and credit-card payment flows with audit history, overpayment support, and rollback metadata.
 - **Loans Receivable**: Principal disbursement and repayment flows that move balances without misclassifying principal as income or expense.
 - **Recurring Transactions**: Daily, weekly, biweekly, monthly, quarterly, and yearly rules.
@@ -41,7 +41,7 @@ FinHealth is a personal finance dashboard built with Next.js 16 and React 19. It
 | Forms | React Hook Form + Zod | 7.71+ / 4.3+ |
 | Charts | Recharts | 3.6+ |
 | Icons | Lucide React | 0.562+ |
-| Market Data | yahoo-finance2 | 3.13+ |
+| Market Data | yahoo-finance2 + Pegadaian reference prices | 3.13+ / external API |
 | Push Notifications | web-push | 3.6+ |
 | Package Manager | pnpm | 9.x |
 
@@ -114,6 +114,7 @@ expense-tracker/
 - `/api/categories`
 - `/api/cron/monthly-net-worth-snapshots`
 - `/api/cron/notifications`
+- `/api/cron/pegadaian-gold-prices`
 - `/api/cron/recurring`
 - `/api/investments/[id]/trades`
 
@@ -185,6 +186,8 @@ openssl rand -base64 32
 **Subscription**: Renewal tracking with billing cycle, status, linked account/category, notes, optional recurring rule, and encrypted companion fields.
 
 **ExchangeRate**: Global FX cache. Do not apply `userId` filters to this table.
+
+**GoldPriceSnapshot**: Global Pegadaian reference-price history containing provider/source identifiers, customer buy/sell prices, unit size, effective date, source timestamp, and fetch timestamp. Do not apply `userId` filters to this table.
 
 **NetWorthSnapshot**: Frozen month-end totals and breakdowns used for historical reporting.
 
@@ -335,7 +338,7 @@ All mutations and authenticated server-side reads should follow the current acti
 - Require `session.user.id` from `auth()` for user-owned operations.
 - Validate inputs with Zod before database work.
 - Include `userId` in every query for user-owned models.
-- Do not add `userId` filters to global tables such as `ExchangeRate`.
+- Do not add `userId` filters to global reference-data tables such as `ExchangeRate` and `GoldPriceSnapshot`.
 - Use Prisma transactions for balance-moving flows such as transactions, transfers, liability payments, trades, and receivable flows.
 - Revalidate affected dashboard paths after successful mutations.
 - Return `{ success: boolean, data?: T, error?: string }`.
@@ -418,6 +421,17 @@ Notable current hooks include:
 - Precious-metal holdings can require `TROY_OUNCE` to `GRAM` conversion through `src/lib/unit-conversion.ts`.
 - Forecasting and insight code should surface missing FX warnings instead of failing whole views.
 
+### Pegadaian Gold Reference Prices
+
+- Pegadaian access and response normalization live in `src/lib/pegadaian-gold-service.ts`.
+- Validate external responses with the existing Zod schema before storing any values.
+- Store normalized provider results in `GoldPriceSnapshot`; UI and valuation code should consume the latest stored snapshot rather than call Pegadaian directly.
+- `GoldPriceSnapshot` is global reference data and must not receive `userId` ownership filters.
+- The current integration attaches Pegadaian prices only to active holdings whose normalized symbol is `GC=F`.
+- Pegadaian customer buy and sell prices are supplementary reference values only. Portfolio value, day change, cost basis, and P&L must continue to use Yahoo Finance market prices.
+- Missing, stale, invalid, or unavailable Pegadaian data must degrade to no reference-price display without breaking portfolio valuation.
+- The refresh endpoint is `/api/cron/pegadaian-gold-prices` and uses the shared `CRON_SECRET` bearer authorization pattern.
+
 ## Authentication
 
 - Auth.js v5 with JWT sessions and Prisma adapter.
@@ -467,8 +481,9 @@ The project currently includes these `src/components/ui` primitives:
 - Validate user input with Zod or feature-specific validators.
 - Use Prisma ORM instead of building raw SQL.
 - Include `userId` filters on all user-owned models.
-- Do not add `userId` filters to global tables like `ExchangeRate`.
+- Do not add `userId` filters to global reference-data tables such as `ExchangeRate` and `GoldPriceSnapshot`.
 - Keep notification deep links on trusted in-app dashboard paths.
+- Protect cron routes with the shared bearer-secret pattern in production.
 - Use Prisma transactions for any balance-changing workflow.
 - Respect encrypted field helpers instead of reading or writing encrypted columns ad hoc.
 
@@ -493,6 +508,8 @@ Manual verification should cover the touched feature area plus affected cross-fe
 - Liability payments, audit trails, rollback behavior, and overpayment handling
 - Loans Receivable disbursement and repayment flows
 - Investment buys, sells, realized PnL, valuation fallback behavior, and unit conversion
+- Pegadaian cron authorization, response validation, snapshot persistence, no-snapshot fallback, and display only on active `GC=F` positions
+- Confirmation that Pegadaian reference prices do not change portfolio value, cost basis, day change, or P&L
 - Subscription CRUD, recurring-rule linkage, renewal summaries, and trial behavior
 - Recurring processing and schedule-pressure alerts
 - Budget progress, goal progress, profile targets, and dashboard cards
@@ -511,6 +528,9 @@ Manual verification should cover the touched feature area plus affected cross-fe
 - `/api/cron/monthly-net-worth-snapshots` at `0 0 * * *`
 - `/api/cron/recurring` at `15 0 * * *`
 - `/api/cron/notifications` at `30 0 * * *`
+- `/api/cron/pegadaian-gold-prices` at `45 0 * * *`
+
+The Pegadaian reference-price refresh runs once per day at `00:45 UTC`.
 
 ### Required Production Configuration
 
