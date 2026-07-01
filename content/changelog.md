@@ -1,5 +1,10 @@
 # FinHealth Changelog
 
+## v4.5.14
+
+- Split the Accounts page into separate Active Accounts and Inactive Accounts sections so older account records are easier to review without mixing them into your current working list.
+- Added search and pagination to both account sections, making larger account lists faster to scan and browse.
+
 ## v4.5.13
 
 - Maintenance update: improved report loading behind the scenes so spending trends, category summaries, and monthly comparisons can be prepared more efficiently across larger transaction histories.
