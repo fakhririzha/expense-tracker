@@ -8,6 +8,7 @@ import { Landmark, Plus } from "lucide-react";
 
 import { useAccounts } from "@/hooks/useAccountQueries";
 import { useOpenDeposito } from "@/hooks/useDepositoQueries";
+import { DepositoAnnualRateTooltip } from "@/components/deposito/DepositoAnnualRateTooltip";
 import {
   DEPOSITO_INTEREST_FREQUENCIES,
   DEPOSITO_INTEREST_FREQUENCY_LABELS,
@@ -29,6 +30,7 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -270,7 +272,7 @@ export function OpenDepositoDialog({ onSuccess }: OpenDepositoDialogProps) {
                 name="interestFrequency"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Interest Schedule</FormLabel>
+                    <FormLabel>Interest Posting Schedule</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
@@ -285,6 +287,9 @@ export function OpenDepositoDialog({ onSuccess }: OpenDepositoDialogProps) {
                         ))}
                       </SelectContent>
                     </Select>
+                    <FormDescription>
+                      This only controls how often interest is credited.
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -295,7 +300,10 @@ export function OpenDepositoDialog({ onSuccess }: OpenDepositoDialogProps) {
                 name="interestRate"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Interest Rate (%)</FormLabel>
+                    <div className="flex items-center gap-1">
+                      <FormLabel>Interest Rate (% p.a.)</FormLabel>
+                      <DepositoAnnualRateTooltip />
+                    </div>
                     <FormControl>
                       <Input
                         type="number"
@@ -307,6 +315,10 @@ export function OpenDepositoDialog({ onSuccess }: OpenDepositoDialogProps) {
                         }
                       />
                     </FormControl>
+                    <FormDescription>
+                      Enter the annual rate. FinHealth prorates it by the posting
+                      schedule.
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
