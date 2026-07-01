@@ -7,7 +7,7 @@ FinHealth is a personal finance dashboard built with Next.js 16 and React 19. It
 - Unified account tracking for bank, cash, investment, liability, credit-card, and receivable balances
 - Transaction flows for income, expenses, transfers, liability payments, and optional location metadata
 - Manual split expense transactions with category-aware reporting
-- Portfolio valuation with Yahoo Finance pricing, trade history, realized PnL, and precious-metal unit conversion
+- Portfolio valuation with Yahoo Finance pricing, trade history, realized PnL, precious-metal unit conversion, and Pegadaian Tabungan Emas reference prices for eligible gold holdings
 - Loans receivable, liability-payment audits, and month-end frozen net-worth snapshots
 - Subscriptions, recurring rules, calendar views, and upcoming bank-pressure alerts
 - CSV import/export, multi-currency reporting, budgets, goals, forecasting, and financial insights
@@ -27,7 +27,7 @@ FinHealth is a personal finance dashboard built with Next.js 16 and React 19. It
 | Server State | TanStack Query | 5.90+ |
 | Forms | React Hook Form + Zod | 7.71+ / 4.3+ |
 | Charts | Recharts | 3.6+ |
-| Market Data | yahoo-finance2 | 3.13+ |
+| Market Data | yahoo-finance2 + Pegadaian reference prices | 3.13+ / external API |
 | Push Notifications | web-push | 3.6+ |
 | Package Manager | pnpm | 9.x |
 
@@ -147,6 +147,7 @@ Notes:
 - `/api/investments/[id]/trades`
 - `/api/cron/monthly-net-worth-snapshots`
 - `/api/cron/notifications`
+- `/api/cron/pegadaian-gold-prices`
 - `/api/cron/recurring`
 
 ## Project Structure
@@ -180,7 +181,9 @@ expense-tracker/
 - Server Actions under `src/actions` implement most authenticated reads and all mutations.
 - Prisma uses a generated client under `src/generated/prisma/client`.
 - TanStack Query wraps client-side access to Server Actions.
-- Yahoo Finance powers live quote and FX data with fallback-aware handling.
+- Yahoo Finance powers live market quotes and FX data with fallback-aware handling.
+- `src/lib/pegadaian-gold-service.ts` validates and stores Pegadaian Tabungan Emas reference prices for eligible `GC=F` holdings.
+- Pegadaian prices are supplementary buy/sell references; portfolio value and P&L continue to use Yahoo Finance market prices.
 - PWA support is implemented through `src/app/manifest.ts`, `public/sw.js`, and profile-level notification settings.
 
 ## Data Model Notes
@@ -190,6 +193,7 @@ expense-tracker/
 - `NetWorthSnapshot` stores frozen month-end values for historical reporting.
 - `PushSubscription`, `NotificationPreference`, and `NotificationEvent` back browser push notifications.
 - `ExchangeRate` is a global cache and is not user-owned.
+- `GoldPriceSnapshot` stores global Pegadaian reference-price history and is not user-owned.
 
 ## Testing
 
@@ -206,7 +210,7 @@ When relevant, also run:
 git diff --check
 ```
 
-For functional changes, manually verify the touched flow and its balance/reporting side effects. This is especially important for transactions, transfers, liabilities, receivables, split expenses, investments, forecasts, notifications, and imports.
+For functional changes, manually verify the touched flow and its balance/reporting side effects. This is especially important for transactions, transfers, liabilities, receivables, split expenses, investments, market-price fallbacks, Pegadaian reference prices, forecasts, notifications, and imports.
 
 ## Deployment
 
@@ -228,10 +232,16 @@ For functional changes, manually verify the touched flow and its balance/reporti
     {
       "path": "/api/cron/notifications",
       "schedule": "30 0 * * *"
+    },
+    {
+      "path": "/api/cron/pegadaian-gold-prices",
+      "schedule": "45 0 * * *"
     }
   ]
 }
 ```
+
+The Pegadaian cron refreshes the stored reference price once per day at `00:45 UTC`.
 
 Before deploying:
 
