@@ -1,5 +1,10 @@
 # FinHealth Changelog
 
+## v4.6.4
+
+- Reduced the default Transactions page size from 25 rows to 10 rows so history opens in smaller, easier-to-scan batches.
+- Kept the existing page-size options available, so you can still expand the list when you want to review more transactions at once.
+
 ## v4.6.3
 
 - Improved Add Transaction and Edit Transaction so the selected account balance is now shown for income and expense entries, not just transfers.
