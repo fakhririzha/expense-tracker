@@ -35,6 +35,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { MoneyInput } from "@/components/ui/money-input";
+import { TransactionAccountCombobox } from "@/components/transactions/TransactionAccountCombobox";
 import { TransactionSplitEditor } from "@/components/transactions/TransactionSplitEditor";
 import {
   isDepositoAccountType,
@@ -441,29 +442,22 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>From Account</FormLabel>
-                    <Select
-                      onValueChange={(value) => {
-                        field.onChange(value);
-                        // Clear toAccountId if same as from account
-                        if (form.getValues("toAccountId") === value) {
-                          form.setValue("toAccountId", "");
-                        }
-                      }}
-                      value={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select source account" />
-                        </SelectTrigger>
-                        </FormControl>
-                      <SelectContent>
-                        {eligibleTransferAccounts.map((account) => (
-                            <SelectItem key={account.id} value={account.id}>
-                              {account.name} ({account.currency})
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <TransactionAccountCombobox
+                        emptyMessage="No source accounts found."
+                        onChange={(value) => {
+                          field.onChange(value);
+                          if (form.getValues("toAccountId") === value) {
+                            form.setValue("toAccountId", "");
+                          }
+                        }}
+                        options={eligibleTransferAccounts}
+                        placeholder="Select source account"
+                        selectedAccount={selectedFromAccount}
+                        showCurrencyInTrigger
+                        value={field.value ?? ""}
+                      />
+                    </FormControl>
                     {selectedFromAccount ? (
                       <AccountBalanceSummary
                         balance={selectedFromAccount.balance}
@@ -482,23 +476,21 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>To Account</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      value={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select destination account" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {eligibleDestinationAccounts.map((account) => (
-                            <SelectItem key={account.id} value={account.id}>
-                              {account.name} ({account.currency})
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <TransactionAccountCombobox
+                        emptyMessage={
+                          selectedFromAccount
+                            ? "No destination accounts found."
+                            : "Select a source account first."
+                        }
+                        onChange={field.onChange}
+                        options={eligibleDestinationAccounts}
+                        placeholder="Select destination account"
+                        selectedAccount={selectedToAccount}
+                        showCurrencyInTrigger
+                        value={field.value ?? ""}
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -511,23 +503,17 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Account</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    defaultValue={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select account" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {activeAccounts.map((account) => (
-                        <SelectItem key={account.id} value={account.id}>
-                          {account.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <TransactionAccountCombobox
+                      emptyMessage="No accounts found."
+                      onChange={field.onChange}
+                      options={activeAccounts}
+                      placeholder="Select account"
+                      selectedAccount={selectedFromAccount}
+                      showCurrencyInList={false}
+                      value={field.value ?? ""}
+                    />
+                  </FormControl>
                   {selectedFromAccount ? (
                     <AccountBalanceSummary
                       balance={selectedFromAccount.balance}
