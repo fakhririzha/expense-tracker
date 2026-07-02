@@ -65,6 +65,7 @@ interface TransactionTableProps {
   total: number;
   totalPages: number;
   sorting: SortingState;
+  isPagePending?: boolean;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
   onSortingChange: (sorting: SortingState) => void;
@@ -81,6 +82,7 @@ interface TransactionTableProps {
  * @param total - The total number of matching transactions across all pages.
  * @param totalPages - The total number of available pages.
  * @param sorting - The current server-side sorting state.
+ * @param isPagePending - Whether the table is waiting for a newly requested page.
  * @param onPageChange - Callback invoked when the requested page changes.
  * @param onPageSizeChange - Callback invoked when the page size changes.
  * @param onSortingChange - Callback invoked when the sort order changes.
@@ -95,6 +97,7 @@ export function TransactionTable({
   total,
   totalPages,
   sorting,
+  isPagePending = false,
   onPageChange,
   onPageSizeChange,
   onSortingChange,
@@ -429,6 +432,7 @@ export function TransactionTable({
             <Select
               value={String(pageSize)}
               onValueChange={(value) => onPageSizeChange(Number(value))}
+              disabled={isPagePending}
             >
               <SelectTrigger className="w-22">
                 <SelectValue />
@@ -450,7 +454,7 @@ export function TransactionTable({
               variant="outline"
               size="sm"
               onClick={() => onPageChange(page - 1)}
-              disabled={page <= 1}
+              disabled={isPagePending || page <= 1}
             >
               Previous
             </Button>
@@ -458,7 +462,7 @@ export function TransactionTable({
               variant="outline"
               size="sm"
               onClick={() => onPageChange(page + 1)}
-              disabled={page >= totalPages}
+              disabled={isPagePending || page >= totalPages}
             >
               Next
             </Button>
