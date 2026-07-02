@@ -1,5 +1,10 @@
 # FinHealth Changelog
 
+## v4.6.1
+
+- Added a dedicated Insights page in the sidebar so financial signals now live in their own view between Dashboard and Transactions.
+- Lightened the main dashboard load by moving the Insights section off the home page while keeping the same alerts and recommendations available.
+
 ## v4.6.0
 
 - Added a dedicated Deposito Tracker so locked deposito balances can now be opened from bank or cash accounts, monitored from their own dashboard page, and closed back into liquid accounts without manual balance work.
