@@ -1,5 +1,10 @@
 # FinHealth Changelog
 
+## v4.6.7
+
+- Improved Add Transaction and Edit Transaction account search results so long account lists scroll more reliably inside the picker on mobile and desktop.
+- Prevented the surrounding page or sheet from stealing scroll gestures while you browse account matches, making account selection easier in longer forms.
+
 ## v4.6.6
 
 - Improved Add Transaction and Edit Transaction account pickers with search so larger account lists are faster to scan and select on mobile and desktop.

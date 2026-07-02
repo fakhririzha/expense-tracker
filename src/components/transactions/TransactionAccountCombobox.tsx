@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useMemo, useState } from "react";
+import { forwardRef, useMemo, useRef, useState } from "react";
 import type { ComponentPropsWithoutRef } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -61,11 +61,22 @@ export const TransactionAccountCombobox = forwardRef<
     ref
   ) => {
     const [open, setOpen] = useState(false);
+    const listRef = useRef<HTMLDivElement | null>(null);
 
     const resolvedSelectedAccount = useMemo(
       () => selectedAccount ?? options.find((account) => account.id === value),
       [options, selectedAccount, value]
     );
+
+    const stopListScrollPropagation = () => {
+      const listElement = listRef.current;
+
+      if (!listElement || listElement.scrollHeight <= listElement.clientHeight) {
+        return;
+      }
+
+      return true;
+    };
 
     return (
       <Popover open={open} onOpenChange={setOpen}>
@@ -93,11 +104,24 @@ export const TransactionAccountCombobox = forwardRef<
         </PopoverTrigger>
         <PopoverContent
           align="start"
-          className="w-(--radix-popover-trigger-width) min-w-0 p-0"
+          className="z-60 w-(--radix-popover-trigger-width) min-w-0 overflow-hidden p-0"
         >
           <Command>
             <CommandInput placeholder="Search account..." />
-            <CommandList className="max-h-72">
+            <CommandList
+              ref={listRef}
+              className="max-h-[min(18rem,var(--radix-popover-content-available-height))] touch-pan-y overscroll-contain [-webkit-overflow-scrolling:touch]"
+              onTouchMoveCapture={(event) => {
+                if (stopListScrollPropagation()) {
+                  event.stopPropagation();
+                }
+              }}
+              onWheelCapture={(event) => {
+                if (stopListScrollPropagation()) {
+                  event.stopPropagation();
+                }
+              }}
+            >
               <CommandEmpty>{emptyMessage}</CommandEmpty>
               <CommandGroup>
                 {options.map((account) => {
