@@ -1,5 +1,10 @@
 # FinHealth Changelog
 
+## v4.6.3
+
+- Improved Add Transaction and Edit Transaction so the selected account balance is now shown for income and expense entries, not just transfers.
+- Made it easier to confirm available funds before saving everyday transactions while keeping transfer destination rules unchanged.
+
 ## v4.6.2
 
 - Removed the duplicate Financial Insights panel from Reports so analytics stays focused there and insights now live only on the dedicated Insights page.
