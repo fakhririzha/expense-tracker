@@ -24,6 +24,7 @@ import {
   HandCoins,
   Landmark,
   LayoutDashboard,
+  Lightbulb,
   Menu,
   PieChart,
   Repeat2,
@@ -37,6 +38,7 @@ import {
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/dashboard/insights", label: "Insights", icon: Lightbulb },
   { href: "/dashboard/transactions", label: "Transactions", icon: Receipt },
   { href: "/dashboard/accounts", label: "Accounts", icon: Wallet },
   { href: "/dashboard/assets", label: "Assets", icon: Boxes },
