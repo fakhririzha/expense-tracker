@@ -1,5 +1,10 @@
 # FinHealth Changelog
 
+## v4.6.5
+
+- Improved the Transactions table so the current page stays visible while the next page is loading, reducing jumpy refreshes during pagination.
+- Locked the page-size picker and Previous/Next controls during page changes so it is harder to trigger duplicate navigation clicks before new results arrive.
+
 ## v4.6.4
 
 - Reduced the default Transactions page size from 25 rows to 10 rows so history opens in smaller, easier-to-scan batches.

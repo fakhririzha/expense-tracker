@@ -133,7 +133,11 @@ export default function TransactionsPage() {
     [filters, page, pageSize, sortBy, sortOrder]
   );
 
-  const { data: transactionPage, isLoading } = useTransactions(transactionQueryParams);
+  const {
+    data: transactionPage,
+    isLoading,
+    isPlaceholderData,
+  } = useTransactions(transactionQueryParams);
   const { data: accountsData = [] } = useAccounts();
   const { data: categoriesData = [] } = useCategories();
   const deleteMutation = useDeleteTransaction();
@@ -181,7 +185,7 @@ export default function TransactionsPage() {
   );
 
   useEffect(() => {
-    if (!transactionPage || transactionPage.page === page) {
+    if (isPlaceholderData || !transactionPage || transactionPage.page === page) {
       return;
     }
 
@@ -191,7 +195,7 @@ export default function TransactionsPage() {
           ? undefined
           : String(transactionPage.page),
     });
-  }, [page, replaceSearchParams, transactionPage]);
+  }, [isPlaceholderData, page, replaceSearchParams, transactionPage]);
 
   const handleFiltersChange = (nextFilters: FilterOptions) => {
     replaceSearchParams(
@@ -262,6 +266,10 @@ export default function TransactionsPage() {
   };
 
   const transactions = transactionPage?.transactions ?? [];
+  const tablePage = isPlaceholderData ? page : transactionPage?.page ?? page;
+  const tablePageSize = isPlaceholderData
+    ? pageSize
+    : transactionPage?.pageSize ?? pageSize;
 
   return (
     <div className="space-y-6">
@@ -290,11 +298,12 @@ export default function TransactionsPage() {
       ) : (
         <TransactionTable
           transactions={transactions}
-          page={transactionPage?.page ?? page}
-          pageSize={transactionPage?.pageSize ?? pageSize}
+          page={tablePage}
+          pageSize={tablePageSize}
           total={transactionPage?.total ?? 0}
           totalPages={transactionPage?.totalPages ?? 1}
           sorting={sorting}
+          isPagePending={isPlaceholderData}
           onPageChange={handlePageChange}
           onPageSizeChange={handlePageSizeChange}
           onSortingChange={handleSortingChange}
