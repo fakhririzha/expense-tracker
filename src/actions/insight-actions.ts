@@ -73,7 +73,7 @@ const insightTypeSchema = z.enum([
 
 const getFinancialInsightsSchema = z
   .object({
-    scope: z.enum(["dashboard", "reports"]).optional(),
+    scope: z.enum(["dashboard"]).optional(),
     limit: z.number().int().min(1).max(12).optional(),
     includeTypes: z.array(insightTypeSchema).optional(),
   })

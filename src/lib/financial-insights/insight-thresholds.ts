@@ -1,6 +1,5 @@
 export const FINANCIAL_INSIGHT_LIMITS = {
   dashboard: 6,
-  reports: 10,
 } as const;
 
 export const BUDGET_WARNING_THRESHOLD = 80;

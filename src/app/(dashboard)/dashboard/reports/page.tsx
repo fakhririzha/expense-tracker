@@ -8,8 +8,6 @@ import { NetWorthHistoryChart } from "@/components/reports/NetWorthHistoryChart"
 import { NetWorthSnapshotEmptyState } from "@/components/reports/NetWorthSnapshotEmptyState";
 import { NetWorthSnapshotSummaryCard } from "@/components/reports/NetWorthSnapshotSummaryCard";
 import { MonthlySummaryCard } from "@/components/reports/MonthlySummaryCard";
-import { FinancialInsightsCard } from "@/components/insights/FinancialInsightsCard";
-import { FinancialInsightsSkeleton } from "@/components/insights/FinancialInsightsSkeleton";
 import { CashFlowForecastSection } from "@/components/forecast/CashFlowForecastSection";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SubscriptionSummaryCards } from "@/components/subscriptions/SubscriptionSummaryCards";
@@ -27,7 +25,6 @@ import {
   useIncomeVsExpense,
   useReportMonthlySummary,
 } from "@/hooks/useReportQueries";
-import { useFinancialInsights } from "@/hooks/useFinancialInsightQueries";
 import {
   useNetWorthSnapshotSummary,
   useNetWorthTrend,
@@ -95,10 +92,6 @@ export default function ReportsPage() {
   );
   const { data: subscriptionSummary } = useSubscriptionSummary();
   const { data: activeSubscriptions = [] } = useSubscriptions({ status: "ACTIVE" });
-  const { data: insightResult, isLoading: insightsLoading } = useFinancialInsights({
-    scope: "reports",
-    limit: 10,
-  });
 
   const isLoading = trendsLoading || expCatLoading;
 
@@ -240,15 +233,6 @@ export default function ReportsPage() {
                 </CardContent>
               </Card>
             </div>
-
-            {insightsLoading ? (
-              <FinancialInsightsSkeleton />
-            ) : (
-              <FinancialInsightsCard
-                insights={insightResult?.insights ?? []}
-                description="A broader read across spending, resilience, debt, and asset concentration."
-              />
-            )}
 
             {/* Charts Grid */}
             <div className="grid gap-6 md:grid-cols-2">

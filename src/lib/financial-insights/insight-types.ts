@@ -16,7 +16,7 @@ export type FinancialInsightType =
   | "investment_allocation"
   | "multi_currency_impact";
 
-export type FinancialInsightScope = "dashboard" | "reports";
+export type FinancialInsightScope = "dashboard";
 
 export interface FinancialInsightPeriod {
   from: string;

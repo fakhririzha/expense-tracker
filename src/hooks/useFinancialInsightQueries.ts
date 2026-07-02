@@ -13,7 +13,7 @@ function getCurrentInsightPeriodKey(): string {
 export const financialInsightKeys = {
   all: ["financial-insights"] as const,
   current: (
-    scope: "dashboard" | "reports",
+    scope: "dashboard",
     limit: number | undefined,
     periodKey: string,
     includeTypes?: NonNullable<GetFinancialInsightsInput>["includeTypes"]
