@@ -1,5 +1,10 @@
 # FinHealth Changelog
 
+## v4.6.6
+
+- Improved Add Transaction and Edit Transaction account pickers with search so larger account lists are faster to scan and select on mobile and desktop.
+- Kept transfer account rules and historical inactive-account editing behavior intact while making account selection easier to manage as your account list grows.
+
 ## v4.6.5
 
 - Improved the Transactions table so the current page stays visible while the next page is loading, reducing jumpy refreshes during pagination.
