@@ -1,5 +1,5 @@
 export const DEFAULT_TRANSACTION_PAGE = 1;
-export const DEFAULT_TRANSACTION_PAGE_SIZE = 25;
+export const DEFAULT_TRANSACTION_PAGE_SIZE = 10;
 export const TRANSACTION_PAGE_SIZES = [10, 25, 50, 100] as const;
 
 export type TransactionSortField = "date" | "amount";
