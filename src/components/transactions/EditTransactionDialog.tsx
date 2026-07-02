@@ -40,7 +40,7 @@ import {
   isDepositoAccountType,
   isTransferAccountType,
 } from "@/lib/account-types";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
 import { AlertCircle, CalendarIcon } from "lucide-react";
@@ -114,12 +114,44 @@ interface AccountOption {
   id: string;
   name: string;
   type: string;
+  balance: number;
   currency: string;
   isActive: boolean;
 }
 
-function formatAccountOptionLabel(account: AccountOption, showCurrency = false) {
+function formatAccountOptionLabel(
+  account: Pick<AccountOption, "name" | "currency">,
+  showCurrency = false
+) {
   return showCurrency ? `${account.name} (${account.currency})` : account.name;
+}
+
+interface AccountBalanceSummaryProps {
+  balance: number;
+  currency: string;
+  transferNote?: string;
+}
+
+function AccountBalanceSummary({
+  balance,
+  currency,
+  transferNote,
+}: AccountBalanceSummaryProps) {
+  return (
+    <div className="mt-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-2">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-[11px] font-medium uppercase tracking-wide text-primary/80">
+          Available balance
+        </span>
+        <span className="text-sm font-semibold text-foreground">
+          {formatCurrency(balance, currency)}
+        </span>
+      </div>
+      {transferNote ? (
+        <p className="mt-1 text-xs text-muted-foreground">{transferNote}</p>
+      ) : null}
+    </div>
+  );
 }
 
 interface Transaction {
@@ -201,6 +233,7 @@ export function EditTransactionDialog({
         id: a.id,
         name: a.name,
         type: a.type,
+        balance: a.balance,
         currency: a.currency,
         isActive: a.isActive,
       })),
@@ -257,6 +290,10 @@ export function EditTransactionDialog({
           }
         : undefined),
     [accounts, selectedFromAccountId, transaction]
+  );
+  const selectedFromAccountBalance = useMemo(
+    () => accounts.find((account) => account.id === selectedFromAccountId)?.balance,
+    [accounts, selectedFromAccountId]
   );
   const selectedToAccount = useMemo(
     () =>
@@ -573,11 +610,12 @@ export function EditTransactionDialog({
                             ))}
                         </SelectContent>
                       </Select>
-                      {selectedFromAccount ? (
-                        <p className="text-xs text-muted-foreground">
-                          Transfers only allow destination accounts in{" "}
-                          {selectedFromAccount.currency}.
-                        </p>
+                      {selectedFromAccount && selectedFromAccountBalance !== undefined ? (
+                        <AccountBalanceSummary
+                          balance={selectedFromAccountBalance}
+                          currency={selectedFromAccount.currency}
+                          transferNote={`Transfers only allow destination accounts in ${selectedFromAccount.currency}.`}
+                        />
                       ) : null}
                       <FormMessage />
                     </FormItem>
@@ -648,6 +686,13 @@ export function EditTransactionDialog({
                         ))}
                       </SelectContent>
                     </Select>
+                    {selectedFromAccount &&
+                    selectedFromAccountBalance !== undefined ? (
+                      <AccountBalanceSummary
+                        balance={selectedFromAccountBalance}
+                        currency={selectedFromAccount.currency}
+                      />
+                    ) : null}
                     <FormMessage />
                   </FormItem>
                 )}

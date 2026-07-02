@@ -100,6 +100,34 @@ interface AddTransactionDialogProps {
   onSuccess?: () => void;
 }
 
+interface AccountBalanceSummaryProps {
+  balance: number;
+  currency: string;
+  transferNote?: string;
+}
+
+function AccountBalanceSummary({
+  balance,
+  currency,
+  transferNote,
+}: AccountBalanceSummaryProps) {
+  return (
+    <div className="mt-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-2">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-[11px] font-medium uppercase tracking-wide text-primary/80">
+          Available balance
+        </span>
+        <span className="text-sm font-semibold text-foreground">
+          {formatCurrency(balance, currency)}
+        </span>
+      </div>
+      {transferNote ? (
+        <p className="mt-1 text-xs text-muted-foreground">{transferNote}</p>
+      ) : null}
+    </div>
+  );
+}
+
 /**
  * Display a dialog for creating a transaction (income, expense, or transfer).
  *
@@ -437,22 +465,11 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
                       </SelectContent>
                     </Select>
                     {selectedFromAccount ? (
-                      <div className="mt-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-2">
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="text-[11px] font-medium uppercase tracking-wide text-primary/80">
-                            Available balance
-                          </span>
-                          <span className="text-sm font-semibold text-foreground">
-                            {formatCurrency(
-                              selectedFromAccount.balance,
-                              selectedFromAccount.currency
-                            )}
-                          </span>
-                        </div>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          Destination accounts must use {selectedFromAccount.currency}.
-                        </p>
-                      </div>
+                      <AccountBalanceSummary
+                        balance={selectedFromAccount.balance}
+                        currency={selectedFromAccount.currency}
+                        transferNote={`Destination accounts must use ${selectedFromAccount.currency}.`}
+                      />
                     ) : null}
                     <FormMessage />
                   </FormItem>
@@ -511,6 +528,12 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
                       ))}
                     </SelectContent>
                   </Select>
+                  {selectedFromAccount ? (
+                    <AccountBalanceSummary
+                      balance={selectedFromAccount.balance}
+                      currency={selectedFromAccount.currency}
+                    />
+                  ) : null}
                   <FormMessage />
                 </FormItem>
               )}
