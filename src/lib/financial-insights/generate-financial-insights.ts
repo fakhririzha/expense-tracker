@@ -41,7 +41,9 @@ export interface InsightBudgetProgress {
   amount: number;
   spent: number;
   percentage: number;
+  scope: "CATEGORIES" | "LEGACY_GLOBAL";
   categoryId: string | null;
+  categoryIds: string[];
   categoryName: string | null;
 }
 
@@ -228,8 +230,8 @@ export function generateFinancialInsights(
   const suppressedCategoryIds = new Set<string>();
 
   if (strongestBudgetWarning) {
-    if (strongestBudgetWarning.categoryId) {
-      suppressedCategoryIds.add(strongestBudgetWarning.categoryId);
+    for (const categoryId of strongestBudgetWarning.categoryIds) {
+      suppressedCategoryIds.add(categoryId);
     }
 
     const severity: FinancialInsightSeverity =

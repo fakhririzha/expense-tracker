@@ -991,7 +991,12 @@ async function sendBudgetThresholdNotifications(
       id: true,
       amount: true,
       period: true,
-      categoryId: true,
+      scope: true,
+      categories: {
+        select: {
+          categoryId: true,
+        },
+      },
     },
   });
 
@@ -1021,9 +1026,14 @@ async function sendBudgetThresholdNotifications(
       continue;
     }
 
-    const spent = budget.categoryId
-      ? aggregate.spentByCategoryId.get(budget.categoryId) ?? 0
-      : aggregate.totalSpent;
+    const spent =
+      budget.scope === "CATEGORIES"
+        ? budget.categories.reduce(
+            (sum, category) =>
+              sum + (aggregate.spentByCategoryId.get(category.categoryId) ?? 0),
+            0
+          )
+        : aggregate.totalSpent;
     const percentage = budget.amount > 0 ? (spent / budget.amount) * 100 : 0;
 
     const threshold =

@@ -15,6 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { formatBudgetCategorySummary } from "@/lib/budget-utils";
 import { cn, formatCurrency } from "@/lib/utils";
 import { BudgetWithProgress } from "@/actions/budget-actions";
 import { MoreHorizontal, Pencil, Trash2, TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
@@ -91,7 +92,7 @@ export function BudgetCard({ budget, onEdit, onDelete }: BudgetCardProps) {
           <div className="space-y-1">
             <CardTitle className="text-lg">{budget.name}</CardTitle>
             <CardDescription>
-              {budget.category?.name || "All Categories"} • {periodLabel}
+              {formatBudgetCategorySummary(budget.categories, budget.scope)} • {periodLabel}
             </CardDescription>
           </div>
           <DropdownMenu>

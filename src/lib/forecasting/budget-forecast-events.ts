@@ -13,6 +13,7 @@ import {
 } from "date-fns";
 
 import { BudgetPeriod } from "@/generated/prisma/client/client";
+import type { BudgetScopeValue } from "@/lib/budget-utils";
 import { buildForecastEvent } from "@/lib/forecasting/forecast-events";
 import { getDateKey, roundMoney } from "@/lib/forecasting/forecast-periods";
 import type { ForecastEvent } from "@/lib/forecasting/forecast-types";
@@ -22,9 +23,10 @@ export interface ForecastBudget {
   name: string;
   amount: number;
   period: BudgetPeriod;
+  scope: BudgetScopeValue;
   startDate: Date;
   endDate: Date | null;
-  categoryId: string | null;
+  categoryIds: string[];
 }
 
 function getBudgetWindow(period: BudgetPeriod, date: Date) {
@@ -66,9 +68,14 @@ export function buildBudgetForecastEvents(args: {
     }
 
     const actualSpent = args.actualSpentByBudgetId.get(budget.id) ?? 0;
-    const plannedFutureSpend = budget.categoryId
-      ? args.plannedExpenseByCategoryId.get(budget.categoryId) ?? 0
-      : args.uncategorizedPlannedExpense;
+    const plannedFutureSpend =
+      budget.scope === "CATEGORIES"
+        ? budget.categoryIds.reduce(
+            (sum, categoryId) =>
+              sum + (args.plannedExpenseByCategoryId.get(categoryId) ?? 0),
+            0
+          )
+        : args.uncategorizedPlannedExpense;
 
     const remainingBudget = roundMoney(
       Math.max(budget.amount - actualSpent - plannedFutureSpend, 0)
@@ -99,9 +106,7 @@ export function buildBudgetForecastEvents(args: {
           id: `budget-${budget.id}-${getDateKey(date)}`,
           date,
           type: "estimated_spending",
-          label: budget.categoryId
-            ? `Budget pace: ${budget.name}`
-            : "Budget-based spending pace",
+          label: `Budget pace: ${budget.name}`,
           amount: dailyAmount,
           currency: args.currency,
           amountInMainCurrency: dailyAmount,
@@ -109,7 +114,10 @@ export function buildBudgetForecastEvents(args: {
           confidence: "low",
           source: "budget",
           sourceId: budget.id,
-          categoryId: budget.categoryId,
+          categoryId:
+            budget.scope === "CATEGORIES" && budget.categoryIds.length === 1
+              ? budget.categoryIds[0]
+              : null,
           conversionRate: 1,
           conversionSource: "identity",
         })

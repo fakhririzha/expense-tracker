@@ -18,6 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { formatBudgetCategorySummary } from "@/lib/budget-utils";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import { ArrowLeft, TrendingUp, AlertTriangle, Loader2 } from "lucide-react";
 
@@ -69,7 +70,7 @@ export function BudgetProgress({ budget, onBack }: BudgetProgressProps) {
         <div>
           <h2 className="text-2xl font-bold">{budget.name}</h2>
           <p className="text-muted-foreground">
-            {budget.category?.name || "All Categories"} • {periodLabel}
+            {formatBudgetCategorySummary(budget.categories, budget.scope)} • {periodLabel}
           </p>
         </div>
       </div>

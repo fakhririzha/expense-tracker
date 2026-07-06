@@ -1,6 +1,6 @@
 "use client";
 
-import { BudgetWithProgress } from "@/actions/budget-actions";
+import { BudgetVsActualItem, BudgetWithProgress } from "@/actions/budget-actions";
 import { AddBudgetDialog } from "@/components/budgets/AddBudgetDialog";
 import { BudgetCard } from "@/components/budgets/BudgetCard";
 import { BudgetProgress } from "@/components/budgets/BudgetProgress";
@@ -19,22 +19,6 @@ import { formatCurrency } from "@/lib/utils";
 import { Wallet, TrendingUp, TrendingDown, AlertTriangle, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useBudgetsSummary, useBudgetVsActual } from "@/hooks/useBudgetQueries";
-
-interface BudgetVsActual {
-  budgetId: string | null;
-  budgetName: string | null;
-  category: {
-    id: string;
-    name: string;
-    icon: string | null;
-    color: string | null;
-  } | null;
-  budgeted: number;
-  actual: number;
-  variance: number;
-  percentageUsed: number;
-  isOverBudget: boolean;
-}
 
 /**
  * Render the Budgets dashboard page with summaries, filters, and budget management UI.
@@ -218,7 +202,7 @@ export default function BudgetsPage() {
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           ) : (
-            <BudgetVsActualChart data={comparisonData as BudgetVsActual[]} />
+            <BudgetVsActualChart data={comparisonData as BudgetVsActualItem[]} />
           )}
         </TabsContent>
       </Tabs>
