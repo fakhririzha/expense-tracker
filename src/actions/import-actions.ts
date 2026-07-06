@@ -772,13 +772,15 @@ export async function importAccounts(
  * - `name` is required.
  * - `amount` must be greater than zero.
  * - `period` must be one of `MONTHLY`, `QUARTERLY`, or `YEARLY` (case-insensitive).
- * If `category` is provided, the function attempts to link it to one of the current user's categories; if not found, the budget is created without a category. Row numbers in reported errors start at 2 (header = row 1).
+ * - At least one valid expense category must be resolved from `categories` or legacy `category`.
+ * Row numbers in reported errors start at 2 (header = row 1).
  *
  * @param budgets - Array of budget records to import. Each item should contain:
  *   - `name`: display name of the budget
  *   - `amount`: positive numeric budget amount
  *   - `period`: budget period (`MONTHLY` | `QUARTERLY` | `YEARLY`)
- *   - `category` (optional): category name to link the budget to
+ *   - `category` (optional): legacy single category name
+ *   - `categories` (optional): pipe-delimited category names such as `Food|Transport`
  *   - `startDate` (optional): ISO date string for the budget start (defaults to now)
  *   - `endDate` (optional): ISO date string for the budget end
  * @returns The import result including counts (`imported`, `failed`), per-row `errors`, and `success` which is `true` if at least one budget was created.
@@ -789,6 +791,7 @@ export async function importBudgets(
     amount: number;
     period: string;
     category?: string;
+    categories?: string;
     startDate?: string;
     endDate?: string;
   }>
@@ -815,7 +818,10 @@ export async function importBudgets(
 
     // Get categories for lookup
     const categories = await prisma.category.findMany({
-      where: { userId: session.user.id },
+      where: {
+        userId: session.user.id,
+        type: "EXPENSE",
+      },
       select: { id: true, name: true },
     });
 
@@ -853,13 +859,31 @@ export async function importBudgets(
       }
 
       try {
-        // Find category if specified
-        let categoryId: string | null = null;
-        if (budget.category) {
-          const category = categoryMap.get(budget.category.toLowerCase());
-          if (category) {
-            categoryId = category.id;
-          }
+        const requestedCategoryNames = (
+          budget.categories
+            ? budget.categories.split("|")
+            : budget.category
+              ? [budget.category]
+              : []
+        )
+          .map((value) => value.trim())
+          .filter((value) => value.length > 0);
+
+        const categoryIds = Array.from(
+          new Set(
+            requestedCategoryNames
+              .map((categoryName) => categoryMap.get(categoryName.toLowerCase())?.id)
+              .filter((value): value is string => !!value)
+          )
+        );
+
+        if (categoryIds.length === 0) {
+          result.failed++;
+          result.errors.push({
+            row: rowNumber,
+            error: "At least one valid expense category is required",
+          });
+          continue;
         }
 
         await prisma.budget.create({
@@ -867,9 +891,14 @@ export async function importBudgets(
             name: budget.name,
             amount: budget.amount,
             period: budget.period.toUpperCase() as "MONTHLY" | "QUARTERLY" | "YEARLY",
+            scope: "CATEGORIES",
             startDate: budget.startDate ? new Date(budget.startDate) : new Date(),
             endDate: budget.endDate ? new Date(budget.endDate) : null,
-            categoryId,
+            categories: {
+              create: categoryIds.map((categoryId) => ({
+                categoryId,
+              })),
+            },
             userId: session.user.id,
           },
         });
@@ -916,10 +945,10 @@ export async function getImportTemplate(type: "transactions" | "accounts" | "bud
 Bank Account,BANK,IDR,1000000,Main bank account
 Cash,CASH,IDR,500000,Pocket money
 Credit Card,CREDIT_CARD,IDR,-200000,Credit card debt`,
-    budgets: `Name,Amount,Period,Category,Start Date,End Date
-Food Budget,2000000,MONTHLY,Food,2024-01-01,
+    budgets: `Name,Amount,Period,Categories,Start Date,End Date
+Food Budget,2000000,MONTHLY,Food|Groceries,2024-01-01,
 Transport,500000,MONTHLY,Transport,2024-01-01,
-Savings,1000000,MONTHLY,,2024-01-01,`,
+Household,1000000,MONTHLY,Utilities|Home,2024-01-01,`,
   };
 
   return templates[type];

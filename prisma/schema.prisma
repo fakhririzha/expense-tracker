@@ -239,7 +239,7 @@ model Category {
 
   transactions Transaction[]
   transactionSplits TransactionSplit[]
-  budgets      Budget[]
+  budgetCategories BudgetCategory[]
   subscriptions Subscription[]
 
   createdAt DateTime @default(now())
@@ -636,17 +636,34 @@ enum BudgetPeriod {
   YEARLY
 }
 
+enum BudgetScope {
+  CATEGORIES
+  LEGACY_GLOBAL
+}
+
+model BudgetCategory {
+  budgetId   String
+  categoryId String
+
+  budget   Budget   @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([budgetId, categoryId])
+  @@index([budgetId])
+  @@index([categoryId])
+}
+
 model Budget {
   id        String       @id @default(cuid())
   name      String
   amount    Float
   period    BudgetPeriod
+  scope     BudgetScope  @default(CATEGORIES)
   startDate DateTime
   endDate   DateTime?
   isActive  Boolean      @default(true)
 
-  categoryId String?
-  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  categories BudgetCategory[]
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -655,7 +672,6 @@ model Budget {
   updatedAt DateTime @updatedAt
 
   @@index([userId])
-  @@index([categoryId])
 }
 
 // ==================== SAVINGS GOALS ====================

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCreateBudget } from "@/hooks/useBudgetQueries";
+import { BudgetCategoryMultiSelect } from "@/components/budgets/BudgetCategoryMultiSelect";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -49,7 +50,7 @@ const budgetFormSchema = z
     period: z.enum(["MONTHLY", "QUARTERLY", "YEARLY"]),
     startDate: z.date(),
     endDate: z.date().optional(),
-    categoryId: z.string().optional(),
+    categoryIds: z.array(z.string()).min(1, "Select at least one category"),
     isActive: z.boolean(),
   })
   .refine(
@@ -103,7 +104,7 @@ export function AddBudgetDialog({ onSuccess }: AddBudgetDialogProps) {
       period: "MONTHLY",
       startDate: new Date(),
       isActive: true,
-      categoryId: "",
+      categoryIds: [],
     },
   });
 
@@ -228,31 +229,20 @@ export function AddBudgetDialog({ onSuccess }: AddBudgetDialogProps) {
 
             <FormField
               control={form.control}
-              name="categoryId"
+              name="categoryIds"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Category (Optional)</FormLabel>
-                  <Select
-                    onValueChange={(value) => {
-                      // Use "all" as a sentinel value that gets converted to undefined
-                      field.onChange(value === "all" ? undefined : value);
-                    }}
-                    value={field.value || "all"}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="All categories" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="all">All categories</SelectItem>
-                      {categories.map((category) => (
-                        <SelectItem key={category.id} value={category.id}>
-                          {category.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormLabel>Categories</FormLabel>
+                  <FormControl>
+                    <BudgetCategoryMultiSelect
+                      onChange={field.onChange}
+                      options={categories}
+                      value={field.value}
+                    />
+                  </FormControl>
+                  <p className="text-xs text-muted-foreground">
+                    Select one or more expense categories for this budget.
+                  </p>
                   <FormMessage />
                 </FormItem>
               )}

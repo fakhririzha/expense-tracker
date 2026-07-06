@@ -1,5 +1,6 @@
 "use client";
 
+import type { BudgetVsActualItem } from "@/actions/budget-actions";
 import {
   Card,
   CardContent,
@@ -7,6 +8,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { formatBudgetCategorySummary } from "@/lib/budget-utils";
 import { formatCurrency } from "@/lib/utils";
 import {
   Bar,
@@ -20,24 +22,8 @@ import {
   YAxis,
 } from "recharts";
 
-interface BudgetVsActualData {
-  budgetId: string | null;
-  budgetName: string | null;
-  category: {
-    id: string;
-    name: string;
-    icon: string | null;
-    color: string | null;
-  } | null;
-  budgeted: number;
-  actual: number;
-  variance: number;
-  percentageUsed: number;
-  isOverBudget: boolean;
-}
-
 interface BudgetVsActualChartProps {
-  data: BudgetVsActualData[];
+  data: BudgetVsActualItem[];
 }
 
 /**
@@ -54,7 +40,11 @@ export function BudgetVsActualChart({ data }: BudgetVsActualChartProps) {
   const chartData = data
     .filter((item) => item.budgeted > 0 || item.actual > 0)
     .map((item) => ({
-      name: item.category?.name || item.budgetName || "Uncategorized",
+      name:
+        item.budgetName ||
+        formatBudgetCategorySummary(item.categories, item.scope) ||
+        "Uncategorized",
+      categorySummary: formatBudgetCategorySummary(item.categories, item.scope),
       budgeted: item.budgeted,
       actual: item.actual,
       variance: item.variance,
@@ -82,12 +72,12 @@ export function BudgetVsActualChart({ data }: BudgetVsActualChartProps) {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Budget vs Actual</CardTitle>
-        <CardDescription>
-          Compare your budgeted amounts with actual spending by category
-        </CardDescription>
-      </CardHeader>
+        <CardHeader>
+          <CardTitle>Budget vs Actual</CardTitle>
+          <CardDescription>
+            Compare your budgeted amounts with actual spending by budget
+          </CardDescription>
+        </CardHeader>
       <CardContent>
         <div className="h-[400px] w-full">
           <ResponsiveContainer width="100%" height="100%">
@@ -120,7 +110,7 @@ export function BudgetVsActualChart({ data }: BudgetVsActualChartProps) {
                   formatCurrency(value as number),
                   name === "budgeted" ? "Budgeted" : "Actual",
                 ]}
-                labelFormatter={(label) => `Category: ${label}`}
+                labelFormatter={(label) => `Budget: ${label}`}
                 contentStyle={{
                   backgroundColor: "hsl(var(--card))",
                   borderColor: "hsl(var(--border))",
@@ -172,7 +162,12 @@ export function BudgetVsActualChart({ data }: BudgetVsActualChartProps) {
                 className="flex items-center justify-between py-2 border-b last:border-0"
               >
                 <div className="flex items-center gap-2">
-                  <span className="font-medium">{item.name}</span>
+                  <div>
+                    <p className="font-medium">{item.name}</p>
+                    {item.categorySummary && item.categorySummary !== item.name ? (
+                      <p className="text-xs text-muted-foreground">{item.categorySummary}</p>
+                    ) : null}
+                  </div>
                   {item.isOverBudget && (
                     <span className="text-xs bg-destructive/10 text-destructive px-2 py-0.5 rounded">
                       Over Budget

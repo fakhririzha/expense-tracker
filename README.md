@@ -1,13 +1,15 @@
 # FinHealth
 
-FinHealth is a personal finance dashboard built with Next.js 16 and React 19. It tracks accounts, transactions, split expenses, liabilities, loans receivable, investments, personal assets, subscriptions, budgets, savings goals, historical net worth, cash-flow forecasts, rule-based insights, and browser notifications.
+FinHealth is a personal finance dashboard built with Next.js 16 and React 19. It tracks accounts, transactions, split expenses, liabilities, loans receivable, deposito balances, investments, personal assets, subscriptions, multi-category budgets, savings goals, historical net worth, cash-flow forecasts, rule-based insights, and browser notifications.
 
 ## Highlights
 
 - Unified account tracking for bank, cash, investment, liability, credit-card, and receivable balances
 - Transaction flows for income, expenses, transfers, liability payments, and optional location metadata
 - Manual split expense transactions with category-aware reporting
+- Multi-category budgets with support for legacy all-spending budgets
 - Portfolio valuation with Yahoo Finance pricing, trade history, realized PnL, precious-metal unit conversion, and Pegadaian Tabungan Emas reference prices for eligible gold holdings
+- Dedicated Insights and Deposito Tracker dashboards for financial signals and locked-balance workflows
 - Loans receivable, liability-payment audits, and month-end frozen net-worth snapshots
 - Subscriptions, recurring rules, calendar views, and upcoming bank-pressure alerts
 - CSV import/export, multi-currency reporting, budgets, goals, forecasting, and financial insights
@@ -129,7 +131,9 @@ Notes:
 - `/dashboard/calendar`
 - `/dashboard/categories`
 - `/dashboard/data`
+- `/dashboard/deposito`
 - `/dashboard/goals`
+- `/dashboard/insights`
 - `/dashboard/investments`
 - `/dashboard/liabilities`
 - `/dashboard/profile`
@@ -144,6 +148,7 @@ Notes:
 - `/api/accounts/by-type`
 - `/api/auth/[...nextauth]`
 - `/api/categories`
+- `/api/cron/deposito`
 - `/api/investments/[id]/trades`
 - `/api/cron/monthly-net-worth-snapshots`
 - `/api/cron/notifications`
@@ -182,6 +187,8 @@ expense-tracker/
 - Prisma uses a generated client under `src/generated/prisma/client`.
 - TanStack Query wraps client-side access to Server Actions.
 - Yahoo Finance powers live market quotes and FX data with fallback-aware handling.
+- Budgets support multiple expense categories through a scoped many-to-many linkage, with legacy global budgets preserved for older records.
+- Deposito tracking has a dedicated dashboard flow plus cron-backed daily interest processing.
 - `src/lib/pegadaian-gold-service.ts` validates and stores Pegadaian Tabungan Emas reference prices for eligible `GC=F` holdings.
 - Pegadaian prices are supplementary buy/sell references; portfolio value and P&L continue to use Yahoo Finance market prices.
 - PWA support is implemented through `src/app/manifest.ts`, `public/sw.js`, and profile-level notification settings.
@@ -189,6 +196,7 @@ expense-tracker/
 ## Data Model Notes
 
 - `FinancialAccount` stores account names and descriptions in encrypted-only columns.
+- `Budget` uses scoped many-to-many category coverage so one budget can track multiple expense categories.
 - `TransactionSplit` supports manual split expense allocation.
 - `NetWorthSnapshot` stores frozen month-end values for historical reporting.
 - `PushSubscription`, `NotificationPreference`, and `NotificationEvent` back browser push notifications.
@@ -223,25 +231,29 @@ For functional changes, manually verify the touched flow and its balance/reporti
   "crons": [
     {
       "path": "/api/cron/monthly-net-worth-snapshots",
-      "schedule": "0 0 * * *"
+      "schedule": "0 17 * * *"
     },
     {
       "path": "/api/cron/recurring",
-      "schedule": "15 0 * * *"
+      "schedule": "15 17 * * *"
     },
     {
       "path": "/api/cron/notifications",
-      "schedule": "30 0 * * *"
+      "schedule": "30 17 * * *"
+    },
+    {
+      "path": "/api/cron/deposito",
+      "schedule": "0 18 * * *"
     },
     {
       "path": "/api/cron/pegadaian-gold-prices",
-      "schedule": "45 0 * * *"
+      "schedule": "45 17 * * *"
     }
   ]
 }
 ```
 
-The Pegadaian cron refreshes the stored reference price once per day at `00:45 UTC`.
+The Pegadaian cron refreshes the stored reference price once per day at `17:45 UTC`, and the deposito cron posts due interest once per day at `18:00 UTC`.
 
 Before deploying:
 

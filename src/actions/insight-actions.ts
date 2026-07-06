@@ -10,6 +10,7 @@ import { addDays, startOfMonth, startOfQuarter, startOfYear } from "date-fns";
 import { z } from "zod";
 
 import { auth } from "@/auth";
+import { formatBudgetCategorySummary } from "@/lib/budget-utils";
 import prisma from "@/lib/db";
 import {
   createInsightCurrencyConverter,
@@ -137,10 +138,13 @@ function buildBudgetProgress(input: {
     name: string;
     amount: number;
     period: BudgetPeriod;
+    scope: "CATEGORIES" | "LEGACY_GLOBAL";
     startDate: Date;
     endDate: Date | null;
-    categoryId: string | null;
-    category: { id: string; name: string } | null;
+    categories: Array<{
+      categoryId: string;
+      category: { id: string; name: string };
+    }>;
   }>;
   transactions: Array<{
     amount: number;
@@ -164,13 +168,14 @@ function buildBudgetProgress(input: {
     )
     .map((budget) => {
       const range = getBudgetRange(budget.period, input.now);
-      const spent = budget.categoryId
+      const categoryIds = budget.categories.map((entry) => entry.categoryId);
+      const spent = budget.scope === "CATEGORIES"
         ? input.expenseAllocations.reduce((sum, transaction) => {
             if (transaction.date < range.start || transaction.date > range.end) {
               return sum;
             }
 
-            if (transaction.categoryId !== budget.categoryId) {
+            if (!transaction.categoryId || !categoryIds.includes(transaction.categoryId)) {
               return sum;
             }
 
@@ -198,8 +203,19 @@ function buildBudgetProgress(input: {
         amount: budget.amount,
         spent,
         percentage,
-        categoryId: budget.categoryId,
-        categoryName: budget.category?.name ?? null,
+        scope: budget.scope,
+        categoryId: categoryIds.length === 1 ? categoryIds[0] : null,
+        categoryIds,
+        categoryName:
+          budget.scope === "CATEGORIES"
+            ? formatBudgetCategorySummary(
+                budget.categories.map((entry) => ({
+                  id: entry.category.id,
+                  name: entry.category.name,
+                })),
+                "CATEGORIES"
+              )
+            : "All spending",
       };
     });
 }
@@ -497,13 +513,18 @@ export async function getFinancialInsights(
           name: true,
           amount: true,
           period: true,
+          scope: true,
           startDate: true,
           endDate: true,
-          categoryId: true,
-          category: {
+          categories: {
             select: {
-              id: true,
-              name: true,
+              categoryId: true,
+              category: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
             },
           },
         },

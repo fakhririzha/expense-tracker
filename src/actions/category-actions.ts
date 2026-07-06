@@ -66,7 +66,7 @@ export async function getCategories(type?: "INCOME" | "EXPENSE") {
           _count: {
             select: {
               transactions: true,
-              budgets: true,
+              budgetCategories: true,
             },
           },
         },
@@ -102,7 +102,7 @@ export async function getCategories(type?: "INCOME" | "EXPENSE") {
         createdAt: category.createdAt,
         updatedAt: category.updatedAt,
         transactionCount: category._count.transactions,
-        budgetCount: category._count.budgets,
+        budgetCount: category._count.budgetCategories,
         recurringRuleCount: recurringCountMap.get(category.id) ?? 0,
       })),
     };

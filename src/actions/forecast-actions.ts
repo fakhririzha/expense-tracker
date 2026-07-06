@@ -487,9 +487,14 @@ export async function getCashFlowForecast(
               name: true,
               amount: true,
               period: true,
+              scope: true,
               startDate: true,
               endDate: true,
-              categoryId: true,
+              categories: {
+                select: {
+                  categoryId: true,
+                },
+              },
             },
           })
         : Promise.resolve([]),
@@ -690,7 +695,8 @@ export async function getCashFlowForecast(
 
       for (const budget of budgets) {
         const range = getBudgetPeriodRange(budget.period, startDate);
-        const spent = budget.categoryId
+        const categoryIds = budget.categories.map((entry) => entry.categoryId);
+        const spent = budget.scope === "CATEGORIES"
           ? flattenTransactionAllocationRows(
               await prisma.transaction.findMany({
                 where: {
@@ -740,7 +746,11 @@ export async function getCashFlowForecast(
                 },
               })
             )
-              .filter((transaction) => transaction.categoryId === budget.categoryId)
+              .filter(
+                (transaction) =>
+                  transaction.categoryId !== null &&
+                  categoryIds.includes(transaction.categoryId)
+              )
               .reduce((sum, transaction) => sum + transaction.normalizedAmount, 0)
           : (
               await prisma.transaction.findMany({
@@ -801,7 +811,10 @@ export async function getCashFlowForecast(
 
       variableSpendingEvents.push(
         ...buildBudgetForecastEvents({
-          budgets,
+          budgets: budgets.map((budget) => ({
+            ...budget,
+            categoryIds: budget.categories.map((entry) => entry.categoryId),
+          })),
           startDate,
           endDate,
           actualSpentByBudgetId,

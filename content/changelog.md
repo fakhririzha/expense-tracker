@@ -1,5 +1,10 @@
 # FinHealth Changelog
 
+## v4.6.8
+
+- Added multi-category budgets so one budget can now track several expense categories together instead of forcing you to split the limit into separate entries.
+- Kept older all-spending budgets working as legacy budgets, while making it possible to convert them into category-based budgets whenever you update them.
+
 ## v4.6.7
 
 - Improved Add Transaction and Edit Transaction account search results so long account lists scroll more reliably inside the picker on mobile and desktop.

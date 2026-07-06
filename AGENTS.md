@@ -4,7 +4,7 @@ This file describes the current repository state for AI coding agents working on
 
 ## Project Overview
 
-FinHealth is a personal finance dashboard built with Next.js 16 and React 19. It covers day-to-day money tracking, portfolio valuation, liabilities, loans receivable, personal assets, subscriptions, budgets, goals, cash-flow forecasting, rule-based insights, month-end net-worth snapshots, PWA install support, browser push notifications, and supplementary Pegadaian gold reference prices.
+FinHealth is a personal finance dashboard built with Next.js 16 and React 19. It covers day-to-day money tracking, portfolio valuation, liabilities, loans receivable, deposito balances, personal assets, subscriptions, multi-category budgets, goals, cash-flow forecasting, rule-based insights, month-end net-worth snapshots, PWA install support, browser push notifications, and supplementary Pegadaian gold reference prices.
 
 ### Current Feature Set
 
@@ -17,8 +17,9 @@ FinHealth is a personal finance dashboard built with Next.js 16 and React 19. It
 - **Loans Receivable**: Principal disbursement and repayment flows that move balances without misclassifying principal as income or expense.
 - **Recurring Transactions**: Daily, weekly, biweekly, monthly, quarterly, and yearly rules.
 - **Subscriptions**: Renewal tracking, trial tracking, recurring-rule linkage, summaries, and detail drawers.
-- **Budgets and Goals**: Monthly, quarterly, and yearly budgets plus savings goals and profile-level targets.
-- **Reports and Analytics**: Category breakdowns, spending trends, income-vs-expense views, frozen month-end net-worth history, forecasting, and rule-based financial insights.
+- **Deposito Tracker**: Locked deposito account opening, scheduled interest posting, maturity monitoring, and controlled closing flows back into liquid accounts.
+- **Budgets and Goals**: Monthly, quarterly, and yearly budgets with multi-category support, legacy global budget compatibility, plus savings goals and profile-level targets.
+- **Reports and Analytics**: Category breakdowns, spending trends, income-vs-expense views, frozen month-end net-worth history, forecasting, and a dedicated financial insights surface.
 - **Calendar and Pressure Alerts**: Upcoming recurring items, subscription renewals, and bank-balance pressure alerts for the next 30 days.
 - **Data Tools**: CSV import with mapping and export support.
 - **PWA and Notifications**: Install prompt, offline fallback page, service worker, push subscriptions, notification preferences, and daily notification dispatch cron.
@@ -97,7 +98,9 @@ expense-tracker/
 - `/dashboard/calendar`
 - `/dashboard/categories`
 - `/dashboard/data`
+- `/dashboard/deposito`
 - `/dashboard/goals`
+- `/dashboard/insights`
 - `/dashboard/investments`
 - `/dashboard/liabilities`
 - `/dashboard/profile`
@@ -112,6 +115,7 @@ expense-tracker/
 - `/api/accounts/by-type`
 - `/api/auth/[...nextauth]`
 - `/api/categories`
+- `/api/cron/deposito`
 - `/api/cron/monthly-net-worth-snapshots`
 - `/api/cron/notifications`
 - `/api/cron/pegadaian-gold-prices`
@@ -175,7 +179,7 @@ openssl rand -base64 32
 
 **TransactionSplit**: Child rows for split expense allocations. Each split has its own amount, optional description, category, and sort order.
 
-**Category**: System and user-defined categories shared across transactions, split rows, budgets, and subscriptions.
+**Category**: System and user-defined categories shared across transactions, split rows, budget category scopes, and subscriptions.
 
 **InvestmentAsset**: Holdings with symbol, quantity, average buy price, currency, unit type, optional investment-account linkage, and trade history.
 
@@ -193,7 +197,9 @@ openssl rand -base64 32
 
 **LiabilityPaymentAudit**: Payment audit log with source/target balance snapshots, execution metadata, and rollback state.
 
-**Budget**: User-owned budget rules with period, date range, and optional category linkage.
+**Budget**: User-owned budget rules with period, date range, `BudgetScope`, and many-to-many category coverage through `BudgetCategory`. Category-scoped budgets can cover one or more expense categories, while legacy global budgets remain compatible for older all-spending records.
+
+**BudgetCategory**: Join model connecting budgets to one or more expense categories for scoped budget tracking and category usage counts.
 
 **SavingsGoal**: User-owned goal with progress, target date, optional linked account, and encrypted descriptive fields.
 
@@ -266,6 +272,11 @@ enum BudgetPeriod {
   MONTHLY,
   QUARTERLY,
   YEARLY
+}
+
+enum BudgetScope {
+  CATEGORIES,
+  LEGACY_GLOBAL
 }
 
 enum NotificationType {
@@ -405,6 +416,13 @@ Notable current hooks include:
 - Source and destination accounts must share the same currency.
 - Liability and receivable flows have separate dedicated actions and validation rules.
 
+### Budgets
+
+- New budgets must select at least one owned `EXPENSE` category.
+- Budget category coverage is many-to-many through `BudgetCategory`; the same category can intentionally contribute to multiple budgets.
+- Legacy global budgets remain supported for older category-less records and continue to represent all spending until converted.
+- Category-scoped budget progress, comparisons, forecasting, and transaction matching must aggregate spend across the full selected category set.
+
 ### Notifications and PWA
 
 - Service worker registration is handled by `src/components/pwa/ServiceWorkerRegistrar.tsx`.
@@ -525,12 +543,13 @@ Manual verification should cover the touched feature area plus affected cross-fe
 
 `vercel.json` currently schedules:
 
-- `/api/cron/monthly-net-worth-snapshots` at `0 0 * * *`
-- `/api/cron/recurring` at `15 0 * * *`
-- `/api/cron/notifications` at `30 0 * * *`
-- `/api/cron/pegadaian-gold-prices` at `45 0 * * *`
+- `/api/cron/monthly-net-worth-snapshots` at `0 17 * * *`
+- `/api/cron/recurring` at `15 17 * * *`
+- `/api/cron/notifications` at `30 17 * * *`
+- `/api/cron/deposito` at `0 18 * * *`
+- `/api/cron/pegadaian-gold-prices` at `45 17 * * *`
 
-The Pegadaian reference-price refresh runs once per day at `00:45 UTC`.
+The Pegadaian reference-price refresh runs once per day at `17:45 UTC`, and deposito interest processing runs once per day at `18:00 UTC`.
 
 ### Required Production Configuration
 

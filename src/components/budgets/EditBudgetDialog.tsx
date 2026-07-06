@@ -1,6 +1,7 @@
 "use client";
 
 import { useUpdateBudget } from "@/hooks/useBudgetQueries";
+import { BudgetCategoryMultiSelect } from "@/components/budgets/BudgetCategoryMultiSelect";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -49,7 +50,7 @@ const editBudgetFormSchema = z
     period: z.enum(["MONTHLY", "QUARTERLY", "YEARLY"]),
     startDate: z.date(),
     endDate: z.date().optional().nullable(),
-    categoryId: z.string().optional().nullable(),
+    categoryIds: z.array(z.string()),
     isActive: z.boolean(),
   })
   .refine(
@@ -80,14 +81,17 @@ interface Budget {
   name: string;
   amount: number;
   period: string;
+  scope: "CATEGORIES" | "LEGACY_GLOBAL";
   startDate: Date;
   endDate: Date | null;
   isActive: boolean;
-  categoryId: string | null;
-  category?: {
+  categoryIds: string[];
+  categories: Array<{
     id: string;
     name: string;
-  } | null;
+    icon: string | null;
+    color: string | null;
+  }>;
 }
 
 interface EditBudgetDialogProps {
@@ -128,7 +132,7 @@ export function EditBudgetDialog({
       startDate: new Date(),
       endDate: null,
       isActive: true,
-      categoryId: null,
+      categoryIds: [],
     },
   });
 
@@ -170,13 +174,20 @@ export function EditBudgetDialog({
         startDate: new Date(budget.startDate),
         endDate: budget.endDate ? new Date(budget.endDate) : null,
         isActive: budget.isActive,
-        categoryId: budget.categoryId || null,
+        categoryIds: budget.categoryIds,
       });
     }
   }, [budget, open, form]);
 
   const onSubmit = async (data: EditBudgetFormValues) => {
     if (!budget) return;
+
+    if (budget.scope !== "LEGACY_GLOBAL" && data.categoryIds.length === 0) {
+      form.setError("categoryIds", {
+        message: "Select at least one category",
+      });
+      return;
+    }
 
     try {
       await updateMutation.mutateAsync({
@@ -187,7 +198,7 @@ export function EditBudgetDialog({
           period: data.period,
           startDate: data.startDate,
           endDate: data.endDate || undefined,
-          categoryId: data.categoryId || undefined,
+          categoryIds: data.categoryIds,
           isActive: data.isActive,
         },
       });
@@ -276,31 +287,29 @@ export function EditBudgetDialog({
 
             <FormField
               control={form.control}
-              name="categoryId"
+              name="categoryIds"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Category (Optional)</FormLabel>
-                  <Select
-                    onValueChange={(value) => {
-                      // Use "all" as a sentinel value that gets converted to undefined
-                      field.onChange(value === "all" ? undefined : value);
-                    }}
-                    value={field.value || "all"}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="All categories" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="all">All categories</SelectItem>
-                      {categories.map((category) => (
-                        <SelectItem key={category.id} value={category.id}>
-                          {category.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormLabel>Categories</FormLabel>
+                  <FormControl>
+                    <BudgetCategoryMultiSelect
+                      legacyGlobal={
+                        budget?.scope === "LEGACY_GLOBAL" && field.value.length === 0
+                      }
+                      onChange={field.onChange}
+                      options={categories}
+                      value={field.value}
+                    />
+                  </FormControl>
+                  {budget?.scope === "LEGACY_GLOBAL" ? (
+                    <p className="text-xs text-muted-foreground">
+                      This legacy budget still covers all spending. Choose categories and save to convert it.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Select one or more expense categories for this budget.
+                    </p>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}

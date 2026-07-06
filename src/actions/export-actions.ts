@@ -251,7 +251,13 @@ export async function exportAllData() {
       }),
       prisma.budget.findMany({
         where: { userId: session.user.id },
-        include: { category: { select: { name: true } } },
+        include: {
+          categories: {
+            include: {
+              category: { select: { name: true } },
+            },
+          },
+        },
       }),
       prisma.investmentAsset.findMany({
         where: { userId: session.user.id },
@@ -325,7 +331,7 @@ export async function exportAllData() {
     // Create a JSON backup
     const backup = {
       exportDate: new Date().toISOString(),
-      version: "1.3",
+      version: "1.4",
       data: {
         accounts: decryptedAccounts,
         transactions: decryptedTransactions.map((t) => ({
@@ -358,10 +364,11 @@ export async function exportAllData() {
           name: b.name,
           amount: b.amount,
           period: b.period,
+          scope: b.scope,
           startDate: b.startDate,
           endDate: b.endDate,
           isActive: b.isActive,
-          categoryName: b.category?.name || null,
+          categoryNames: b.categories.map((entry) => entry.category.name),
         })),
         investmentAssets,
         tradeHistory: tradeHistory.map((t) => ({
@@ -508,8 +515,12 @@ export async function exportBudgetsCSV() {
     const budgets = await prisma.budget.findMany({
       where: { userId: session.user.id },
       include: {
-        category: {
-          select: { name: true },
+        categories: {
+          include: {
+            category: {
+              select: { name: true },
+            },
+          },
         },
       },
       orderBy: { createdAt: "asc" },
@@ -520,7 +531,7 @@ export async function exportBudgetsCSV() {
       "Name",
       "Amount",
       "Period",
-      "Category",
+      "Categories",
       "Start Date",
       "End Date",
       "Is Active",
@@ -531,7 +542,7 @@ export async function exportBudgetsCSV() {
       b.name,
       b.amount.toString(),
       b.period,
-      b.category?.name || "",
+      b.categories.map((entry) => entry.category.name).join("|"),
       format(new Date(b.startDate), "yyyy-MM-dd"),
       b.endDate ? format(new Date(b.endDate), "yyyy-MM-dd") : "",
       b.isActive ? "Yes" : "No",
