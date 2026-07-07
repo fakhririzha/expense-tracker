@@ -30,23 +30,9 @@ const budgetSchema = z
     name: z.string().min(1, "Name is required"),
     amount: z.number().positive("Amount must be positive"),
     period: z.enum(["MONTHLY", "QUARTERLY", "YEARLY"]),
-    startDate: z.date(),
-    endDate: z.date().optional(),
     categoryIds: z.array(z.string()).default([]),
     isActive: z.boolean().default(true),
   })
-  .refine(
-    (data) => {
-      if (data.endDate && data.startDate) {
-        return data.endDate > data.startDate;
-      }
-      return true;
-    },
-    {
-      message: "End date must be after start date",
-      path: ["endDate"],
-    }
-  )
   .refine((data) => data.categoryIds.length > 0, {
     message: "Select at least one category",
     path: ["categoryIds"],
@@ -254,33 +240,30 @@ function mapBudgetRecord(budget: {
   };
 }
 
-function getBudgetDateRange(budget: {
-  period: BudgetPeriod;
-  startDate: Date;
-  endDate?: Date | null;
-}): { start: Date; end: Date } {
-  const baseDate = budget.startDate;
-
-  switch (budget.period) {
+function getBudgetDateRange(
+  period: BudgetPeriod,
+  baseDate = new Date()
+): { start: Date; end: Date } {
+  switch (period) {
     case BudgetPeriod.MONTHLY:
       return {
         start: startOfMonth(baseDate),
-        end: budget.endDate ? endOfMonth(budget.endDate) : endOfMonth(baseDate),
+        end: endOfMonth(baseDate),
       };
     case BudgetPeriod.QUARTERLY:
       return {
         start: startOfQuarter(baseDate),
-        end: budget.endDate ? endOfQuarter(budget.endDate) : endOfQuarter(baseDate),
+        end: endOfQuarter(baseDate),
       };
     case BudgetPeriod.YEARLY:
       return {
         start: startOfYear(baseDate),
-        end: budget.endDate ? endOfYear(budget.endDate) : endOfYear(baseDate),
+        end: endOfYear(baseDate),
       };
     default:
       return {
         start: startOfMonth(baseDate),
-        end: budget.endDate ? endOfMonth(budget.endDate) : endOfMonth(baseDate),
+        end: endOfMonth(baseDate),
       };
   }
 }
@@ -336,7 +319,7 @@ function buildBudgetProgressRecord(
   spent: number,
   now = new Date()
 ): BudgetWithProgress {
-  const { start, end } = getBudgetDateRange(budget);
+  const { start, end } = getBudgetDateRange(budget.period, now);
   const remaining = budget.amount - spent;
   const percentage = budget.amount > 0 ? (spent / budget.amount) * 100 : 0;
   const effectiveNow = now < start ? start : now > end ? end : now;
@@ -495,14 +478,18 @@ export async function createBudget(data: BudgetInput) {
       return { success: false, error: categoryValidation.error };
     }
 
+    const budgetStart = getBudgetDateRange(
+      validatedFields.data.period as BudgetPeriod
+    ).start;
+
     const budget = await prisma.budget.create({
       data: {
         name: validatedFields.data.name,
         amount: validatedFields.data.amount,
         period: validatedFields.data.period,
         scope: BudgetScope.CATEGORIES,
-        startDate: validatedFields.data.startDate,
-        endDate: validatedFields.data.endDate ?? null,
+        startDate: budgetStart,
+        endDate: null,
         isActive: validatedFields.data.isActive,
         userId: session.user.id,
         categories: {
@@ -571,11 +558,6 @@ export async function updateBudget(id: string, data: Partial<BudgetInput>) {
         name: validatedFields.data.name,
         amount: validatedFields.data.amount,
         period: validatedFields.data.period,
-        startDate: validatedFields.data.startDate,
-        endDate:
-          validatedFields.data.endDate !== undefined
-            ? validatedFields.data.endDate ?? null
-            : undefined,
         isActive: validatedFields.data.isActive,
         ...(normalizedCategoryIds !== undefined
           ? {
@@ -654,7 +636,8 @@ export async function getBudgetProgress(
     }
 
     const budget = mapBudgetRecord(budgetRecord);
-    const { start, end } = getBudgetDateRange(budget);
+    const now = new Date();
+    const { start, end } = getBudgetDateRange(budget.period, now);
 
     const parentTransactions = await prisma.transaction.findMany({
       where: {
@@ -680,7 +663,7 @@ export async function getBudgetProgress(
 
     return {
       success: true,
-      data: buildBudgetProgressRecord(budget, spent),
+      data: buildBudgetProgressRecord(budget, spent, now),
     };
   } catch (error) {
     console.error("Get budget progress error:", error);
@@ -709,7 +692,10 @@ export async function getBudgetsSummary() {
     }
 
     const budgets = budgetRecords.map(mapBudgetRecord);
-    const dateRanges = budgets.map((budget) => getBudgetDateRange(budget));
+    const now = new Date();
+    const dateRanges = budgets.map((budget) =>
+      getBudgetDateRange(budget.period, now)
+    );
     const minDate = new Date(
       Math.min(...dateRanges.map((range) => range.start.getTime()))
     );
@@ -729,10 +715,8 @@ export async function getBudgetsSummary() {
     const allocationRows = flattenTransactionAllocationRows(
       parentTransactions.filter((transaction) => transaction.type === TransactionType.EXPENSE)
     );
-    const now = new Date();
-
     const budgetsWithProgress = budgets.map((budget) => {
-      const { start, end } = getBudgetDateRange(budget);
+      const { start, end } = getBudgetDateRange(budget.period, now);
       const spent =
         budget.scope === BudgetScope.CATEGORIES
           ? getBudgetAllocationSpend(
@@ -774,7 +758,9 @@ export async function getBudgetVsActual() {
     const monthStart = startOfMonth(now);
     const monthEnd = endOfMonth(now);
 
-    const budgetRanges = budgets.map((budget) => getBudgetDateRange(budget));
+    const budgetRanges = budgets.map((budget) =>
+      getBudgetDateRange(budget.period, now)
+    );
     const minDate = budgetRanges.length
       ? new Date(
           Math.min(
@@ -828,7 +814,7 @@ export async function getBudgetVsActual() {
 
     const coveredCategoryIds = new Set<string>();
     const comparison: BudgetVsActualItem[] = budgets.map((budget) => {
-      const { start, end } = getBudgetDateRange(budget);
+      const { start, end } = getBudgetDateRange(budget.period, now);
 
       if (budget.scope === BudgetScope.CATEGORIES) {
         budget.categoryIds.forEach((categoryId) => coveredCategoryIds.add(categoryId));
@@ -917,7 +903,7 @@ export async function getBudgetTransactions(
     }
 
     const budget = mapBudgetRecord(budgetRecord);
-    const { start, end } = getBudgetDateRange(budget);
+    const { start, end } = getBudgetDateRange(budget.period);
 
     const transactions = await prisma.transaction.findMany({
       where: {

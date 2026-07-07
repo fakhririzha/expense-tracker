@@ -3,7 +3,6 @@
 import { useCreateBudget } from "@/hooks/useBudgetQueries";
 import { BudgetCategoryMultiSelect } from "@/components/budgets/BudgetCategoryMultiSelect";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
 import {
   Dialog,
   DialogContent,
@@ -23,11 +22,6 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -35,36 +29,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { MoneyInput } from "@/components/ui/money-input";
-import { cn } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { format } from "date-fns";
-import { CalendarIcon, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
-const budgetFormSchema = z
-  .object({
-    name: z.string().min(1, "Name is required"),
-    amount: z.number().positive("Amount must be positive"),
-    period: z.enum(["MONTHLY", "QUARTERLY", "YEARLY"]),
-    startDate: z.date(),
-    endDate: z.date().optional(),
-    categoryIds: z.array(z.string()).min(1, "Select at least one category"),
-    isActive: z.boolean(),
-  })
-  .refine(
-    (data) => {
-      if (data.endDate && data.startDate) {
-        return data.endDate > data.startDate;
-      }
-      return true;
-    },
-    {
-      message: "End date must be after start date",
-      path: ["endDate"],
-    }
-  );
+const budgetFormSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  amount: z.number().positive("Amount must be positive"),
+  period: z.enum(["MONTHLY", "QUARTERLY", "YEARLY"]),
+  categoryIds: z.array(z.string()).min(1, "Select at least one category"),
+  isActive: z.boolean(),
+});
 
 type BudgetFormValues = z.infer<typeof budgetFormSchema>;
 
@@ -102,7 +79,6 @@ export function AddBudgetDialog({ onSuccess }: AddBudgetDialogProps) {
       name: "",
       amount: 0,
       period: "MONTHLY",
-      startDate: new Date(),
       isActive: true,
       categoryIds: [],
     },
@@ -243,84 +219,6 @@ export function AddBudgetDialog({ onSuccess }: AddBudgetDialogProps) {
                   <p className="text-xs text-muted-foreground">
                     Select one or more expense categories for this budget.
                   </p>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="startDate"
-              render={({ field }) => (
-                <FormItem className="flex flex-col">
-                  <FormLabel>Start Date</FormLabel>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <FormControl>
-                        <Button
-                          variant={"outline"}
-                          className={cn(
-                            "w-full pl-3 text-left font-normal",
-                            !field.value && "text-muted-foreground"
-                          )}
-                        >
-                          {field.value ? (
-                            format(field.value, "PPP")
-                          ) : (
-                            <span>Pick a date</span>
-                          )}
-                          <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                        </Button>
-                      </FormControl>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={field.value}
-                        onSelect={field.onChange}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="endDate"
-              render={({ field }) => (
-                <FormItem className="flex flex-col">
-                  <FormLabel>End Date (Optional)</FormLabel>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <FormControl>
-                        <Button
-                          variant={"outline"}
-                          className={cn(
-                            "w-full pl-3 text-left font-normal",
-                            !field.value && "text-muted-foreground"
-                          )}
-                        >
-                          {field.value ? (
-                            format(field.value, "PPP")
-                          ) : (
-                            <span>No end date</span>
-                          )}
-                          <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                        </Button>
-                      </FormControl>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={field.value}
-                        onSelect={field.onChange}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
                   <FormMessage />
                 </FormItem>
               )}
