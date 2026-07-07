@@ -1,5 +1,10 @@
 # FinHealth Changelog
 
+## v4.6.9
+
+- Changed budgets to follow the current calendar period automatically, so monthly, quarterly, and yearly budgets no longer need start or end dates.
+- Fixed category budget totals so they use the active month, quarter, or year instead of an older budget setup date.
+
 ## v4.6.8
 
 - Added multi-category budgets so one budget can now track several expense categories together instead of forcing you to split the limit into separate entries.
