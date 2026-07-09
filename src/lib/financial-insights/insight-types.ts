@@ -6,6 +6,7 @@ export type FinancialInsightType =
   | "spending_reduction"
   | "cash_flow_risk"
   | "debt_pressure"
+  | "debt_payoff_progress"
   | "goal_progress"
   | "emergency_fund"
   | "net_worth_movement"

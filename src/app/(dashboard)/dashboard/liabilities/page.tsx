@@ -1,4 +1,5 @@
 import { Metadata } from "next";
+import { DebtPayoffPlanner } from "@/components/liability/DebtPayoffPlanner";
 import { LiabilityPaymentDialog } from "@/components/liability/LiabilityPaymentDialog";
 import { LiabilityPaymentHistory } from "@/components/liability/LiabilityPaymentHistory";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,7 +8,7 @@ import { CreditCard, Landmark, AlertCircle } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Liabilities | Expense Tracker",
-  description: "Manage your loans and credit card payments",
+  description: "Manage your loans, credit card payments, and debt payoff plan",
 };
 
 /**
@@ -106,6 +107,9 @@ export default async function LiabilitiesPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Debt payoff planner */}
+      <DebtPayoffPlanner />
 
       {/* Payment History */}
       <Card>

@@ -51,6 +51,8 @@ model User {
   personalAssetValuations PersonalAssetValuation[]
   depositoAccounts  DepositoAccount[]
   netWorthSnapshots NetWorthSnapshot[]
+  debtPlans         DebtPlan[]
+  debtPlanItems     DebtPlanItem[]
   pushSubscriptions PushSubscription[]
   notificationPreference NotificationPreference?
   notificationEvents NotificationEvent[]
@@ -153,6 +155,7 @@ model FinancialAccount {
   subscriptions    Subscription[]
   savingsGoals     SavingsGoal[]
   depositoAccount  DepositoAccount?
+  debtPlanItems    DebtPlanItem[]
 
   @@index([userId])
 }
@@ -586,6 +589,59 @@ model NetWorthSnapshot {
 
   @@unique([userId, periodYear, periodMonth])
   @@index([userId, snapshotDate])
+}
+
+// ==================== DEBT PAYOFF PLANNER ====================
+
+enum DebtPayoffStrategy {
+  AVALANCHE
+  SNOWBALL
+  CUSTOM
+}
+
+model DebtPlan {
+  id                 String             @id @default(cuid())
+  name               String             @default("My debt payoff plan")
+  strategy           DebtPayoffStrategy @default(AVALANCHE)
+  extraMonthlyAmount Float              @default(0)
+  currency           String             @default("IDR")
+  isActive           Boolean            @default(true)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  items DebtPlanItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([userId, isActive])
+}
+
+model DebtPlanItem {
+  id                 String @id @default(cuid())
+  annualInterestRate Float // APR as percent, e.g. 18.5 means 18.5% per year
+  minimumPayment     Float
+  priorityOverride   Int? // Lower value = higher priority when strategy is CUSTOM
+  paymentDayOfMonth  Int    @default(1)
+
+  debtPlanId String
+  debtPlan   DebtPlan @relation(fields: [debtPlanId], references: [id], onDelete: Cascade)
+
+  accountId String
+  account   FinancialAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([debtPlanId, accountId])
+  @@index([debtPlanId])
+  @@index([accountId])
+  @@index([userId])
 }
 
 // ==================== LIABILITY PAYMENT AUDIT ====================

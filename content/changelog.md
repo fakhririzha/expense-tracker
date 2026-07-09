@@ -1,5 +1,11 @@
 # FinHealth Changelog
 
+## v4.7.0
+
+- Added a Debt Payoff Planner on the Liabilities page so you can set APR and minimum payments, choose avalanche or snowball (or a custom order), and add an extra monthly amount toward debt.
+- Shows projected debt-free date, total interest, strategy comparison, remaining-balance chart, and the first months of your payment schedule using live loan and credit card balances.
+- Surfaces debt payoff signals on Insights when you have an active plan, including unreachable plans and when avalanche could save more interest than snowball.
+
 ## v4.6.9
 
 - Changed budgets to follow the current calendar period automatically, so monthly, quarterly, and yearly budgets no longer need start or end dates.

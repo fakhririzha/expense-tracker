@@ -10,7 +10,7 @@ FinHealth is a personal finance dashboard built with Next.js 16 and React 19. It
 - Multi-category budgets with support for legacy all-spending budgets
 - Portfolio valuation with Yahoo Finance pricing, trade history, realized PnL, precious-metal unit conversion, and Pegadaian Tabungan Emas reference prices for eligible gold holdings
 - Dedicated Insights and Deposito Tracker dashboards for financial signals and locked-balance workflows
-- Loans receivable, liability-payment audits, and month-end frozen net-worth snapshots
+- Loans receivable, liability-payment audits, debt payoff planning (avalanche/snowball), and month-end frozen net-worth snapshots
 - Subscriptions, recurring rules, calendar views, and upcoming bank-pressure alerts
 - CSV import/export, multi-currency reporting, budgets, goals, forecasting, and financial insights
 - Installable PWA support with offline fallback and optional browser push notifications

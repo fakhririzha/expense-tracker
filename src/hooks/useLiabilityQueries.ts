@@ -5,6 +5,7 @@ import {
   generatePaymentReference,
 } from "@/actions/liability-payment-actions";
 import { forecastKeys } from "@/hooks/useCashFlowForecast";
+import { debtPlanKeys } from "@/hooks/useDebtPlanQueries";
 import { accountKeys } from "./useAccountQueries";
 import { transactionKeys } from "./useTransactionQueries";
 
@@ -54,6 +55,7 @@ export function useCreateLiabilityPayment() {
       qc.invalidateQueries({ queryKey: accountKeys.all });
       qc.invalidateQueries({ queryKey: transactionKeys.all });
       qc.invalidateQueries({ queryKey: forecastKeys.all });
+      qc.invalidateQueries({ queryKey: debtPlanKeys.all });
     },
   });
 }
