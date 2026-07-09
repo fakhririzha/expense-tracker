@@ -10,7 +10,12 @@ import { addDays, startOfMonth, startOfQuarter, startOfYear } from "date-fns";
 import { z } from "zod";
 
 import { auth } from "@/auth";
+import { decryptAccountName } from "@/lib/account-crypto";
 import { formatBudgetCategorySummary } from "@/lib/budget-utils";
+import {
+  compareDebtPayoffStrategies,
+  simulateDebtPayoff,
+} from "@/lib/debt-payoff";
 import prisma from "@/lib/db";
 import {
   createInsightCurrencyConverter,
@@ -22,6 +27,7 @@ import {
   type FinancialInsightComputationContext,
   type InsightBudgetProgress,
   type InsightCategorySpendComparison,
+  type InsightDebtPayoffPlan,
   type InsightGoalProgress,
   type InsightNetWorthMovement,
   type InsightPortfolioAllocation,
@@ -61,6 +67,7 @@ const insightTypeSchema = z.enum([
   "spending_reduction",
   "cash_flow_risk",
   "debt_pressure",
+  "debt_payoff_progress",
   "goal_progress",
   "emergency_fund",
   "net_worth_movement",
@@ -905,6 +912,69 @@ export async function getFinancialInsights(
       }
     }
 
+    let debtPayoffPlan: InsightDebtPayoffPlan | null = null;
+    const activeDebtPlan = await prisma.debtPlan.findFirst({
+      where: { userId: session.user.id, isActive: true },
+      include: {
+        items: {
+          include: {
+            account: {
+              select: {
+                id: true,
+                nameEncrypted: true,
+                currency: true,
+                balance: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { updatedAt: "desc" },
+    });
+
+    if (activeDebtPlan && activeDebtPlan.items.length > 0) {
+      const debts = await Promise.all(
+        activeDebtPlan.items.map(async (item) => {
+          const conversion = await converter.convert(
+            Math.abs(item.account.balance),
+            item.account.currency
+          );
+          const name = await decryptAccountName(
+            session.user.id,
+            item.account.nameEncrypted
+          );
+          return {
+            id: item.accountId,
+            name,
+            balance: conversion.amount ?? Math.abs(item.account.balance),
+            annualInterestRate: item.annualInterestRate,
+            minimumPayment: item.minimumPayment,
+            priorityOverride: item.priorityOverride,
+          };
+        })
+      );
+
+      const simulation = simulateDebtPayoff({
+        debts,
+        strategy: activeDebtPlan.strategy,
+        extraMonthlyAmount: activeDebtPlan.extraMonthlyAmount,
+      });
+      const comparison = compareDebtPayoffStrategies({
+        debts,
+        extraMonthlyAmount: activeDebtPlan.extraMonthlyAmount,
+      });
+
+      debtPayoffPlan = {
+        planName: activeDebtPlan.name,
+        strategy: activeDebtPlan.strategy,
+        monthsToDebtFree: simulation.monthsToDebtFree,
+        totalInterest: simulation.totalInterest,
+        isPayable: simulation.isPayable,
+        interestSavedByAvalanche: comparison.interestSavedByAvalanche,
+        usingAvalanche: activeDebtPlan.strategy === "AVALANCHE",
+      };
+    }
+
     const context: FinancialInsightComputationContext = {
       scope,
       limit,
@@ -945,6 +1015,7 @@ export async function getFinancialInsights(
         totalExpenseValue: currentMonthExpense,
         fallbackRateCount: converter.getStats().cachedRateCount,
       },
+      debtPayoffPlan,
     };
 
     return {

@@ -14,6 +14,7 @@ FinHealth is a personal finance dashboard built with Next.js 16 and React 19. It
 - **Categories**: System and user-defined categories with icon and color metadata.
 - **Investments**: Holdings, buy/sell trade history, realized PnL, Yahoo Finance valuation, account linkage, precious-metal unit conversion, and Pegadaian Tabungan Emas buy/sell reference prices for eligible active gold holdings.
 - **Liabilities**: Loan and credit-card payment flows with audit history, overpayment support, and rollback metadata.
+- **Debt Payoff Planner**: Avalanche, snowball, or custom payoff plans with APR and minimum-payment inputs, extra monthly budget, debt-free date and interest projections, strategy comparison, and Insights integration.
 - **Loans Receivable**: Principal disbursement and repayment flows that move balances without misclassifying principal as income or expense.
 - **Recurring Transactions**: Daily, weekly, biweekly, monthly, quarterly, and yearly rules.
 - **Subscriptions**: Renewal tracking, trial tracking, recurring-rule linkage, summaries, and detail drawers.
@@ -197,6 +198,8 @@ openssl rand -base64 32
 
 **LiabilityPaymentAudit**: Payment audit log with source/target balance snapshots, execution metadata, and rollback state.
 
+**DebtPlan / DebtPlanItem**: User-owned debt payoff plan with strategy (avalanche, snowball, custom), extra monthly amount, plan currency, and per-liability APR, minimum payment, and optional custom priority.
+
 **Budget**: User-owned budget rules with period, date range, `BudgetScope`, and many-to-many category coverage through `BudgetCategory`. Category-scoped budgets can cover one or more expense categories, while legacy global budgets remain compatible for older all-spending records.
 
 **BudgetCategory**: Join model connecting budgets to one or more expense categories for scoped budget tracking and category usage counts.
@@ -277,6 +280,12 @@ enum BudgetPeriod {
 enum BudgetScope {
   CATEGORIES,
   LEGACY_GLOBAL
+}
+
+enum DebtPayoffStrategy {
+  AVALANCHE,
+  SNOWBALL,
+  CUSTOM
 }
 
 enum NotificationType {
@@ -524,6 +533,7 @@ Manual verification should cover the touched feature area plus affected cross-fe
 - Transaction creation, editing, transfers, split expenses, and location metadata
 - Transaction add/edit account selectors excluding inactive accounts while preserving historical edits on already-linked inactive accounts
 - Liability payments, audit trails, rollback behavior, and overpayment handling
+- Debt payoff planner create/edit, avalanche vs snowball comparison, live balance projection, and related Insights cards
 - Loans Receivable disbursement and repayment flows
 - Investment buys, sells, realized PnL, valuation fallback behavior, and unit conversion
 - Pegadaian cron authorization, response validation, snapshot persistence, no-snapshot fallback, and display only on active `GC=F` positions

@@ -24,6 +24,7 @@ const ICON_MAP: Record<FinancialInsightType, typeof AlertTriangle> = {
   spending_reduction: TrendingDown,
   cash_flow_risk: CalendarClock,
   debt_pressure: CreditCard,
+  debt_payoff_progress: TrendingDown,
   goal_progress: Target,
   emergency_fund: PiggyBank,
   net_worth_movement: Wallet,

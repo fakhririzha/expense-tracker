@@ -105,6 +105,16 @@ export interface InsightMultiCurrencyExposure {
   fallbackRateCount: number;
 }
 
+export interface InsightDebtPayoffPlan {
+  planName: string;
+  strategy: string;
+  monthsToDebtFree: number | null;
+  totalInterest: number;
+  isPayable: boolean;
+  interestSavedByAvalanche: number | null;
+  usingAvalanche: boolean;
+}
+
 export interface FinancialInsightComputationContext {
   scope: FinancialInsightScope;
   limit: number;
@@ -136,6 +146,7 @@ export interface FinancialInsightComputationContext {
   netWorthMovement: InsightNetWorthMovement | null;
   portfolioAllocation: InsightPortfolioAllocation | null;
   multiCurrencyExposure: InsightMultiCurrencyExposure;
+  debtPayoffPlan: InsightDebtPayoffPlan | null;
 }
 
 function buildSummary(insights: FinancialInsight[]): FinancialInsightSummary {
@@ -451,6 +462,76 @@ export function generateFinancialInsights(
           }
         : null
     );
+  }
+
+  if (context.debtPayoffPlan) {
+    const plan = context.debtPayoffPlan;
+    if (!plan.isPayable || plan.monthsToDebtFree == null) {
+      maybeAddInsight(insights, context.includeTypes, {
+        id: `${context.periodKey}:debt_payoff_progress:unreachable`,
+        type: "debt_payoff_progress",
+        severity: "warning",
+        priority: 72,
+        title: "Debt payoff plan may not finish",
+        description: `${plan.planName} does not reach zero with current minimums and extra payments. Increase payments or lower rates to make the plan reachable.`,
+        actionLabel: "Open debt plan",
+        actionHref: "/dashboard/liabilities",
+        metadata: {
+          valueKind: "text",
+          strategy: plan.strategy,
+        },
+      });
+    } else {
+      const months = plan.monthsToDebtFree;
+      const monthLabel =
+        months === 1 ? "1 month" : months < 12 ? `${months} months` : `${(months / 12).toFixed(1)} years`;
+      maybeAddInsight(insights, context.includeTypes, {
+        id: `${context.periodKey}:debt_payoff_progress:timeline`,
+        type: "debt_payoff_progress",
+        severity: months > 60 ? "info" : "success",
+        priority: months > 60 ? 48 : 42,
+        title: `Debt-free in about ${monthLabel}`,
+        description: `${plan.planName} (${plan.strategy.toLowerCase()}) projects payoff in ${months} month${
+          months === 1 ? "" : "s"
+        } with about ${plan.totalInterest.toLocaleString(undefined, {
+          maximumFractionDigits: 0,
+        })} ${context.currency} in interest.`,
+        value: months,
+        currency: context.currency,
+        actionLabel: "Review debt plan",
+        actionHref: "/dashboard/liabilities",
+        metadata: {
+          valueKind: "months",
+          totalInterest: plan.totalInterest,
+          strategy: plan.strategy,
+        },
+      });
+
+      if (
+        !plan.usingAvalanche &&
+        plan.interestSavedByAvalanche != null &&
+        plan.interestSavedByAvalanche > 0
+      ) {
+        maybeAddInsight(insights, context.includeTypes, {
+          id: `${context.periodKey}:debt_payoff_progress:avalanche_tip`,
+          type: "debt_payoff_progress",
+          severity: "info",
+          priority: 46,
+          title: "Avalanche could save more interest",
+          description: `Switching ${plan.planName} to avalanche (highest APR first) could save about ${plan.interestSavedByAvalanche.toLocaleString(
+            undefined,
+            { maximumFractionDigits: 0 }
+          )} ${context.currency} versus snowball with the same extra budget.`,
+          value: plan.interestSavedByAvalanche,
+          currency: context.currency,
+          actionLabel: "Compare strategies",
+          actionHref: "/dashboard/liabilities",
+          metadata: {
+            valueKind: "currency",
+          },
+        });
+      }
+    }
   }
 
   const behindGoal = context.goals
