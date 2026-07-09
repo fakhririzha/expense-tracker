@@ -150,7 +150,11 @@ const OCR_ALLOWED_IMAGE_TYPES = new Set([
   "image/heif",
 ]);
 const OCR_ALLOWED_IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"];
-const OCR_MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+const OCR_MAX_SOURCE_IMAGE_SIZE = 5 * 1024 * 1024;
+const OCR_TARGET_IMAGE_SIZE = 500 * 1024;
+const OCR_MAX_COMPRESSED_IMAGE_SIZE = 1 * 1024 * 1024;
+const OCR_COMPRESSION_DIMENSIONS = [1600, 1400, 1200, 1000, 850, 700];
+const OCR_COMPRESSION_QUALITIES = [0.82, 0.72, 0.62, 0.52, 0.45];
 const OCR_SPLIT_MIN_CONFIDENCE = 0.7;
 
 function AccountBalanceSummary({
@@ -193,6 +197,170 @@ function isAllowedOcrImage(file: File) {
       file.name.toLowerCase().endsWith(extension)
     )
   );
+}
+
+function formatFileSize(bytes: number) {
+  if (bytes >= 1024 * 1024) {
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+function getCompressedOcrFileName(fileName: string, mimeType: string) {
+  const extension = mimeType === "image/webp" ? "webp" : "jpg";
+  const baseName = fileName.replace(/\.[^/.]+$/, "") || "bill-photo";
+  return `${baseName}-compressed.${extension}`;
+}
+
+function canvasToBlob(
+  canvas: HTMLCanvasElement,
+  mimeType: string,
+  quality: number
+) {
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (blob) {
+          resolve(blob);
+        } else {
+          reject(new Error("Unable to compress bill photo."));
+        }
+      },
+      mimeType,
+      quality
+    );
+  });
+}
+
+function supportsCanvasMimeType(mimeType: string) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1;
+  canvas.height = 1;
+  return canvas.toDataURL(mimeType).startsWith(`data:${mimeType}`);
+}
+
+async function loadImageForCompression(file: File) {
+  if ("createImageBitmap" in window) {
+    try {
+      const bitmap = await createImageBitmap(file, {
+        imageOrientation: "from-image",
+      });
+      return {
+        width: bitmap.width,
+        height: bitmap.height,
+        draw: (context: CanvasRenderingContext2D, width: number, height: number) => {
+          context.drawImage(bitmap, 0, 0, width, height);
+        },
+        close: () => bitmap.close(),
+      };
+    } catch {
+      // Fall through to HTMLImageElement decoding for browsers without full support.
+    }
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = new Image();
+    image.decoding = "async";
+    image.src = objectUrl;
+    await image.decode();
+
+    return {
+      width: image.naturalWidth,
+      height: image.naturalHeight,
+      draw: (context: CanvasRenderingContext2D, width: number, height: number) => {
+        context.drawImage(image, 0, 0, width, height);
+      },
+      close: () => URL.revokeObjectURL(objectUrl),
+    };
+  } catch (error) {
+    URL.revokeObjectURL(objectUrl);
+    throw error;
+  }
+}
+
+async function compressOcrImage(file: File) {
+  if (file.size <= OCR_TARGET_IMAGE_SIZE) {
+    return file;
+  }
+
+  let loadedImage: Awaited<ReturnType<typeof loadImageForCompression>>;
+
+  try {
+    loadedImage = await loadImageForCompression(file);
+  } catch {
+    if (file.size < OCR_MAX_COMPRESSED_IMAGE_SIZE) {
+      return file;
+    }
+
+    throw new Error(
+      "This browser could not compress that image. Use a JPEG, PNG, or WebP image under 1 MB."
+    );
+  }
+
+  try {
+    const outputMimeType = supportsCanvasMimeType("image/webp")
+      ? "image/webp"
+      : "image/jpeg";
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      throw new Error("This browser could not prepare the bill photo.");
+    }
+
+    let hardLimitFile: File | null = null;
+
+    for (const maxDimension of OCR_COMPRESSION_DIMENSIONS) {
+      const ratio = Math.min(
+        1,
+        maxDimension / loadedImage.width,
+        maxDimension / loadedImage.height
+      );
+      const width = Math.max(1, Math.round(loadedImage.width * ratio));
+      const height = Math.max(1, Math.round(loadedImage.height * ratio));
+
+      canvas.width = width;
+      canvas.height = height;
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, width, height);
+      loadedImage.draw(context, width, height);
+
+      for (const quality of OCR_COMPRESSION_QUALITIES) {
+        const blob = await canvasToBlob(canvas, outputMimeType, quality);
+        const compressedFile = new File(
+          [blob],
+          getCompressedOcrFileName(file.name, outputMimeType),
+          {
+            type: outputMimeType,
+            lastModified: Date.now(),
+          }
+        );
+
+        if (compressedFile.size <= OCR_TARGET_IMAGE_SIZE) {
+          return compressedFile;
+        }
+
+        if (
+          compressedFile.size < OCR_MAX_COMPRESSED_IMAGE_SIZE &&
+          (!hardLimitFile || compressedFile.size < hardLimitFile.size)
+        ) {
+          hardLimitFile = compressedFile;
+        }
+      }
+    }
+
+    if (hardLimitFile) {
+      return hardLimitFile;
+    }
+
+    throw new Error(
+      "Compressed bill photo is still larger than 1 MB. Try cropping the receipt and scan again."
+    );
+  } finally {
+    loadedImage.close();
+  }
 }
 
 function formatOcrValue(
@@ -383,16 +551,20 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
       return;
     }
 
-    if (file.size > OCR_MAX_IMAGE_SIZE) {
-      setOcrError("Bill photo must be 5 MB or smaller.");
+    if (file.size > OCR_MAX_SOURCE_IMAGE_SIZE) {
+      setOcrError("Bill photo must be 5 MB or smaller before compression.");
       return;
     }
 
     setIsScanningBill(true);
 
     try {
+      const compressedFile = await compressOcrImage(file);
       const formData = new FormData();
-      formData.append("image", file);
+      formData.append("image", compressedFile);
+      setOcrFileName(
+        `${file.name} (${formatFileSize(compressedFile.size)} upload)`
+      );
       const result = await scanTransactionBill(formData);
 
       if (!result.success) {
@@ -404,7 +576,9 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
       setSelectedOcrFields(getDefaultSelectedOcrFields(result.data));
     } catch (error) {
       console.error("Bill scan error:", error);
-      setOcrError("Failed to scan bill photo.");
+      setOcrError(
+        error instanceof Error ? error.message : "Failed to scan bill photo."
+      );
     } finally {
       setIsScanningBill(false);
     }
@@ -708,7 +882,8 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
                     Scan bill photo
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Upload one receipt image to preview suggested transaction fields.
+                    Upload one receipt image. It will be compressed before scanning,
+                    with a limit of 2 scans per day.
                   </p>
                 </div>
                 <div>

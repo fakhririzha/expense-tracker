@@ -1,10 +1,13 @@
 "use server";
 
 import { auth } from "@/auth";
+import { Prisma } from "@/generated/prisma/client/client";
 import prisma from "@/lib/db";
 import { z } from "zod";
 
-const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+const MAX_IMAGE_SIZE = 1 * 1024 * 1024;
+const DAILY_OCR_LIMIT = 2;
+const JAKARTA_UTC_OFFSET_MS = 7 * 60 * 60 * 1000;
 const ALLOWED_IMAGE_TYPES = new Set([
   "image/jpeg",
   "image/png",
@@ -109,6 +112,21 @@ function getImageMimeType(file: File) {
   return extension ? IMAGE_EXTENSION_TYPES[extension] : null;
 }
 
+function getJakartaDayBounds(now = new Date()) {
+  const jakartaDate = new Date(now.getTime() + JAKARTA_UTC_OFFSET_MS);
+  const startUtcMs =
+    Date.UTC(
+      jakartaDate.getUTCFullYear(),
+      jakartaDate.getUTCMonth(),
+      jakartaDate.getUTCDate()
+    ) - JAKARTA_UTC_OFFSET_MS;
+
+  return {
+    start: new Date(startUtcMs),
+    end: new Date(startUtcMs + 24 * 60 * 60 * 1000),
+  };
+}
+
 async function imageFileToDataUrl(file: File) {
   const buffer = Buffer.from(await file.arrayBuffer());
   const mimeType = getImageMimeType(file) ?? "application/octet-stream";
@@ -173,6 +191,42 @@ function normalizeParsedResult(
   };
 }
 
+async function reserveOcrUsage(userId: string, imageBytes: number) {
+  const { start, end } = getJakartaDayBounds();
+
+  return prisma.$transaction(
+    async (tx) => {
+      const todayCount = await tx.ocrUsageEvent.count({
+        where: {
+          userId,
+          processedAt: {
+            gte: start,
+            lt: end,
+          },
+        },
+      });
+
+      if (todayCount >= DAILY_OCR_LIMIT) {
+        return {
+          success: false as const,
+          error:
+            "Daily bill scan limit reached. You can scan up to 2 bill photos per day.",
+        };
+      }
+
+      await tx.ocrUsageEvent.create({
+        data: {
+          userId,
+          imageBytes,
+        },
+      });
+
+      return { success: true as const };
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+  );
+}
+
 export async function scanTransactionBill(
   formData: FormData
 ): Promise<ScanTransactionBillResult> {
@@ -199,8 +253,16 @@ export async function scanTransactionBill(
       };
     }
 
-    if (image.size > MAX_IMAGE_SIZE) {
-      return { success: false, error: "Bill photo must be 5 MB or smaller." };
+    if (image.size >= MAX_IMAGE_SIZE) {
+      return {
+        success: false,
+        error: "Compressed bill photo must be smaller than 1 MB.",
+      };
+    }
+
+    const usage = await reserveOcrUsage(session.user.id, image.size);
+    if (!usage.success) {
+      return usage;
     }
 
     const categories = await prisma.category.findMany({

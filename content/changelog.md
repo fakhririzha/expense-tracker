@@ -1,6 +1,16 @@
 # FinHealth Changelog
 
+## v5.0.1
+
+- Compressed bill photos before scanning to reduce OCR upload size, aiming for smaller previews while keeping receipts readable.
+- Added a daily limit of 2 bill photo scans per user to keep OCR usage predictable.
+
 ## v5.0.0
+
+- Added bill photo scanning to Add Transaction, so receipt images can suggest amount, date, description, location, category, and eligible split rows before you apply them.
+- Kept scanned photos temporary and under your control, with a preview step that does not change account selections or save a transaction automatically.
+
+## v4.8.2
 
 - Fixed the Debt Payoff Planner dialog on Liabilities so creating or editing a plan no longer gets stuck or crashes after the form opens.
 - Kept the existing payoff-plan defaults and editing flow intact while making the form more stable during background loading and refreshes.
