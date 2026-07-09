@@ -2,8 +2,8 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Plus, Trash2 } from "lucide-react";
-import { useEffect, useMemo } from "react";
-import { useFieldArray, useForm } from "react-hook-form";
+import { useEffect, useMemo, useRef } from "react";
+import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 
 import type { DebtPlanView } from "@/actions/debt-plan-actions";
@@ -81,6 +81,14 @@ const formSchema = z
 
 type FormValues = z.infer<typeof formSchema>;
 
+const EMPTY_ACCOUNTS: Array<{
+  id: string;
+  name: string;
+  type: string;
+  currency: string;
+  balance: number;
+}> = [];
+
 interface DebtPlanDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -98,11 +106,13 @@ export function DebtPlanDialog({
   onSuccess,
 }: DebtPlanDialogProps) {
   const isEditing = Boolean(plan);
-  const { data: accounts = [], isLoading: accountsLoading } =
+  const { data: accountsData, isLoading: accountsLoading } =
     useDebtPlanEligibleAccounts(open);
+  const accounts = accountsData ?? EMPTY_ACCOUNTS;
   const createMutation = useCreateDebtPlan();
   const updateMutation = useUpdateDebtPlan();
   const isPending = createMutation.isPending || updateMutation.isPending;
+  const hasInitializedRef = useRef(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -119,11 +129,23 @@ export function DebtPlanDialog({
     name: "items",
   });
 
-  const strategy = form.watch("strategy");
-  const watchedItems = form.watch("items");
+  const strategy = useWatch({
+    control: form.control,
+    name: "strategy",
+  });
+  const watchedItems =
+    useWatch({
+      control: form.control,
+      name: "items",
+    }) ?? [];
 
   useEffect(() => {
-    if (!open) return;
+    if (open) return;
+    hasInitializedRef.current = false;
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || hasInitializedRef.current) return;
 
     if (plan) {
       form.reset({
@@ -138,8 +160,11 @@ export function DebtPlanDialog({
           paymentDayOfMonth: item.paymentDayOfMonth,
         })),
       });
+      hasInitializedRef.current = true;
       return;
     }
+
+    if (accountsLoading) return;
 
     const defaultItems =
       accounts.length > 0
@@ -158,7 +183,8 @@ export function DebtPlanDialog({
       extraMonthlyAmount: 0,
       items: defaultItems,
     });
-  }, [open, plan, accounts, form]);
+    hasInitializedRef.current = true;
+  }, [open, plan, accounts, accountsLoading, form]);
 
   const selectedAccountIds = watchedItems.map((item) => item.accountId);
 
