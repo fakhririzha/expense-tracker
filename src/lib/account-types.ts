@@ -44,6 +44,13 @@ export const TRANSFER_ACCOUNT_TYPES = [
   "INVESTMENT",
 ] as const satisfies readonly AccountTypeValue[];
 
+/** Account types eligible as savings-goal funding sources. */
+export const GOAL_SOURCE_ACCOUNT_TYPES = [
+  "BANK",
+  "CASH",
+  "INVESTMENT",
+] as const satisfies readonly AccountTypeValue[];
+
 export function isAssetAccountType(type: string): boolean {
   return (ASSET_ACCOUNT_TYPES as readonly string[]).includes(type);
 }
@@ -58,6 +65,10 @@ export function isLiquidAccountType(type: string): boolean {
 
 export function isTransferAccountType(type: string): boolean {
   return (TRANSFER_ACCOUNT_TYPES as readonly string[]).includes(type);
+}
+
+export function isGoalSourceAccountType(type: string): boolean {
+  return (GOAL_SOURCE_ACCOUNT_TYPES as readonly string[]).includes(type);
 }
 
 export function isLoanReceivableAccountType(type: string): boolean {

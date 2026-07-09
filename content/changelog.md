@@ -1,5 +1,11 @@
 # FinHealth Changelog
 
+## v4.8.0
+
+- Savings goals can now link multiple Bank, Cash, or Investment accounts as funding sources.
+- Goal progress updates automatically from the total balance of those linked accounts (in your main currency), so you no longer add or withdraw progress by hand.
+- Goals that only had a manual progress amount and no linked account will show zero until you attach account sources after this update.
+
 ## v4.7.0
 
 - Added a Debt Payoff Planner on the Liabilities page so you can set APR and minimum payments, choose avalanche or snowball (or a custom order), and add an extra monthly amount toward debt.

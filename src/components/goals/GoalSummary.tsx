@@ -52,7 +52,7 @@ export function GoalSummary({
         <CardContent>
           <div className="text-2xl font-bold">{formatCurrency(totalSaved, mainCurrency)}</div>
           <p className="text-xs text-muted-foreground">
-            across {totalGoals} goal{totalGoals !== 1 ? "s" : ""}
+            from linked accounts across {totalGoals} goal{totalGoals !== 1 ? "s" : ""}
           </p>
         </CardContent>
       </Card>

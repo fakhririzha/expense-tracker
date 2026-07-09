@@ -1,6 +1,7 @@
 "use client";
 
 import { useCreateGoal } from "@/hooks/useGoalQueries";
+import { GoalAccountMultiSelect } from "@/components/goals/GoalAccountMultiSelect";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -15,6 +16,7 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -34,6 +36,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { MoneyInput } from "@/components/ui/money-input";
+import { isGoalSourceAccountType } from "@/lib/account-types";
 import { cn } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
@@ -42,7 +45,6 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
-// Common emoji icons for goals
 const GOAL_ICONS = [
   { value: "🏖️", label: "Vacation" },
   { value: "🚗", label: "Car" },
@@ -58,7 +60,6 @@ const GOAL_ICONS = [
   { value: "🚴", label: "Fitness" },
 ];
 
-// Color presets for goals
 const GOAL_COLORS = [
   { value: "#ef4444", label: "Red" },
   { value: "#f97316", label: "Orange" },
@@ -73,12 +74,11 @@ const GOAL_COLORS = [
 const goalFormSchema = z.object({
   name: z.string().min(1, "Name is required"),
   targetAmount: z.number().positive("Target must be positive"),
-  currentAmount: z.number().min(0),
   targetDate: z.date().nullable().optional(),
   icon: z.string().nullable().optional(),
   color: z.string().nullable().optional(),
   description: z.string().nullable().optional(),
-  accountId: z.string().nullable().optional(),
+  accountIds: z.array(z.string()).min(1, "Select at least one account"),
 });
 
 type GoalFormValues = z.infer<typeof goalFormSchema>;
@@ -95,13 +95,7 @@ interface AddGoalDialogProps {
 }
 
 /**
- * Render a dialog for creating a savings goal.
- *
- * Loads asset-type accounts when opened, validates input against the goal schema,
- * submits the form to create the goal, and surfaces submission errors at the form root.
- * On successful creation the dialog closes, the form resets, and the optional callback is invoked.
- *
- * @param onSuccess - Optional callback invoked after a goal is successfully created
+ * Dialog for creating a savings goal backed by one or more account balances.
  */
 export function AddGoalDialog({ onSuccess }: AddGoalDialogProps) {
   const [open, setOpen] = useState(false);
@@ -113,33 +107,24 @@ export function AddGoalDialog({ onSuccess }: AddGoalDialogProps) {
     defaultValues: {
       name: "",
       targetAmount: 0,
-      currentAmount: 0,
       targetDate: null,
       icon: "💰",
       color: "#22c55e",
       description: "",
-      accountId: null,
+      accountIds: [],
     },
   });
 
   useEffect(() => {
-    /**
-     * Load asset accounts from the API and update the component's accounts state.
-     *
-     * Fetches account data, filters for accounts whose type is "BANK", "CASH", or "INVESTMENT",
-     * and calls `setAccounts` with the filtered list. Any network or parsing errors are logged
-     * to the console.
-     */
     async function loadAccounts() {
       try {
         const response = await fetch("/api/accounts/by-type");
         if (response.ok) {
           const data = await response.json();
-          // Filter to asset accounts (BANK, CASH, INVESTMENT)
-          const assetAccounts = data?.accounts?.filter(
-            (acc: Account) =>
-              acc.type === "BANK" || acc.type === "CASH" || acc.type === "INVESTMENT"
-          ) ?? [];
+          const assetAccounts =
+            data?.accounts?.filter((acc: Account) =>
+              isGoalSourceAccountType(acc.type)
+            ) ?? [];
           setAccounts(assetAccounts);
         }
       } catch (error) {
@@ -176,12 +161,11 @@ export function AddGoalDialog({ onSuccess }: AddGoalDialogProps) {
         <DialogHeader>
           <DialogTitle>Add Savings Goal</DialogTitle>
           <DialogDescription>
-            Create a new savings goal to track your progress towards a financial target.
+            Create a goal and track progress from the balances of the accounts you link.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            {/* Name */}
             <FormField
               control={form.control}
               name="name"
@@ -196,7 +180,6 @@ export function AddGoalDialog({ onSuccess }: AddGoalDialogProps) {
               )}
             />
 
-            {/* Target Amount */}
             <FormField
               control={form.control}
               name="targetAmount"
@@ -218,29 +201,29 @@ export function AddGoalDialog({ onSuccess }: AddGoalDialogProps) {
               )}
             />
 
-            {/* Current Amount (Optional) */}
             <FormField
               control={form.control}
-              name="currentAmount"
+              name="accountIds"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Current Amount (Optional)</FormLabel>
+                  <FormLabel>Account Sources</FormLabel>
                   <FormControl>
-                    <MoneyInput
-                      placeholder="0.00"
-                      name={field.name}
-                      ref={field.ref}
+                    <GoalAccountMultiSelect
+                      options={accounts}
                       value={field.value}
-                      onBlur={field.onBlur}
-                      onValueChange={(value) => field.onChange(value ?? 0)}
+                      onChange={field.onChange}
+                      placeholder="Select one or more accounts"
+                      emptyMessage="No Bank, Cash, or Investment accounts found."
                     />
                   </FormControl>
+                  <FormDescription>
+                    Progress is the total balance of the selected accounts.
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
-            {/* Target Date */}
             <FormField
               control={form.control}
               name="targetDate"
@@ -281,7 +264,6 @@ export function AddGoalDialog({ onSuccess }: AddGoalDialogProps) {
               )}
             />
 
-            {/* Icon */}
             <FormField
               control={form.control}
               name="icon"
@@ -298,7 +280,8 @@ export function AddGoalDialog({ onSuccess }: AddGoalDialogProps) {
                           {field.value ? (
                             <span className="flex items-center gap-2">
                               <span className="text-lg">{field.value}</span>
-                              {GOAL_ICONS.find((i) => i.value === field.value)?.label || "Custom"}
+                              {GOAL_ICONS.find((i) => i.value === field.value)?.label ||
+                                "Custom"}
                             </span>
                           ) : (
                             "Select an icon"
@@ -322,7 +305,6 @@ export function AddGoalDialog({ onSuccess }: AddGoalDialogProps) {
               )}
             />
 
-            {/* Color */}
             <FormField
               control={form.control}
               name="color"
@@ -360,7 +342,6 @@ export function AddGoalDialog({ onSuccess }: AddGoalDialogProps) {
               )}
             />
 
-            {/* Description */}
             <FormField
               control={form.control}
               name="description"
@@ -379,37 +360,6 @@ export function AddGoalDialog({ onSuccess }: AddGoalDialogProps) {
               )}
             />
 
-            {/* Linked Account */}
-            <FormField
-              control={form.control}
-              name="accountId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Linked Account (Optional)</FormLabel>
-                  <Select
-                    onValueChange={(value) => field.onChange(value === "none" ? null : value)}
-                    value={field.value || "none"}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select an account (optional)" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="none">None</SelectItem>
-                      {accounts.map((account) => (
-                        <SelectItem key={account.id} value={account.id}>
-                          {account.name} ({account.currency})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {/* Error message */}
             {form.formState.errors.root && (
               <p className="text-sm font-medium text-destructive">
                 {form.formState.errors.root.message}
