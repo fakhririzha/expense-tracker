@@ -153,7 +153,7 @@ model FinancialAccount {
   tradeHistories   TradeHistory[]
   transactions     Transaction[]
   subscriptions    Subscription[]
-  savingsGoals     SavingsGoal[]
+  goalLinks        SavingsGoalAccount[]
   depositoAccount  DepositoAccount?
   debtPlanItems    DebtPlanItem[]
 
@@ -732,22 +732,31 @@ model Budget {
 
 // ==================== SAVINGS GOALS ====================
 
+model SavingsGoalAccount {
+  goalId    String
+  accountId String
+
+  goal    SavingsGoal      @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  account FinancialAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@id([goalId, accountId])
+  @@index([goalId])
+  @@index([accountId])
+}
+
 model SavingsGoal {
   id                   String    @id @default(cuid())
   name                 String
   nameEncrypted        String?   @db.Text // Encrypted name
   targetAmount         Float
-  currentAmount        Float     @default(0)
   targetDate           DateTime?
   icon                 String? // emoji or icon name
   color                String? // hex color for UI
   description          String?
   descriptionEncrypted String?   @db.Text // Encrypted description
-  isCompleted          Boolean   @default(false)
 
-  // Optional: Link to account for auto-tracking
-  accountId String?
-  account   FinancialAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  // Progress is derived from linked account balances (not stored)
+  accounts SavingsGoalAccount[]
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -756,7 +765,6 @@ model SavingsGoal {
   updatedAt DateTime @updatedAt
 
   @@index([userId])
-  @@index([accountId])
 }
 
 // ==================== PERSONAL ASSETS ====================

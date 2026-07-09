@@ -19,7 +19,7 @@ FinHealth is a personal finance dashboard built with Next.js 16 and React 19. It
 - **Recurring Transactions**: Daily, weekly, biweekly, monthly, quarterly, and yearly rules.
 - **Subscriptions**: Renewal tracking, trial tracking, recurring-rule linkage, summaries, and detail drawers.
 - **Deposito Tracker**: Locked deposito account opening, scheduled interest posting, maturity monitoring, and controlled closing flows back into liquid accounts.
-- **Budgets and Goals**: Monthly, quarterly, and yearly budgets with multi-category support, legacy global budget compatibility, plus savings goals and profile-level targets.
+- **Budgets and Goals**: Monthly, quarterly, and yearly budgets with multi-category support, legacy global budget compatibility, plus multi-account savings goals (progress from linked account balances) and profile-level targets.
 - **Reports and Analytics**: Category breakdowns, spending trends, income-vs-expense views, frozen month-end net-worth history, forecasting, and a dedicated financial insights surface.
 - **Calendar and Pressure Alerts**: Upcoming recurring items, subscription renewals, and bank-balance pressure alerts for the next 30 days.
 - **Data Tools**: CSV import with mapping and export support.
@@ -204,7 +204,9 @@ openssl rand -base64 32
 
 **BudgetCategory**: Join model connecting budgets to one or more expense categories for scoped budget tracking and category usage counts.
 
-**SavingsGoal**: User-owned goal with progress, target date, optional linked account, and encrypted descriptive fields.
+**SavingsGoal**: User-owned goal with target amount, optional target date, encrypted descriptive fields, and one or more linked funding accounts through `SavingsGoalAccount`. Progress is derived live from the sum of linked account balances (converted to the user's main currency); there is no manual current-amount ledger.
+
+**SavingsGoalAccount**: Join model connecting a savings goal to one or more `FinancialAccount` sources (Bank, Cash, or Investment).
 
 **PersonalAsset**: Durable owned item with category, manual valuation, purchase metadata, notes, and disposal date.
 

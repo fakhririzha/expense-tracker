@@ -15,31 +15,31 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { cn, formatCurrency } from "@/lib/utils";
 import { GoalWithProgress } from "@/actions/goal-actions";
-import { MoreHorizontal, Pencil, Trash2, Plus, Calendar, CheckCircle2, Target } from "lucide-react";
-
+import {
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+  Calendar,
+  CheckCircle2,
+  Target,
+  Wallet,
+} from "lucide-react";
 
 interface GoalCardProps {
   goal: GoalWithProgress;
   onEdit: (goal: GoalWithProgress) => void;
-  onAddProgress: (goal: GoalWithProgress) => void;
   onDelete: () => void;
 }
 
 /**
- * Display a card for a goal showing its progress, amounts, target information, and action controls.
- *
- * The card presents goal name, icon, color indicator, progress bar, current/target amounts, remaining amount,
- * optional monthly target and target-date status, and a menu with actions to add/withdraw progress, edit, or delete the goal.
- *
- * @param goal - Goal data including progress, amounts, dates, display metadata, and completion state
- * @param onEdit - Called with `goal` when the Edit action is selected
- * @param onAddProgress - Called with `goal` when the Add/Withdraw Progress action is selected
- * @param onDelete - Called after the goal has been successfully deleted
- * @returns The React element rendering the goal card
+ * Display a savings goal card with live progress from linked account balances.
  */
-export function GoalCard({ goal, onEdit, onAddProgress, onDelete }: GoalCardProps) {
+export function GoalCard({ goal, onEdit, onDelete }: GoalCardProps) {
+  const { mainCurrency } = useCurrency();
+  const displayCurrency = goal.mainCurrency || mainCurrency;
   const deleteMutation = useDeleteGoal();
   const isDeleting = deleteMutation.isPending;
 
@@ -78,6 +78,13 @@ export function GoalCard({ goal, onEdit, onAddProgress, onDelete }: GoalCardProp
     return `${months} month${months > 1 ? "s" : ""} left`;
   };
 
+  const accountLabel =
+    goal.accounts.length === 0
+      ? "No accounts linked"
+      : goal.accounts.length === 1
+        ? goal.accounts[0].name
+        : `${goal.accounts[0].name} +${goal.accounts.length - 1} more`;
+
   return (
     <Card
       className={cn(
@@ -85,7 +92,6 @@ export function GoalCard({ goal, onEdit, onAddProgress, onDelete }: GoalCardProp
         goal.isCompleted && "ring-2 ring-green-500/50"
       )}
     >
-      {/* Color indicator at top */}
       <div
         className="absolute top-0 left-0 right-0 h-1"
         style={{ backgroundColor: goal.color || "#22c55e" }}
@@ -94,7 +100,6 @@ export function GoalCard({ goal, onEdit, onAddProgress, onDelete }: GoalCardProp
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
-            {/* Icon */}
             <div
               className="flex items-center justify-center w-12 h-12 rounded-full text-2xl"
               style={{ backgroundColor: `${goal.color || "#22c55e"}20` }}
@@ -116,7 +121,6 @@ export function GoalCard({ goal, onEdit, onAddProgress, onDelete }: GoalCardProp
             </div>
           </div>
 
-          {/* Actions dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="h-8 w-8 flex items-center justify-center rounded-md hover:bg-muted">
@@ -125,10 +129,6 @@ export function GoalCard({ goal, onEdit, onAddProgress, onDelete }: GoalCardProp
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => onAddProgress(goal)}>
-                <Plus className="mr-2 h-4 w-4" />
-                Add/Withdraw Progress
-              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => onEdit(goal)}>
                 <Pencil className="mr-2 h-4 w-4" />
                 Edit Goal
@@ -147,7 +147,6 @@ export function GoalCard({ goal, onEdit, onAddProgress, onDelete }: GoalCardProp
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {/* Progress bar */}
         <div className="space-y-2">
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Progress</span>
@@ -160,39 +159,46 @@ export function GoalCard({ goal, onEdit, onAddProgress, onDelete }: GoalCardProp
             )}
           >
             <div
-              className={cn("h-full rounded-full transition-all duration-500", getProgressColor(goal.percentage))}
+              className={cn(
+                "h-full rounded-full transition-all duration-500",
+                getProgressColor(goal.percentage)
+              )}
               style={{ width: `${Math.min(goal.percentage, 100)}%` }}
             />
           </div>
         </div>
 
-        {/* Amount details */}
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
-            <p className="text-muted-foreground">Current</p>
+            <p className="text-muted-foreground">From accounts</p>
             <p className="font-semibold text-lg">
-              {formatCurrency(goal.currentAmount, "IDR")}
+              {formatCurrency(goal.currentAmount, displayCurrency)}
             </p>
           </div>
           <div>
             <p className="text-muted-foreground">Target</p>
             <p className="font-semibold text-lg">
-              {formatCurrency(goal.targetAmount, "IDR")}
+              {formatCurrency(goal.targetAmount, displayCurrency)}
             </p>
           </div>
         </div>
 
-        {/* Remaining amount */}
         <div className="flex items-center justify-between text-sm p-2 bg-muted/50 rounded-md">
           <span className="text-muted-foreground">Remaining</span>
           <span className="font-medium">
-            {formatCurrency(Math.max(0, goal.remaining), "IDR")}
+            {formatCurrency(Math.max(0, goal.remaining), displayCurrency)}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Wallet className="h-3.5 w-3.5 shrink-0" />
+          <span className="truncate" title={goal.accounts.map((a) => a.name).join(", ")}>
+            {accountLabel}
           </span>
         </div>
       </CardContent>
 
       <CardFooter className="pt-0 flex justify-between items-center text-sm text-muted-foreground">
-        {/* Target date */}
         {goal.targetDate ? (
           <div className="flex items-center gap-1">
             <Calendar className="h-4 w-4" />
@@ -205,15 +211,13 @@ export function GoalCard({ goal, onEdit, onAddProgress, onDelete }: GoalCardProp
           </div>
         )}
 
-        {/* Monthly target if applicable */}
         {goal.monthlyTarget && goal.monthlyTarget > 0 && !goal.isCompleted && (
           <div className="text-xs">
-            ~{formatCurrency(goal.monthlyTarget, "IDR")}/month needed
+            ~{formatCurrency(goal.monthlyTarget, displayCurrency)}/month needed
           </div>
         )}
       </CardFooter>
 
-      {/* Completion celebration overlay */}
       {goal.isCompleted && (
         <div className="absolute inset-0 bg-green-500/5 pointer-events-none flex items-center justify-center">
           <div className="text-4xl animate-bounce">🎉</div>

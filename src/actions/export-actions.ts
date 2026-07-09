@@ -275,6 +275,20 @@ export async function exportAllData() {
       }),
       prisma.savingsGoal.findMany({
         where: { userId: session.user.id },
+        include: {
+          accounts: {
+            select: {
+              accountId: true,
+              account: {
+                select: {
+                  id: true,
+                  currency: true,
+                  balance: true,
+                },
+              },
+            },
+          },
+        },
       }),
       prisma.personalAsset.findMany({
         where: { userId: session.user.id },
@@ -384,7 +398,23 @@ export async function exportAllData() {
           accountName: t.accountId ? decryptedAccountMap.get(t.accountId) ?? null : null,
         })),
         recurringRules,
-        savingsGoals,
+        savingsGoals: savingsGoals.map((goal) => ({
+          id: goal.id,
+          name: goal.name,
+          targetAmount: goal.targetAmount,
+          targetDate: goal.targetDate,
+          icon: goal.icon,
+          color: goal.color,
+          description: goal.description,
+          accountIds: goal.accounts.map((link) => link.accountId),
+          accounts: goal.accounts.map((link) => ({
+            id: link.account.id,
+            currency: link.account.currency,
+            balance: link.account.balance,
+          })),
+          createdAt: goal.createdAt,
+          updatedAt: goal.updatedAt,
+        })),
         personalAssets: decryptedPersonalAssets.map((asset) => ({
           id: asset.id,
           name: asset.name,

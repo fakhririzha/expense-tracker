@@ -48,6 +48,7 @@ import {
   UNUSUAL_TRANSACTION_MIN_SAMPLES,
 } from "@/lib/financial-insights/insight-thresholds";
 import { type FinancialInsightResponse } from "@/lib/financial-insights/insight-types";
+import { computeGoalProgress } from "@/lib/goal-progress";
 import {
   isAssetAccountType,
   isLiquidAccountType,
@@ -346,40 +347,63 @@ function buildUnusualTransactionCandidates(input: {
     .filter((candidate): candidate is InsightUnusualTransactionCandidate => candidate !== null);
 }
 
-function buildGoalProgress(input: {
+async function buildGoalProgress(input: {
   goals: Array<{
     id: string;
     targetAmount: number;
-    currentAmount: number;
     targetDate: Date | null;
     createdAt: Date;
+    accounts: Array<{
+      account: { id: string; balance: number; currency: string };
+    }>;
   }>;
   goalNames: Map<string, string>;
+  mainCurrency: string;
   now: Date;
-}): InsightGoalProgress[] {
-  return input.goals
-    .filter((goal) => !!goal.targetDate && goal.targetAmount > 0)
-    .map((goal) => {
-      const completionRatio = Math.min(goal.currentAmount / goal.targetAmount, 1);
-      const totalDays = Math.max(
-        1,
-        getDaysBetween(goal.createdAt, goal.targetDate as Date)
-      );
-      const elapsedDays = Math.min(
-        totalDays,
-        getDaysBetween(goal.createdAt, input.now)
-      );
-      const expectedRatio = Math.min(elapsedDays / totalDays, 1);
-      const gapRatio = Math.max(0, expectedRatio - completionRatio);
+}): Promise<InsightGoalProgress[]> {
+  const results: InsightGoalProgress[] = [];
 
-      return {
-        id: goal.id,
-        name: input.goalNames.get(goal.id) ?? "Savings goal",
-        completionRatio,
-        expectedRatio,
-        gapRatio,
-      };
+  for (const goal of input.goals) {
+    if (!goal.targetDate || goal.targetAmount <= 0) {
+      continue;
+    }
+
+    const progress = await computeGoalProgress({
+      targetAmount: goal.targetAmount,
+      mainCurrency: input.mainCurrency,
+      accounts: goal.accounts.map((link) => ({
+        id: link.account.id,
+        balance: link.account.balance,
+        currency: link.account.currency,
+      })),
     });
+
+    if (progress.isCompleted) {
+      continue;
+    }
+
+    const completionRatio = Math.min(progress.currentAmount / goal.targetAmount, 1);
+    const totalDays = Math.max(
+      1,
+      getDaysBetween(goal.createdAt, goal.targetDate)
+    );
+    const elapsedDays = Math.min(
+      totalDays,
+      getDaysBetween(goal.createdAt, input.now)
+    );
+    const expectedRatio = Math.min(elapsedDays / totalDays, 1);
+    const gapRatio = Math.max(0, expectedRatio - completionRatio);
+
+    results.push({
+      id: goal.id,
+      name: input.goalNames.get(goal.id) ?? "Savings goal",
+      completionRatio,
+      expectedRatio,
+      gapRatio,
+    });
+  }
+
+  return results;
 }
 
 function buildNetWorthMovement(
@@ -537,15 +561,25 @@ export async function getFinancialInsights(
         },
       }),
       prisma.savingsGoal.findMany({
-        where: { userId: session.user.id, isCompleted: false },
+        where: { userId: session.user.id },
         select: {
           id: true,
           name: true,
           nameEncrypted: true,
           targetAmount: true,
-          currentAmount: true,
           targetDate: true,
           createdAt: true,
+          accounts: {
+            select: {
+              account: {
+                select: {
+                  id: true,
+                  balance: true,
+                  currency: true,
+                },
+              },
+            },
+          },
         },
       }),
       prisma.recurringRule.findMany({
@@ -819,9 +853,10 @@ export async function getFinancialInsights(
     });
 
     const goalNames = await decryptGoalNames(session.user.id, goals);
-    const goalProgress = buildGoalProgress({
+    const goalProgress = await buildGoalProgress({
       goals,
       goalNames,
+      mainCurrency,
       now,
     });
 

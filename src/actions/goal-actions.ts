@@ -3,25 +3,35 @@
 import { auth } from "@/auth";
 import { decryptAccountName } from "@/lib/account-crypto";
 import prisma from "@/lib/db";
+import { isGoalSourceAccountType } from "@/lib/account-types";
+import { computeGoalProgress } from "@/lib/goal-progress";
+import { encryptUserField, decryptUserField } from "@/lib/user-encryption";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { encryptUserField, decryptUserField } from "@/lib/user-encryption";
 
-// Schema for goal validation
 const goalSchema = z.object({
   name: z.string().min(1, "Name is required"),
   targetAmount: z.number().positive("Target must be positive"),
-  currentAmount: z.number().min(0).default(0),
   targetDate: z.date().optional().nullable(),
   icon: z.string().optional().nullable(),
   color: z.string().optional().nullable(),
   description: z.string().optional().nullable(),
-  accountId: z.string().optional().nullable(),
+  accountIds: z
+    .array(z.string().min(1))
+    .min(1, "Select at least one account")
+    .max(20, "A goal can link at most 20 accounts"),
 });
 
 export type GoalInput = z.infer<typeof goalSchema>;
 
-// Type for goal with progress
+export interface GoalAccountSummary {
+  id: string;
+  name: string;
+  currency: string;
+  balance: number;
+  balanceInMain: number;
+}
+
 export interface GoalWithProgress {
   id: string;
   name: string;
@@ -32,39 +42,226 @@ export interface GoalWithProgress {
   color: string | null;
   description: string | null;
   isCompleted: boolean;
-  accountId: string | null;
-  account: {
-    id: string;
-    name: string;
-    currency: string;
-  } | null;
+  accounts: GoalAccountSummary[];
   percentage: number;
   remaining: number;
   daysRemaining: number | null;
   monthlyTarget: number | null;
+  mainCurrency: string;
 }
 
-async function mapGoalAccount(
+const goalAccountInclude = {
+  accounts: {
+    include: {
+      account: {
+        select: {
+          id: true,
+          nameEncrypted: true,
+          currency: true,
+          balance: true,
+          type: true,
+          userId: true,
+        },
+      },
+    },
+  },
+} as const;
+
+type GoalAccountLink = {
+  account: {
+    id: string;
+    nameEncrypted: string;
+    currency: string;
+    balance: number;
+    type: string;
+    userId: string;
+  };
+};
+
+async function getUserMainCurrency(userId: string): Promise<string> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { mainCurrency: true },
+  });
+  return user?.mainCurrency || "IDR";
+}
+
+async function decryptGoalTextFields(
   userId: string,
-  account: { id: string; nameEncrypted: string; currency: string } | null
-) {
-  if (!account) {
-    return null;
+  goal: {
+    name: string;
+    nameEncrypted: string | null;
+    description: string | null;
+    descriptionEncrypted: string | null;
+  }
+): Promise<{ name: string; description: string | null }> {
+  let name = goal.name;
+  if (goal.nameEncrypted) {
+    try {
+      name = await decryptUserField(userId, "savingsGoal.name", goal.nameEncrypted);
+    } catch {
+      // Fall back to plaintext
+    }
+  }
+
+  let description = goal.description;
+  if (goal.descriptionEncrypted) {
+    try {
+      description = await decryptUserField(
+        userId,
+        "savingsGoal.description",
+        goal.descriptionEncrypted
+      );
+    } catch {
+      // Fall back to plaintext
+    }
+  }
+
+  return { name, description };
+}
+
+async function mapLinkedAccounts(
+  userId: string,
+  links: GoalAccountLink[],
+  mainCurrency: string
+): Promise<GoalAccountSummary[]> {
+  const progress = await computeGoalProgress({
+    targetAmount: 1,
+    mainCurrency,
+    accounts: links.map((link) => ({
+      id: link.account.id,
+      balance: link.account.balance,
+      currency: link.account.currency,
+    })),
+  });
+
+  const contributionById = new Map(
+    progress.accounts.map((account) => [account.id, account])
+  );
+
+  return Promise.all(
+    links.map(async (link) => {
+      const contribution = contributionById.get(link.account.id);
+      return {
+        id: link.account.id,
+        name: await decryptAccountName(userId, link.account.nameEncrypted),
+        currency: link.account.currency,
+        balance: link.account.balance,
+        balanceInMain: contribution?.balanceInMain ?? 0,
+      };
+    })
+  );
+}
+
+async function buildGoalWithProgress(
+  userId: string,
+  goal: {
+    id: string;
+    name: string;
+    nameEncrypted: string | null;
+    targetAmount: number;
+    targetDate: Date | null;
+    icon: string | null;
+    color: string | null;
+    description: string | null;
+    descriptionEncrypted: string | null;
+    accounts: GoalAccountLink[];
+  },
+  mainCurrency: string,
+  now: Date = new Date()
+): Promise<GoalWithProgress> {
+  const { name, description } = await decryptGoalTextFields(userId, goal);
+  const progress = await computeGoalProgress({
+    targetAmount: goal.targetAmount,
+    mainCurrency,
+    accounts: goal.accounts.map((link) => ({
+      id: link.account.id,
+      balance: link.account.balance,
+      currency: link.account.currency,
+    })),
+  });
+
+  const accounts: GoalAccountSummary[] = await Promise.all(
+    goal.accounts.map(async (link) => {
+      const contribution = progress.accounts.find((a) => a.id === link.account.id);
+      return {
+        id: link.account.id,
+        name: await decryptAccountName(userId, link.account.nameEncrypted),
+        currency: link.account.currency,
+        balance: link.account.balance,
+        balanceInMain: contribution?.balanceInMain ?? 0,
+      };
+    })
+  );
+
+  let daysRemaining: number | null = null;
+  if (goal.targetDate) {
+    const diffTime = goal.targetDate.getTime() - now.getTime();
+    daysRemaining = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+  }
+
+  let monthlyTarget: number | null = null;
+  if (goal.targetDate && daysRemaining !== null && daysRemaining > 0) {
+    const monthsRemaining = daysRemaining / 30;
+    monthlyTarget = progress.remaining / monthsRemaining;
   }
 
   return {
-    id: account.id,
-    name: await decryptAccountName(userId, account.nameEncrypted),
-    currency: account.currency,
+    id: goal.id,
+    name,
+    targetAmount: goal.targetAmount,
+    currentAmount: progress.currentAmount,
+    targetDate: goal.targetDate,
+    icon: goal.icon,
+    color: goal.color,
+    description,
+    isCompleted: progress.isCompleted,
+    accounts,
+    percentage: progress.percentage,
+    remaining: progress.remaining,
+    daysRemaining,
+    monthlyTarget,
+    mainCurrency,
   };
 }
 
 /**
- * Retrieve all savings goals belonging to the authenticated user, including each goal's basic account info.
- *
- * If the user is not authenticated the function returns a failure result with an empty `data` array.
- *
- * @returns An object with `success: true` and `data` containing an array of savings goals (each including its associated account `id`, `name`, and `currency`) on success; otherwise `success: false`, an `error` message, and `data` as an empty array.
+ * Validate that every account ID belongs to the user and is an eligible goal source type.
+ */
+async function validateGoalAccounts(
+  userId: string,
+  accountIds: string[]
+): Promise<{ success: true; accountIds: string[] } | { success: false; error: string }> {
+  const uniqueIds = [...new Set(accountIds.map((id) => id.trim()).filter(Boolean))];
+  if (uniqueIds.length === 0) {
+    return { success: false, error: "Select at least one account" };
+  }
+
+  const accounts = await prisma.financialAccount.findMany({
+    where: {
+      id: { in: uniqueIds },
+      userId,
+    },
+    select: { id: true, type: true },
+  });
+
+  if (accounts.length !== uniqueIds.length) {
+    return { success: false, error: "One or more accounts were not found" };
+  }
+
+  const invalid = accounts.find((account) => !isGoalSourceAccountType(account.type));
+  if (invalid) {
+    return {
+      success: false,
+      error: "Goals can only use Bank, Cash, or Investment accounts",
+    };
+  }
+
+  return { success: true, accountIds: uniqueIds };
+}
+
+/**
+ * Retrieve all savings goals for the authenticated user with linked accounts (no progress metrics).
  */
 export async function getGoals() {
   try {
@@ -73,61 +270,34 @@ export async function getGoals() {
       return { success: false, error: "Unauthorized", data: [] };
     }
 
+    const mainCurrency = await getUserMainCurrency(session.user.id);
     const goals = await prisma.savingsGoal.findMany({
       where: { userId: session.user.id },
-      include: {
-        account: {
-          select: {
-            id: true,
-            nameEncrypted: true,
-            currency: true,
-          },
-        },
-      },
+      include: goalAccountInclude,
       orderBy: { createdAt: "desc" },
     });
 
-    // Decrypt sensitive fields
-    const decryptedGoals = await Promise.all(
+    const data = await Promise.all(
       goals.map(async (goal) => {
-        // Use encrypted name if available, otherwise fall back to plaintext
-        let finalName = goal.name;
-        if (goal.nameEncrypted) {
-          try {
-            finalName = await decryptUserField(
-              session.user.id,
-              "savingsGoal.name",
-              goal.nameEncrypted
-            );
-          } catch {
-            // Fall back to plaintext
-          }
-        }
-
-        // Use encrypted description if available, otherwise fall back to plaintext
-        let finalDescription = goal.description;
-        if (goal.descriptionEncrypted) {
-          try {
-            finalDescription = await decryptUserField(
-              session.user.id,
-              "savingsGoal.description",
-              goal.descriptionEncrypted
-            );
-          } catch {
-            // Fall back to plaintext
-          }
-        }
-
+        const { name, description } = await decryptGoalTextFields(
+          session.user.id,
+          goal
+        );
+        const accounts = await mapLinkedAccounts(
+          session.user.id,
+          goal.accounts,
+          mainCurrency
+        );
         return {
           ...goal,
-          account: await mapGoalAccount(session.user.id, goal.account),
-          name: finalName,
-          description: finalDescription,
+          name,
+          description,
+          accounts,
         };
       })
     );
 
-    return { success: true, data: decryptedGoals };
+    return { success: true, data };
   } catch (error) {
     console.error("Get goals error:", error);
     return { success: false, error: "Failed to fetch goals", data: [] };
@@ -136,9 +306,6 @@ export async function getGoals() {
 
 /**
  * Fetches a savings goal by ID for the authenticated user.
- *
- * @param id - The ID of the savings goal to retrieve.
- * @returns An object with `success: true` and `data` containing the goal (including associated account info: `id`, `name`, `currency`) when found; otherwise `success: false` and `error` with a message.
  */
 export async function getGoal(id: string) {
   try {
@@ -147,57 +314,30 @@ export async function getGoal(id: string) {
       return { success: false, error: "Unauthorized" };
     }
 
+    const mainCurrency = await getUserMainCurrency(session.user.id);
     const goal = await prisma.savingsGoal.findFirst({
       where: { id, userId: session.user.id },
-      include: {
-        account: {
-          select: {
-            id: true,
-            nameEncrypted: true,
-            currency: true,
-          },
-        },
-      },
+      include: goalAccountInclude,
     });
 
     if (!goal) {
       return { success: false, error: "Goal not found" };
     }
 
-    // Decrypt sensitive fields
-    let finalName = goal.name;
-    if (goal.nameEncrypted) {
-      try {
-        finalName = await decryptUserField(
-          session.user.id,
-          "savingsGoal.name",
-          goal.nameEncrypted
-        );
-      } catch {
-        // Fall back to plaintext
-      }
-    }
-
-    let finalDescription = goal.description;
-    if (goal.descriptionEncrypted) {
-      try {
-        finalDescription = await decryptUserField(
-          session.user.id,
-          "savingsGoal.description",
-          goal.descriptionEncrypted
-        );
-      } catch {
-        // Fall back to plaintext
-      }
-    }
+    const { name, description } = await decryptGoalTextFields(session.user.id, goal);
+    const accounts = await mapLinkedAccounts(
+      session.user.id,
+      goal.accounts,
+      mainCurrency
+    );
 
     return {
       success: true,
       data: {
         ...goal,
-        account: await mapGoalAccount(session.user.id, goal.account),
-        name: finalName,
-        description: finalDescription,
+        name,
+        description,
+        accounts,
       },
     };
   } catch (error) {
@@ -207,10 +347,7 @@ export async function getGoal(id: string) {
 }
 
 /**
- * Create a new savings goal for the authenticated user.
- *
- * @param data - Goal fields validated against `goalSchema`; optional `accountId` must belong to the current user
- * @returns An object with `success: true` and the created goal under `data` on success; `success: false` and an `error` message on failure
+ * Create a new savings goal with one or more linked account sources.
  */
 export async function createGoal(data: GoalInput) {
   try {
@@ -227,64 +364,61 @@ export async function createGoal(data: GoalInput) {
       };
     }
 
-    // Validate account belongs to user (IDOR prevention)
-    const { accountId, ...restData } = validatedFields.data;
-    if (accountId) {
-      const account = await prisma.financialAccount.findFirst({
-        where: {
-          id: accountId,
-          userId: session.user.id,
-        },
-      });
-      if (!account) {
-        return { success: false, error: "Account not found" };
-      }
+    const accountValidation = await validateGoalAccounts(
+      session.user.id,
+      validatedFields.data.accountIds
+    );
+    if (!accountValidation.success) {
+      return { success: false, error: accountValidation.error };
     }
 
-    // Encrypt sensitive fields
-    const encryptedName = restData.name
-      ? await encryptUserField(session.user.id, "savingsGoal.name", restData.name)
+    const { name, targetAmount, targetDate, icon, color, description } =
+      validatedFields.data;
+
+    const encryptedName = name
+      ? await encryptUserField(session.user.id, "savingsGoal.name", name)
       : null;
-    
-    const encryptedDescription = restData.description
-      ? await encryptUserField(session.user.id, "savingsGoal.description", restData.description)
+
+    const encryptedDescription = description
+      ? await encryptUserField(
+          session.user.id,
+          "savingsGoal.description",
+          description
+        )
       : null;
+
+    const mainCurrency = await getUserMainCurrency(session.user.id);
 
     const goal = await prisma.savingsGoal.create({
       data: {
-        ...restData,
-        targetDate: validatedFields.data.targetDate || null,
-        icon: validatedFields.data.icon || null,
-        color: validatedFields.data.color || null,
-        // Nullify optional plaintext after encryption
-        description: validatedFields.data.description ? null : undefined,
+        name,
+        targetAmount,
+        targetDate: targetDate || null,
+        icon: icon || null,
+        color: color || null,
+        description: description ? null : undefined,
         descriptionEncrypted: encryptedDescription,
-        // Keep plaintext name (required field), also store encrypted
         nameEncrypted: encryptedName,
-        accountId: accountId?.trim() || null,
         userId: session.user.id,
-      },
-      include: {
-        account: {
-          select: {
-            id: true,
-            nameEncrypted: true,
-            currency: true,
-          },
+        accounts: {
+          create: accountValidation.accountIds.map((accountId) => ({
+            accountId,
+          })),
         },
       },
+      include: goalAccountInclude,
     });
 
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/goals");
 
-    return {
-      success: true,
-      data: {
-        ...goal,
-        account: await mapGoalAccount(session.user.id, goal.account),
-      },
-    };
+    const withProgress = await buildGoalWithProgress(
+      session.user.id,
+      goal,
+      mainCurrency
+    );
+
+    return { success: true, data: withProgress };
   } catch (error) {
     console.error("Create goal error:", error);
     return { success: false, error: "Failed to create goal" };
@@ -292,13 +426,7 @@ export async function createGoal(data: GoalInput) {
 }
 
 /**
- * Update an existing savings goal for the authenticated user.
- *
- * Validates input, ensures any provided `accountId` belongs to the user, computes the goal's completion status from the current and target amounts, updates the goal record, and revalidates dashboard caches.
- *
- * @param id - The ID of the goal to update
- * @param data - Partial goal fields to apply
- * @returns An object with `success: true` and the updated goal under `data` on success, or `success: false` and an `error` message on failure
+ * Update an existing savings goal and replace its linked account sources.
  */
 export async function updateGoal(id: string, data: Partial<GoalInput>) {
   try {
@@ -307,7 +435,6 @@ export async function updateGoal(id: string, data: Partial<GoalInput>) {
       return { success: false, error: "Unauthorized" };
     }
 
-    // Validate input with schema
     const validatedFields = goalSchema.partial().safeParse(data);
     if (!validatedFields.success) {
       return {
@@ -324,80 +451,90 @@ export async function updateGoal(id: string, data: Partial<GoalInput>) {
       return { success: false, error: "Goal not found" };
     }
 
-    // Validate account belongs to user (IDOR prevention)
-    const sanitizedAccountId = validatedFields.data.accountId?.trim() || null;
-    if (sanitizedAccountId) {
-      const account = await prisma.financialAccount.findFirst({
-        where: {
-          id: sanitizedAccountId,
-          userId: session.user.id,
-        },
-      });
-      if (!account) {
-        return { success: false, error: "Account not found" };
+    let validatedAccountIds: string[] | undefined;
+    if (validatedFields.data.accountIds !== undefined) {
+      const accountValidation = await validateGoalAccounts(
+        session.user.id,
+        validatedFields.data.accountIds
+      );
+      if (!accountValidation.success) {
+        return { success: false, error: accountValidation.error };
       }
+      validatedAccountIds = accountValidation.accountIds;
     }
 
-    // Encrypt sensitive fields if provided
     let encryptedName: string | null = null;
     let encryptedDescription: string | null = null;
-    
+
     if (validatedFields.data.name) {
-      encryptedName = await encryptUserField(session.user.id, "savingsGoal.name", validatedFields.data.name);
+      encryptedName = await encryptUserField(
+        session.user.id,
+        "savingsGoal.name",
+        validatedFields.data.name
+      );
     }
     if (validatedFields.data.description !== undefined) {
       encryptedDescription = validatedFields.data.description
-        ? await encryptUserField(session.user.id, "savingsGoal.description", validatedFields.data.description)
+        ? await encryptUserField(
+            session.user.id,
+            "savingsGoal.description",
+            validatedFields.data.description
+          )
         : null;
     }
 
-    const updateData: Record<string, unknown> = {
-      ...validatedFields.data,
-      accountId: sanitizedAccountId,
-    };
-    
-    // If name is being updated, also store encrypted version
-    if (validatedFields.data.name) {
-      updateData.nameEncrypted = encryptedName;
-    }
-    // If description is being updated, nullify plaintext and store encrypted
-    if (validatedFields.data.description !== undefined) {
-      updateData.description = validatedFields.data.description ? null : undefined;
-      updateData.descriptionEncrypted = encryptedDescription;
-    }
+    const mainCurrency = await getUserMainCurrency(session.user.id);
 
-    // Check if goal should be marked as completed
-    const newCurrentAmount = validatedFields.data.currentAmount ?? existingGoal.currentAmount;
-    const newTargetAmount = validatedFields.data.targetAmount ?? existingGoal.targetAmount;
-    const isCompleted = newCurrentAmount >= newTargetAmount;
+    const goal = await prisma.$transaction(async (tx) => {
+      if (validatedAccountIds) {
+        await tx.savingsGoalAccount.deleteMany({ where: { goalId: id } });
+        await tx.savingsGoalAccount.createMany({
+          data: validatedAccountIds.map((accountId) => ({
+            goalId: id,
+            accountId,
+          })),
+        });
+      }
 
-    const goal = await prisma.savingsGoal.update({
-      where: { id },
-      data: {
-        ...updateData,
-        isCompleted,
-      },
-      include: {
-        account: {
-          select: {
-            id: true,
-            nameEncrypted: true,
-            currency: true,
-          },
+      return tx.savingsGoal.update({
+        where: { id },
+        data: {
+          ...(validatedFields.data.name !== undefined
+            ? { name: validatedFields.data.name, nameEncrypted: encryptedName }
+            : {}),
+          ...(validatedFields.data.targetAmount !== undefined
+            ? { targetAmount: validatedFields.data.targetAmount }
+            : {}),
+          ...(validatedFields.data.targetDate !== undefined
+            ? { targetDate: validatedFields.data.targetDate || null }
+            : {}),
+          ...(validatedFields.data.icon !== undefined
+            ? { icon: validatedFields.data.icon || null }
+            : {}),
+          ...(validatedFields.data.color !== undefined
+            ? { color: validatedFields.data.color || null }
+            : {}),
+          ...(validatedFields.data.description !== undefined
+            ? {
+                description: validatedFields.data.description ? null : undefined,
+                descriptionEncrypted: encryptedDescription,
+              }
+            : {}),
         },
-      },
+        include: goalAccountInclude,
+      });
     });
 
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/goals");
 
-    return {
-      success: true,
-      data: {
-        ...goal,
-        account: await mapGoalAccount(session.user.id, goal.account),
-      },
-    };
+    const withProgress = await buildGoalWithProgress(
+      session.user.id,
+      goal,
+      mainCurrency
+    );
+
+    return { success: true, data: withProgress };
   } catch (error) {
     console.error("Update goal error:", error);
     return { success: false, error: "Failed to update goal" };
@@ -406,9 +543,6 @@ export async function updateGoal(id: string, data: Partial<GoalInput>) {
 
 /**
  * Delete a savings goal owned by the current user.
- *
- * @param id - The ID of the goal to delete
- * @returns `{ success: true }` on successful deletion; `{ success: false, error: string }` when unauthorized, the goal is not found, or deletion fails
  */
 export async function deleteGoal(id: string) {
   try {
@@ -438,182 +572,7 @@ export async function deleteGoal(id: string) {
 }
 
 /**
- * Atomically adds a positive amount to a goal's currentAmount and updates its completion status.
- *
- * Performs the increment inside a transaction, updates the goal's `isCompleted` flag if needed,
- * and revalidates the dashboard cache paths.
- *
- * @param id - The ID of the goal to update
- * @param amount - A positive number to add to the goal's current amount
- * @returns An object with `success: true` and the updated goal (including `account` info) on success,
- *          or `success: false` and an `error` message on failure (e.g., "Unauthorized", "Amount must be positive", "Goal not found", or "Failed to add progress")
- */
-export async function addProgress(id: string, amount: number) {
-  try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
-
-    if (amount <= 0) {
-      return { success: false, error: "Amount must be positive" };
-    }
-
-    // Use transaction to prevent race conditions
-    const updatedGoal = await prisma.$transaction(async (tx) => {
-      // Fetch goal and validate within transaction
-      const goal = await tx.savingsGoal.findFirst({
-        where: { id, userId: session.user.id },
-      });
-
-      if (!goal) {
-        throw new Error("Goal not found");
-      }
-
-      // Use atomic increment for currentAmount
-      const updated = await tx.savingsGoal.update({
-        where: { id, userId: session.user.id },
-        data: {
-          currentAmount: { increment: amount },
-        },
-        include: {
-          account: {
-            select: {
-              id: true,
-              nameEncrypted: true,
-              currency: true,
-            },
-          },
-        },
-      });
-
-      // Calculate and set isCompleted after atomic change
-      const isCompleted = updated.currentAmount >= goal.targetAmount;
-      if (isCompleted !== goal.isCompleted) {
-        await tx.savingsGoal.update({
-          where: { id },
-          data: { isCompleted },
-        });
-        updated.isCompleted = isCompleted;
-      }
-
-      return updated;
-    });
-
-    revalidatePath("/dashboard");
-    revalidatePath("/dashboard/goals");
-
-    return {
-      success: true,
-      data: {
-        ...updatedGoal,
-        account: await mapGoalAccount(session.user.id, updatedGoal.account),
-      },
-    };
-  } catch (error) {
-    console.error("Add progress error:", error);
-    if (error instanceof Error && error.message === "Goal not found") {
-      return { success: false, error: "Goal not found" };
-    }
-    return { success: false, error: "Failed to add progress" };
-  }
-}
-
-/**
- * Withdraws a positive amount from the specified goal and updates its completion status.
- *
- * Revalidates dashboard caches and returns the updated goal including its `account` relation.
- *
- * @param id - The ID of the goal to withdraw from.
- * @param amount - The positive amount to subtract from the goal's `currentAmount`.
- * @returns The updated goal object (includes `account` with `id`, `name`, `currency`) on success; otherwise an error object with `success: false` and an `error` message such as `"Goal not found"` or `"Cannot withdraw more than current amount"`.
- */
-export async function withdrawProgress(id: string, amount: number) {
-  try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
-
-    if (amount <= 0) {
-      return { success: false, error: "Amount must be positive" };
-    }
-
-    // Use transaction to prevent race conditions
-    const updatedGoal = await prisma.$transaction(async (tx) => {
-      // Fetch goal and validate within transaction
-      const goal = await tx.savingsGoal.findFirst({
-        where: { id, userId: session.user.id },
-      });
-
-      if (!goal) {
-        throw new Error("Goal not found");
-      }
-
-      if (amount > goal.currentAmount) {
-        throw new Error("Cannot withdraw more than current amount");
-      }
-
-      // Use atomic decrement for currentAmount
-      const updated = await tx.savingsGoal.update({
-        where: { id, userId: session.user.id },
-        data: {
-          currentAmount: { decrement: amount },
-        },
-        include: {
-          account: {
-            select: {
-              id: true,
-              nameEncrypted: true,
-              currency: true,
-            },
-          },
-        },
-      });
-
-      // Calculate and set isCompleted after atomic change
-      const isCompleted = updated.currentAmount >= goal.targetAmount;
-      if (isCompleted !== goal.isCompleted) {
-        await tx.savingsGoal.update({
-          where: { id },
-          data: { isCompleted },
-        });
-        updated.isCompleted = isCompleted;
-      }
-
-      return updated;
-    });
-
-    revalidatePath("/dashboard");
-    revalidatePath("/dashboard/goals");
-
-    return {
-      success: true,
-      data: {
-        ...updatedGoal,
-        account: await mapGoalAccount(session.user.id, updatedGoal.account),
-      },
-    };
-  } catch (error) {
-    console.error("Withdraw progress error:", error);
-    if (error instanceof Error) {
-      if (error.message === "Goal not found") {
-        return { success: false, error: "Goal not found" };
-      }
-      if (error.message === "Cannot withdraw more than current amount") {
-        return { success: false, error: "Cannot withdraw more than current amount" };
-      }
-    }
-    return { success: false, error: "Failed to withdraw progress" };
-  }
-}
-
-/**
- * Retrieve all savings goals for the authenticated user, each augmented with progress metrics.
- *
- * Computes per-goal progress fields including `percentage` (capped at 100), `remaining`, `daysRemaining` (if a target date is set, clamped to zero), and `monthlyTarget` (estimated remaining per 30-day month when applicable).
- *
- * @returns An object where `success` is `true` and `data` is an array of `GoalWithProgress` on success; otherwise `success` is `false`, `error` contains a message, and `data` is an empty array.
+ * Retrieve all savings goals with live progress derived from linked account balances.
  */
 export async function getGoalsSummary() {
   try {
@@ -622,96 +581,19 @@ export async function getGoalsSummary() {
       return { success: false, error: "Unauthorized", data: [] };
     }
 
+    const mainCurrency = await getUserMainCurrency(session.user.id);
     const goals = await prisma.savingsGoal.findMany({
       where: { userId: session.user.id },
-      include: {
-        account: {
-          select: {
-            id: true,
-            nameEncrypted: true,
-            currency: true,
-          },
-        },
-      },
+      include: goalAccountInclude,
       orderBy: { createdAt: "desc" },
     });
 
     const now = new Date();
-
-    // Decrypt sensitive fields for each goal
-    const decryptedGoals = await Promise.all(
-      goals.map(async (goal) => {
-        let finalName = goal.name;
-        if (goal.nameEncrypted) {
-          try {
-            finalName = await decryptUserField(
-              session.user.id,
-              "savingsGoal.name",
-              goal.nameEncrypted
-            );
-          } catch {
-            // Fall back to plaintext
-          }
-        }
-
-        let finalDescription = goal.description;
-        if (goal.descriptionEncrypted) {
-          try {
-            finalDescription = await decryptUserField(
-              session.user.id,
-              "savingsGoal.description",
-              goal.descriptionEncrypted
-            );
-          } catch {
-            // Fall back to plaintext
-          }
-        }
-
-        return {
-          ...goal,
-          account: await mapGoalAccount(session.user.id, goal.account),
-          name: finalName,
-          description: finalDescription,
-        };
-      })
+    const goalsWithProgress = await Promise.all(
+      goals.map((goal) =>
+        buildGoalWithProgress(session.user.id, goal, mainCurrency, now)
+      )
     );
-
-    const goalsWithProgress: GoalWithProgress[] = decryptedGoals.map((goal) => {
-      const percentage = goal.targetAmount > 0 ? (goal.currentAmount / goal.targetAmount) * 100 : 0;
-      const remaining = goal.targetAmount - goal.currentAmount;
-
-      // Calculate days remaining
-      let daysRemaining: number | null = null;
-      if (goal.targetDate) {
-        const diffTime = goal.targetDate.getTime() - now.getTime();
-        daysRemaining = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
-      }
-
-      // Calculate monthly target
-      let monthlyTarget: number | null = null;
-      if (goal.targetDate && daysRemaining !== null && daysRemaining > 0) {
-        const monthsRemaining = daysRemaining / 30;
-        monthlyTarget = remaining / monthsRemaining;
-      }
-
-      return {
-        id: goal.id,
-        name: goal.name,
-        targetAmount: goal.targetAmount,
-        currentAmount: goal.currentAmount,
-        targetDate: goal.targetDate,
-        icon: goal.icon,
-        color: goal.color,
-        description: goal.description,
-        isCompleted: goal.isCompleted,
-        accountId: goal.accountId,
-        account: goal.account,
-        percentage: Math.min(percentage, 100),
-        remaining,
-        daysRemaining,
-        monthlyTarget,
-      };
-    });
 
     return { success: true, data: goalsWithProgress };
   } catch (error) {
@@ -721,16 +603,7 @@ export async function getGoalsSummary() {
 }
 
 /**
- * Retrieve aggregate statistics for the current user's savings goals.
- *
- * @returns An object with `success: true` and a `data` object containing aggregate metrics when the operation succeeds; otherwise `success: false` and an `error` message.
- *
- * `data` fields:
- * - `totalSaved` - Sum of all goals' `currentAmount`.
- * - `totalTarget` - Sum of all goals' `targetAmount`.
- * - `inProgressCount` - Number of goals that are not completed.
- * - `completedCount` - Number of goals marked as completed.
- * - `totalGoals` - Total number of goals for the user.
+ * Retrieve aggregate statistics for the current user's savings goals (live balances).
  */
 export async function getGoalsStats() {
   try {
@@ -739,19 +612,36 @@ export async function getGoalsStats() {
       return { success: false, error: "Unauthorized" };
     }
 
+    const mainCurrency = await getUserMainCurrency(session.user.id);
     const goals = await prisma.savingsGoal.findMany({
       where: { userId: session.user.id },
-      select: {
-        currentAmount: true,
-        targetAmount: true,
-        isCompleted: true,
-      },
+      include: goalAccountInclude,
     });
 
-    const totalSaved = goals.reduce((sum, g) => sum + g.currentAmount, 0);
-    const totalTarget = goals.reduce((sum, g) => sum + g.targetAmount, 0);
-    const inProgressCount = goals.filter((g) => !g.isCompleted).length;
-    const completedCount = goals.filter((g) => g.isCompleted).length;
+    let totalSaved = 0;
+    let totalTarget = 0;
+    let inProgressCount = 0;
+    let completedCount = 0;
+
+    for (const goal of goals) {
+      const progress = await computeGoalProgress({
+        targetAmount: goal.targetAmount,
+        mainCurrency,
+        accounts: goal.accounts.map((link) => ({
+          id: link.account.id,
+          balance: link.account.balance,
+          currency: link.account.currency,
+        })),
+      });
+
+      totalSaved += progress.currentAmount;
+      totalTarget += goal.targetAmount;
+      if (progress.isCompleted) {
+        completedCount += 1;
+      } else {
+        inProgressCount += 1;
+      }
+    }
 
     return {
       success: true,

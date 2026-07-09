@@ -23,6 +23,7 @@ import {
   type Prisma,
 } from "@/generated/prisma/client/client";
 import prisma from "@/lib/db";
+import { computeGoalProgress } from "@/lib/goal-progress";
 import { flattenTransactionAllocationRows } from "@/lib/transaction-allocation-service";
 import { decryptUserField, encryptUserField } from "@/lib/user-encryption";
 
@@ -1113,24 +1114,57 @@ async function sendGoalProgressNotifications(
   }
 
   const dueBy = endOfDay(addDays(now, GOAL_REMINDER_LOOKAHEAD_DAYS));
-  const goals = await prisma.savingsGoal.findMany({
-    where: {
-      userId,
-      isCompleted: false,
-      targetDate: {
-        not: null,
-        lte: dueBy,
+  const [user, goals] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { mainCurrency: true },
+    }),
+    prisma.savingsGoal.findMany({
+      where: {
+        userId,
+        targetDate: {
+          not: null,
+          lte: dueBy,
+        },
       },
-    },
-    select: {
-      id: true,
-      targetDate: true,
-    },
-  });
+      select: {
+        id: true,
+        targetDate: true,
+        targetAmount: true,
+        accounts: {
+          select: {
+            account: {
+              select: {
+                id: true,
+                balance: true,
+                currency: true,
+              },
+            },
+          },
+        },
+      },
+    }),
+  ]);
+
+  const mainCurrency = user?.mainCurrency || "IDR";
 
   let sent = 0;
   for (const goal of goals) {
     if (!goal.targetDate) {
+      continue;
+    }
+
+    const progress = await computeGoalProgress({
+      targetAmount: goal.targetAmount,
+      mainCurrency,
+      accounts: goal.accounts.map((link) => ({
+        id: link.account.id,
+        balance: link.account.balance,
+        currency: link.account.currency,
+      })),
+    });
+
+    if (progress.isCompleted) {
       continue;
     }
 

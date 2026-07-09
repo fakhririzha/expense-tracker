@@ -5,8 +5,6 @@ import {
   createGoal,
   updateGoal,
   deleteGoal,
-  addProgress,
-  withdrawProgress,
   type GoalInput,
 } from "@/actions/goal-actions";
 
@@ -83,34 +81,6 @@ export function useDeleteGoal() {
     mutationFn: async (id: string) => {
       const result = await deleteGoal(id);
       if (!result.success) throw new Error(result.error);
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: goalKeys.all });
-    },
-  });
-}
-
-export function useAddProgress() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, amount }: { id: string; amount: number }) => {
-      const result = await addProgress(id, amount);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: goalKeys.all });
-    },
-  });
-}
-
-export function useWithdrawProgress() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, amount }: { id: string; amount: number }) => {
-      const result = await withdrawProgress(id, amount);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: goalKeys.all });
