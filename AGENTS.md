@@ -161,6 +161,9 @@ pnpm db:backfill:account-encryption
 | `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Public VAPID key for browser push subscription | Required for web push |
 | `VAPID_PRIVATE_KEY` | Private VAPID key for server-side push delivery | Required for web push |
 | `VAPID_SUBJECT` | Contact subject for VAPID, usually `mailto:...` or the app URL | Required for web push |
+| `CHAT_API_ENDPOINT` | OpenAI-compatible chat completions endpoint used for bill photo OCR in Add Transaction | Required for OCR bill scan |
+| `CHAT_API_KEY` | Bearer key for the chat completions endpoint | Required for OCR bill scan |
+| `CHAT_API_MODEL` | Vision-capable chat model used to parse bill photos | Required for OCR bill scan |
 
 Generate a new encryption key with:
 
@@ -413,6 +416,8 @@ Notable current hooks include:
 ### Transactions and Splits
 
 - Split transactions are supported only for `EXPENSE` transactions.
+- Bill photo OCR in Add Transaction is a transient form-filling helper only; do not store uploaded receipt images or raw OCR text unless a future storage feature explicitly adds that scope.
+- Bill photo OCR uses `CHAT_API_ENDPOINT`, `CHAT_API_KEY`, and `CHAT_API_MODEL` through `src/actions/transaction-ocr-actions.ts`; send only the image and owned category context to the provider, never account names or balances.
 - Split rows must sum exactly to the parent amount in minor units for the transaction currency.
 - Split rows require at least two rows and at most twenty.
 - Add and Edit Transaction account selectors should only offer active accounts for new selections.
