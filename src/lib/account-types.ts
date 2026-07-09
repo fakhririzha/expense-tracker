@@ -49,6 +49,7 @@ export const GOAL_SOURCE_ACCOUNT_TYPES = [
   "BANK",
   "CASH",
   "INVESTMENT",
+  "DEPOSITO",
 ] as const satisfies readonly AccountTypeValue[];
 
 export function isAssetAccountType(type: string): boolean {

@@ -213,7 +213,7 @@ export function AddGoalDialog({ onSuccess }: AddGoalDialogProps) {
                       value={field.value}
                       onChange={field.onChange}
                       placeholder="Select one or more accounts"
-                      emptyMessage="No Bank, Cash, or Investment accounts found."
+                      emptyMessage="No Bank, Cash, Investment, or Deposito accounts found."
                     />
                   </FormControl>
                   <FormDescription>
