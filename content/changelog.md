@@ -1,6 +1,6 @@
 # FinHealth Changelog
 
-## v4.8.2
+## v5.0.0
 
 - Fixed the Debt Payoff Planner dialog on Liabilities so creating or editing a plan no longer gets stuck or crashes after the form opens.
 - Kept the existing payoff-plan defaults and editing flow intact while making the form more stable during background loading and refreshes.

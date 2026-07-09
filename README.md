@@ -58,6 +58,9 @@ ENCRYPTION_MASTER_KEY="replace-with-openssl-output"
 NEXT_PUBLIC_VAPID_PUBLIC_KEY="replace-with-web-push-public-key"
 VAPID_PRIVATE_KEY="replace-with-web-push-private-key"
 VAPID_SUBJECT="mailto:you@example.com"
+CHAT_API_ENDPOINT="https://provider.example.com/v1/chat/completions"
+CHAT_API_KEY="replace-with-chat-api-key"
+CHAT_API_MODEL="replace-with-vision-capable-model"
 ```
 
 Optional:
@@ -119,6 +122,9 @@ Notes:
 | `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Browser-facing VAPID key | Required for web push |
 | `VAPID_PRIVATE_KEY` | Server-side VAPID key | Required for web push |
 | `VAPID_SUBJECT` | VAPID contact subject | Required for web push |
+| `CHAT_API_ENDPOINT` | OpenAI-compatible chat completions endpoint for bill photo scanning | Required for OCR bill scan |
+| `CHAT_API_KEY` | Bearer token for the chat completions endpoint | Required for OCR bill scan |
+| `CHAT_API_MODEL` | Vision-capable chat model used to parse bill photos | Required for OCR bill scan |
 
 ## Current App Surface
 
