@@ -253,7 +253,7 @@ async function validateGoalAccounts(
   if (invalid) {
     return {
       success: false,
-      error: "Goals can only use Bank, Cash, or Investment accounts",
+      error: "Goals can only use Bank, Cash, Investment, or Deposito accounts",
     };
   }
 

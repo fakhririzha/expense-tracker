@@ -206,7 +206,7 @@ openssl rand -base64 32
 
 **SavingsGoal**: User-owned goal with target amount, optional target date, encrypted descriptive fields, and one or more linked funding accounts through `SavingsGoalAccount`. Progress is derived live from the sum of linked account balances (converted to the user's main currency); there is no manual current-amount ledger.
 
-**SavingsGoalAccount**: Join model connecting a savings goal to one or more `FinancialAccount` sources (Bank, Cash, or Investment).
+**SavingsGoalAccount**: Join model connecting a savings goal to one or more `FinancialAccount` sources (Bank, Cash, Investment, or Deposito).
 
 **PersonalAsset**: Durable owned item with category, manual valuation, purchase metadata, notes, and disposal date.
 

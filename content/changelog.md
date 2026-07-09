@@ -1,5 +1,9 @@
 # FinHealth Changelog
 
+## v4.8.1
+
+- Savings goals can now include Deposito accounts as funding sources, so locked deposito balances count toward goal progress along with Bank, Cash, and Investment accounts.
+
 ## v4.8.0
 
 - Savings goals can now link multiple Bank, Cash, or Investment accounts as funding sources.
