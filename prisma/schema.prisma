@@ -56,6 +56,7 @@ model User {
   pushSubscriptions PushSubscription[]
   notificationPreference NotificationPreference?
   notificationEvents NotificationEvent[]
+  ocrUsageEvents    OcrUsageEvent[]
 }
 
 model AuthAccount {
@@ -915,4 +916,17 @@ model NotificationEvent {
   @@unique([userId, type, dedupeKey])
   @@index([userId, createdAt])
   @@index([type, createdAt])
+}
+
+model OcrUsageEvent {
+  id          String   @id @default(cuid())
+  processedAt DateTime @default(now())
+  imageBytes  Int?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, processedAt])
 }
