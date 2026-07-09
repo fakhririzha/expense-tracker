@@ -25,18 +25,19 @@ import {
   TransactionType,
 } from "@/generated/prisma/client/client";
 
-const budgetSchema = z
-  .object({
-    name: z.string().min(1, "Name is required"),
-    amount: z.number().positive("Amount must be positive"),
-    period: z.enum(["MONTHLY", "QUARTERLY", "YEARLY"]),
-    categoryIds: z.array(z.string()).default([]),
-    isActive: z.boolean().default(true),
-  })
-  .refine((data) => data.categoryIds.length > 0, {
+const baseBudgetSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  amount: z.number().positive("Amount must be positive"),
+  period: z.enum(["MONTHLY", "QUARTERLY", "YEARLY"]),
+  categoryIds: z.array(z.string()).default([]),
+  isActive: z.boolean().default(true),
+});
+
+const budgetSchema = baseBudgetSchema.refine((data) => data.categoryIds.length > 0, {
     message: "Select at least one category",
     path: ["categoryIds"],
   });
+const updateBudgetSchema = baseBudgetSchema.partial();
 
 export type BudgetInput = z.infer<typeof budgetSchema>;
 
@@ -517,7 +518,7 @@ export async function updateBudget(id: string, data: Partial<BudgetInput>) {
       return { success: false, error: "Unauthorized" };
     }
 
-    const validatedFields = budgetSchema.partial().safeParse(data);
+    const validatedFields = updateBudgetSchema.safeParse(data);
     if (!validatedFields.success) {
       return {
         success: false,
