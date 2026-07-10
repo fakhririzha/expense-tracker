@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
 import { ContextualEmptyState } from "@/components/onboarding/ContextualEmptyState";
 import { DateRangePicker } from "@/components/reports/DateRangePicker";
@@ -42,10 +43,13 @@ import { useCurrency } from "@/contexts/CurrencyContext";
  * @returns The Reports & Analytics page as a React element.
  */
 export default function ReportsPage() {
+  const searchParams = useSearchParams();
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [groupBy, setGroupBy] = useState<"day" | "week" | "month">("week");
   const { mainCurrency } = useCurrency();
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeTab, setActiveTab] = useState(() =>
+    searchParams.get("tab") === "forecast" ? "forecast" : "overview"
+  );
   const { data: onboardingProgress } = useOnboardingProgress();
 
   const hasDateRange = !!(dateRange?.from && dateRange?.to);

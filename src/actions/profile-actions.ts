@@ -15,7 +15,7 @@ const financialTargetsSchema = z.object({
     .nullable(),
   monthlyBudget: z
     .number()
-    .positive("Monthly budget target must be positive")
+    .positive("Overall monthly spending limit must be positive")
     .nullable(),
 });
 
@@ -29,7 +29,7 @@ const deleteCurrentUserSchema = z.object({
 export type DeleteCurrentUserInput = z.infer<typeof deleteCurrentUserSchema>;
 
 /**
- * Update the authenticated user's optional retirement and monthly budget targets.
+ * Update the authenticated user's optional retirement target and overall monthly spending limit.
  *
  * Blank form values are submitted as null so users can remove a previously
  * configured target.

@@ -79,7 +79,7 @@ export function BudgetProgress({ budget, onBack }: BudgetProgressProps) {
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>Budget</CardDescription>
+            <CardDescription>Category Limit</CardDescription>
             <CardTitle className="text-2xl">
               {formatCurrency(budget.amount)}
             </CardTitle>
@@ -126,7 +126,7 @@ export function BudgetProgress({ budget, onBack }: BudgetProgressProps) {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            Budget Progress
+            Category Budget Progress
             {budget.percentage >= 100 ? (
               <AlertTriangle className="h-5 w-5 text-destructive" />
             ) : budget.percentage >= 80 ? (
@@ -135,10 +135,10 @@ export function BudgetProgress({ budget, onBack }: BudgetProgressProps) {
           </CardTitle>
           <CardDescription>
             {budget.percentage >= 100
-              ? "You've exceeded your budget!"
+              ? "You've exceeded this category limit!"
               : budget.percentage >= 80
-              ? "You're approaching your budget limit"
-              : "You're on track with your budget"}
+              ? "You're approaching this category limit"
+              : "You're on track with this category budget"}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -188,7 +188,7 @@ export function BudgetProgress({ budget, onBack }: BudgetProgressProps) {
               </p>
             </div>
             <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">Daily Budget Left</p>
+              <p className="text-sm text-muted-foreground">Daily Category Limit Left</p>
               <p className="text-lg font-semibold">
                 {budget.daysRemaining > 0
                   ? formatCurrency(budget.remaining / budget.daysRemaining)
@@ -204,7 +204,7 @@ export function BudgetProgress({ budget, onBack }: BudgetProgressProps) {
         <CardHeader>
           <CardTitle>Transactions</CardTitle>
           <CardDescription>
-            Expenses contributing to this budget
+            Expenses contributing to this category budget
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -214,7 +214,7 @@ export function BudgetProgress({ budget, onBack }: BudgetProgressProps) {
             </div>
           ) : transactions.length === 0 ? (
             <p className="text-center text-muted-foreground py-8">
-              No transactions found for this budget period
+              No transactions found for this category budget period
             </p>
           ) : (
             <Table>

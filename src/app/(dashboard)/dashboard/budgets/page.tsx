@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { BudgetVsActualItem, BudgetWithProgress } from "@/actions/budget-actions";
 import { AddBudgetDialog } from "@/components/budgets/AddBudgetDialog";
 import { BudgetCard } from "@/components/budgets/BudgetCard";
@@ -8,6 +10,7 @@ import { EditBudgetDialog } from "@/components/budgets/EditBudgetDialog";
 import { BudgetVsActualChart } from "@/components/budgets/BudgetVsActualChart";
 import { ContextualEmptyState } from "@/components/onboarding/ContextualEmptyState";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -17,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatCurrency } from "@/lib/utils";
-import { Wallet, TrendingUp, TrendingDown, AlertTriangle, Loader2 } from "lucide-react";
+import { AlertTriangle, Layers3, Loader2, TrendingDown, Wallet } from "lucide-react";
 import { useState } from "react";
 import { useBudgetsSummary, useBudgetVsActual } from "@/hooks/useBudgetQueries";
 
@@ -32,19 +35,24 @@ export default function BudgetsPage() {
   const [selectedBudget, setSelectedBudget] = useState<BudgetWithProgress | null>(null);
   const [periodFilter, setPeriodFilter] = useState<string>("all");
 
-  const { data: budgets = [], isLoading } = useBudgetsSummary();
+  const { data: budgetSummary, isLoading } = useBudgetsSummary();
   const { data: comparisonData = [] } = useBudgetVsActual();
+  const budgets = budgetSummary?.budgets ?? [];
 
   const handleEdit = (budget: BudgetWithProgress) => {
     setEditingBudget(budget);
     setIsEditDialogOpen(true);
   };
 
-  // Calculate summary statistics
-  const totalBudgeted = (budgets as BudgetWithProgress[]).reduce((sum, b) => sum + b.amount, 0);
-  const totalSpent = (budgets as BudgetWithProgress[]).reduce((sum, b) => sum + b.spent, 0);
-  const totalRemaining = (budgets as BudgetWithProgress[]).reduce((sum, b) => sum + b.remaining, 0);
-  const overBudgetCount = (budgets as BudgetWithProgress[]).filter((b) => b.percentage >= 100).length;
+  const categoryBudgets = budgets.filter((budget) => budget.scope === "CATEGORIES");
+  const legacyBudgetCount = budgets.length - categoryBudgets.length;
+  const coveredCategoryCount = new Set(
+    categoryBudgets.flatMap((budget) => budget.categoryIds)
+  ).size;
+  const nearLimitCount = budgets.filter(
+    (budget) => budget.percentage >= 80 && budget.percentage < 100
+  ).length;
+  const overBudgetCount = budgets.filter((budget) => budget.percentage >= 100).length;
 
   // Filter budgets by period
   const filteredBudgets =
@@ -65,11 +73,11 @@ export default function BudgetsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Budgets</h1>
+          <h1 className="text-3xl font-bold">Category Budgets</h1>
           <p className="text-muted-foreground">
-            Track and manage your spending budgets
+            Set focused limits for one or more expense categories
           </p>
         </div>
         <AddBudgetDialog onSuccess={() => {}} />
@@ -79,64 +87,75 @@ export default function BudgetsPage() {
       <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Budgeted</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Overall monthly spending limit
+            </CardTitle>
             <Wallet className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(totalBudgeted)}</div>
-            <p className="text-xs text-muted-foreground">
-              {(budgets as BudgetWithProgress[]).length} active budgets
-            </p>
+          <CardContent className="space-y-2">
+            <div className="text-2xl font-bold">
+              {isLoading
+                ? "—"
+                : budgetSummary?.overallMonthlySpendingLimit
+                  ? formatCurrency(
+                      budgetSummary.overallMonthlySpendingLimit,
+                      budgetSummary.currency
+                    )
+                  : "Not set"}
+            </div>
+            {budgetSummary?.overallMonthlySpendingLimit ? (
+              <p className="text-xs text-muted-foreground">
+                Your guardrail across all spending this month
+              </p>
+            ) : !isLoading ? (
+              <Button asChild size="sm" variant="outline">
+                <Link href="/dashboard/profile">Set overall limit</Link>
+              </Button>
+            ) : null}
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Spent</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Category budgets</CardTitle>
+            <Layers3 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(totalSpent)}</div>
-            <p className="text-xs text-muted-foreground">
-              {totalBudgeted > 0
-                ? `${((totalSpent / totalBudgeted) * 100).toFixed(0)}% of budget`
-                : "0% of budget"}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Remaining</CardTitle>
-            <TrendingDown className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div
-              className={`text-2xl font-bold ${
-                totalRemaining < 0 ? "text-destructive" : ""
-              }`}
-            >
-              {formatCurrency(Math.abs(totalRemaining))}
-              {totalRemaining < 0 && (
-                <span className="text-sm font-normal"> over</span>
-              )}
+            <div className="text-2xl font-bold">
+              {isLoading ? "—" : categoryBudgets.length}
             </div>
             <p className="text-xs text-muted-foreground">
-              {totalRemaining >= 0 ? "Under budget" : "Over budget"}
+              {coveredCategoryCount} unique categories covered
+              {legacyBudgetCount > 0
+                ? ` • ${legacyBudgetCount} legacy all-spending rule(s)`
+                : ""}
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Alerts</CardTitle>
+            <CardTitle className="text-sm font-medium">Near limit</CardTitle>
             <AlertTriangle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {overBudgetCount > 0 ? overBudgetCount : "None"}
+              {isLoading ? "—" : nearLimitCount}
             </div>
             <p className="text-xs text-muted-foreground">
-              {overBudgetCount > 0
-                ? "budgets exceeded"
-                : "all budgets on track"}
+              At 80% or more of their category limit
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Exceeded</CardTitle>
+            <TrendingDown className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className={overBudgetCount > 0 ? "text-2xl font-bold text-destructive" : "text-2xl font-bold"}>
+              {isLoading ? "—" : overBudgetCount}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {overBudgetCount > 0 ? "Category limits exceeded" : "No limits exceeded"}
             </p>
           </CardContent>
         </Card>
@@ -144,10 +163,12 @@ export default function BudgetsPage() {
 
       {/* Tabs for Budget Cards and Chart */}
       <Tabs defaultValue="budgets" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="budgets">Budgets</TabsTrigger>
-          <TabsTrigger value="comparison">Budget vs Actual</TabsTrigger>
-        </TabsList>
+        <div className="w-full overflow-x-auto pb-1">
+          <TabsList className="w-max">
+            <TabsTrigger value="budgets">Category budgets</TabsTrigger>
+            <TabsTrigger value="comparison">Category budget vs actual</TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="budgets" className="space-y-4">
           {/* Period Filter */}
@@ -170,10 +191,10 @@ export default function BudgetsPage() {
             <div className="flex items-center justify-center h-64">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
-          ) : (budgets as BudgetWithProgress[]).length === 0 ? (
+          ) : budgets.length === 0 ? (
             <ContextualEmptyState
-              title="Create your first budget"
-              description="Create a monthly budget to compare planned vs actual spending."
+              title="Create your first category budget"
+              description="Set a focused limit for one or more expense categories without changing your overall monthly spending limit."
               icon={<Wallet className="h-5 w-5" />}
               action={<AddBudgetDialog onSuccess={() => {}} />}
             />
@@ -181,7 +202,7 @@ export default function BudgetsPage() {
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12">
                 <Wallet className="h-12 w-12 text-muted-foreground mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No budgets found</h3>
+                <h3 className="text-lg font-semibold mb-2">No category budgets found</h3>
                 <p className="text-muted-foreground text-center mb-4">
                   {periodFilter !== "all"
                     ? `No ${periodFilter.toLowerCase()} budgets. Try a different filter or create a new budget.`

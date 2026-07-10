@@ -128,7 +128,7 @@ export function BudgetCard({ budget, onEdit, onDelete }: BudgetCardProps) {
               {formatCurrency(budget.spent)}
             </p>
             <p className="text-sm text-muted-foreground">
-              of {formatCurrency(budget.amount)} budget
+              of {formatCurrency(budget.amount)} category limit
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -157,7 +157,7 @@ export function BudgetCard({ budget, onEdit, onDelete }: BudgetCardProps) {
             <span>
               {budget.remaining >= 0
                 ? `${formatCurrency(budget.remaining)} remaining`
-                : `${formatCurrency(Math.abs(budget.remaining))} over budget`}
+                : `${formatCurrency(Math.abs(budget.remaining))} over category limit`}
             </span>
             <span>{budget.daysRemaining} days left</span>
           </div>

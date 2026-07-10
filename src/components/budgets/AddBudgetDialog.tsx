@@ -128,14 +128,14 @@ export function AddBudgetDialog({ onSuccess }: AddBudgetDialogProps) {
       <DialogTrigger asChild>
         <Button>
           <Plus className="mr-2 h-4 w-4" />
-          Add Budget
+          Add Category Budget
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-125 max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Add Budget</DialogTitle>
+          <DialogTitle>Add Category Budget</DialogTitle>
           <DialogDescription>
-            Create a budget to track your spending limits.
+            Create a focused spending limit for one or more expense categories.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -147,7 +147,7 @@ export function AddBudgetDialog({ onSuccess }: AddBudgetDialogProps) {
                 <FormItem>
                   <FormLabel>Name</FormLabel>
                   <FormControl>
-                    <Input placeholder="Groceries Budget" {...field} />
+                    <Input placeholder="Groceries" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -217,7 +217,7 @@ export function AddBudgetDialog({ onSuccess }: AddBudgetDialogProps) {
                     />
                   </FormControl>
                   <p className="text-xs text-muted-foreground">
-                    Select one or more expense categories for this budget.
+                    Select one or more expense categories for this category budget.
                   </p>
                   <FormMessage />
                 </FormItem>
@@ -240,7 +240,7 @@ export function AddBudgetDialog({ onSuccess }: AddBudgetDialogProps) {
                 Cancel
               </Button>
               <Button type="submit" disabled={createMutation.isPending}>
-                {createMutation.isPending ? "Creating..." : "Create Budget"}
+                {createMutation.isPending ? "Creating..." : "Create Category Budget"}
               </Button>
             </DialogFooter>
           </form>

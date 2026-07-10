@@ -82,7 +82,7 @@ const navItems = [
   },
   {
     href: "/dashboard/budgets",
-    label: "Budgets",
+    label: "Category Budgets",
     icon: PieChart,
     tourId: ONBOARDING_TOUR_TARGETS.desktopNavBudgets,
     mobileTourId: ONBOARDING_TOUR_TARGETS.mobileNavBudgets,
@@ -273,8 +273,8 @@ function SidebarGoalSnapshot({ tourId }: { tourId: string }) {
   const budgetDetail = budgetSet
     ? budgetLeftPercent === null
       ? "Current-month spending is unavailable right now."
-      : `${budgetLeftPercent.toFixed(1)}% of your monthly budget remains`
-    : "Set a monthly budget target in your profile.";
+      : `${budgetLeftPercent.toFixed(1)}% remains before upcoming commitments`
+    : "Set an overall monthly spending limit in your profile.";
 
   return (
     <div
@@ -312,7 +312,7 @@ function SidebarGoalSnapshot({ tourId }: { tourId: string }) {
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-xs font-black uppercase tracking-widest opacity-90">
-                Budget Left
+                Spending Limit
               </p>
               <p className="text-xs font-bold opacity-80">{budgetDetail}</p>
             </div>
