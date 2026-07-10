@@ -175,8 +175,7 @@ export function ImportDialog({ trigger, onSuccess }: ImportDialogProps) {
     setStep("importing");
 
     try {
-      const validTransactions = transactions.filter((t) => t.isValid);
-      const result = await importTransactions(validTransactions, {
+      const result = await importTransactions(csvContent, mapping, {
         createMissingAccounts,
         createMissingCategories,
       });
@@ -377,7 +376,7 @@ export function ImportDialog({ trigger, onSuccess }: ImportDialogProps) {
             <div className="flex flex-col items-center justify-center py-8">
               <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
               <p className="text-muted-foreground">
-                Importing {validCount} transactions...
+                Importing {transactions.length} CSV rows...
               </p>
             </div>
           )}

@@ -116,8 +116,8 @@ const exportOptions: {
   },
   {
     value: "all",
-    label: "Full Backup",
-    description: "Export all data as JSON backup",
+    label: "Financial Data Archive",
+    description: "Download a non-restorable JSON archive of your financial records",
     icon: <Package className="h-4 w-4" />,
   },
 ];
@@ -366,6 +366,7 @@ export function ExportDialog({ trigger, defaultType }: ExportDialogProps) {
                     <SelectItem value="INCOME">Income</SelectItem>
                     <SelectItem value="EXPENSE">Expense</SelectItem>
                     <SelectItem value="TRANSFER">Transfer</SelectItem>
+                    <SelectItem value="LIABILITY_PAYMENT">Liability Payment</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

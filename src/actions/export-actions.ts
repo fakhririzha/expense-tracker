@@ -126,7 +126,9 @@ export async function exportTransactionsCSV(params?: {
       "Google Maps Link",
       "Currency",
       "Exchange Rate",
-      "Parent Transaction ID",
+      "Is Recurring",
+      "Payment Status",
+      "Is Overpayment",
       "Is Split",
       "Split Count",
       "Split Allocations",
@@ -167,7 +169,9 @@ export async function exportTransactionsCSV(params?: {
           t.googleMapsLink || "",
           t.currency,
           t.exchangeRate.toString(),
-          t.id,
+          t.isRecurring ? "Yes" : "No",
+          t.paymentStatus,
+          t.isOverpayment ? "Yes" : "No",
           t.splits.length > 0 ? "Yes" : "No",
           t.splits.length.toString(),
           splitAllocations.join(" | "),
@@ -194,11 +198,12 @@ export async function exportTransactionsCSV(params?: {
 }
 
 /**
- * Create a complete JSON backup of the authenticated user's data.
+ * Create a complete, non-restorable JSON archive of the authenticated user's financial data.
  *
- * The backup includes accounts, transactions (with account, category and to-account names), categories, budgets (with category name), investment assets, trade history (with asset symbol), recurring rules, and savings goals. The function returns serialized JSON, a generated filename, and a summary of record counts for each dataset, or an error object if export fails or the user is unauthorized.
+ * The archive contains readable, decrypted financial records and relation names without encryption ciphertext,
+ * internal user identifiers, or push-subscription secrets.
  *
- * @returns An object with `success: true`, `data` (the backup as a formatted JSON string), `filename` (generated backup filename), and `summary` (counts per dataset); or an object with `success: false` and an `error` message on failure.
+ * @returns An object with `success: true`, `data` (the archive as formatted JSON), `filename`, and record counts; or an error result.
  */
 export async function exportAllData() {
   try {
@@ -218,6 +223,11 @@ export async function exportAllData() {
       recurringRules,
       savingsGoals,
       personalAssets,
+      subscriptions,
+      depositoAccounts,
+      debtPlans,
+      liabilityPaymentAudits,
+      netWorthSnapshots,
     ] = await Promise.all([
       prisma.financialAccount.findMany({
         where: { userId: session.user.id },
@@ -289,6 +299,40 @@ export async function exportAllData() {
           },
         },
       }),
+      prisma.subscription.findMany({
+        where: { userId: session.user.id },
+        include: {
+          account: { select: { nameEncrypted: true } },
+          category: { select: { name: true } },
+          recurringRule: { select: { name: true, nameEncrypted: true } },
+        },
+      }),
+      prisma.depositoAccount.findMany({
+        where: { userId: session.user.id },
+        include: {
+          account: { select: { nameEncrypted: true } },
+          interestPostings: {
+            include: { transaction: { select: { date: true } } },
+            orderBy: { postingDate: "asc" },
+          },
+        },
+      }),
+      prisma.debtPlan.findMany({
+        where: { userId: session.user.id },
+        include: {
+          items: {
+            include: { account: { select: { nameEncrypted: true } } },
+          },
+        },
+      }),
+      prisma.liabilityPaymentAudit.findMany({
+        where: { transaction: { userId: session.user.id } },
+        include: { transaction: { select: { date: true } } },
+      }),
+      prisma.netWorthSnapshot.findMany({
+        where: { userId: session.user.id },
+        orderBy: [{ periodYear: "asc" }, { periodMonth: "asc" }],
+      }),
     ]);
 
     const [
@@ -309,6 +353,13 @@ export async function exportAllData() {
                   t.descriptionEncrypted
                 ).catch(() => t.description)
               : t.description,
+            referenceNumber: t.referenceNumberEncrypted
+              ? await decryptUserField(
+                  session.user.id,
+                  "transaction.referenceNumber",
+                  t.referenceNumberEncrypted
+                ).catch(() => t.referenceNumber)
+              : t.referenceNumber,
             accountName: await decryptAccountName(
               session.user.id,
               t.account.nameEncrypted
@@ -337,6 +388,9 @@ export async function exportAllData() {
       ]);
     const decryptedAccountMap = new Map(
       decryptedAccounts.map((account) => [account.id, account.name])
+    );
+    const categoryNameMap = new Map(
+      categories.map((category) => [category.id, category.name])
     );
     const [decryptedRecurringRules, decryptedSavingsGoals] = await Promise.all([
       Promise.all(
@@ -374,40 +428,108 @@ export async function exportAllData() {
         }))
       ),
     ]);
+    const [decryptedSubscriptions, decryptedTradeHistory] = await Promise.all([
+      Promise.all(
+        subscriptions.map(async (subscription) => ({
+          ...subscription,
+          name: await decryptRequiredCompanion(
+            session.user.id,
+            "subscription.name",
+            subscription.nameEncrypted,
+            subscription.name
+          ),
+          provider: await decryptOptionalCompanion(
+            session.user.id,
+            "subscription.provider",
+            subscription.providerEncrypted,
+            subscription.provider
+          ),
+          description: await decryptOptionalCompanion(
+            session.user.id,
+            "subscription.description",
+            subscription.descriptionEncrypted,
+            subscription.description
+          ),
+          cancellationUrl: await decryptOptionalCompanion(
+            session.user.id,
+            "subscription.cancellationUrl",
+            subscription.cancellationUrlEncrypted,
+            subscription.cancellationUrl
+          ),
+          notes: await decryptOptionalCompanion(
+            session.user.id,
+            "subscription.notes",
+            subscription.notesEncrypted,
+            subscription.notes
+          ),
+        }))
+      ),
+      Promise.all(
+        tradeHistory.map(async (trade) => ({
+          ...trade,
+          notes: trade.notesEncrypted
+            ? await decryptUserField(
+                session.user.id,
+                "tradeHistory.notes",
+                trade.notesEncrypted
+              ).catch(() => trade.notes)
+            : trade.notes,
+        }))
+      ),
+    ]);
 
-    // Create a JSON backup
+    // Create a readable archive without encryption ciphertext or internal identifiers.
     const backup = {
       exportDate: new Date().toISOString(),
-      version: "1.4",
+      version: "2.0",
+      restoreSupported: false,
       data: {
-        accounts: decryptedAccounts,
+        accounts: decryptedAccounts.map((account) => ({
+          name: account.name,
+          type: account.type,
+          currency: account.currency,
+          balance: account.balance,
+          description: account.description,
+          isActive: account.isActive,
+          createdAt: account.createdAt,
+          updatedAt: account.updatedAt,
+        })),
         transactions: decryptedTransactions.map((t) => ({
-          id: t.id,
           amount: t.amount,
           currency: t.currency,
           exchangeRate: t.exchangeRate,
           type: t.type,
           description: t.description,
+          referenceNumber: t.referenceNumber,
           location: t.location,
           latitude: t.latitude,
           longitude: t.longitude,
           googleMapsLink: t.googleMapsLink,
           date: t.date,
+          isRecurring: t.isRecurring,
+          paymentStatus: t.paymentStatus,
+          isOverpayment: t.isOverpayment,
+          processedAt: t.processedAt,
           accountName: t.accountName,
           categoryName: t.category?.name || null,
           toAccountName: t.toAccountName,
           splits: t.splits.map((split) => ({
-            id: split.id,
             amount: split.amount,
             description: split.description,
             sortOrder: split.sortOrder,
-            categoryId: split.categoryId,
             categoryName: split.category?.name || null,
           })),
         })),
-        categories,
+        categories: categories.map((category) => ({
+          name: category.name,
+          type: category.type,
+          icon: category.icon,
+          color: category.color,
+          isSystem: category.isSystem,
+          createdAt: category.createdAt,
+          updatedAt: category.updatedAt,
+        })),
         budgets: decryptedBudgets.map((b) => ({
-          id: b.id,
           name: b.name,
           amount: b.amount,
           period: b.period,
@@ -417,37 +539,70 @@ export async function exportAllData() {
           isActive: b.isActive,
           categoryNames: b.categories.map((entry) => entry.category.name),
         })),
-        investmentAssets,
-        tradeHistory: tradeHistory.map((t) => ({
-          id: t.id,
-          type: t.type,
-          quantity: t.quantity,
-          pricePerUnit: t.pricePerUnit,
-          totalAmount: t.totalAmount,
-          fees: t.fees,
-          date: t.date,
-          notes: t.notes,
-          symbol: t.asset.symbol,
-          accountName: t.accountId ? decryptedAccountMap.get(t.accountId) ?? null : null,
+        investmentAssets: await Promise.all(
+          investmentAssets.map(async (asset) => ({
+            symbol: asset.symbol,
+            name: asset.name,
+            quantity: asset.quantity,
+            avgBuyPrice: asset.avgBuyPrice,
+            currency: asset.currency,
+            unitType: asset.unitType,
+            accountName: asset.account
+              ? await decryptAccountName(session.user.id, asset.account.nameEncrypted)
+              : null,
+            createdAt: asset.createdAt,
+            updatedAt: asset.updatedAt,
+          }))
+        ),
+        tradeHistory: decryptedTradeHistory.map((trade) => ({
+          type: trade.type,
+          quantity: trade.quantity,
+          pricePerUnit: trade.pricePerUnit,
+          totalAmount: trade.totalAmount,
+          fees: trade.fees,
+          date: trade.date,
+          notes: trade.notes,
+          unitType: trade.unitType,
+          realizedPnL: trade.realizedPnL,
+          symbol: trade.asset.symbol,
+          accountName: trade.accountId
+            ? decryptedAccountMap.get(trade.accountId) ?? null
+            : null,
+          balanceBefore: trade.balanceBefore,
+          balanceAfter: trade.balanceAfter,
+          createdAt: trade.createdAt,
+          updatedAt: trade.updatedAt,
         })),
-        recurringRules: decryptedRecurringRules.map(
-          ({ nameEncrypted, descriptionEncrypted, ...rule }) => {
-            void nameEncrypted;
-            void descriptionEncrypted;
-            return rule;
-          }
+        recurringRules: await Promise.all(
+          decryptedRecurringRules.map(async (rule) => ({
+            name: rule.name,
+            amount: rule.amount,
+            currency: rule.currency,
+            type: rule.type,
+            interval: rule.interval,
+            nextDueDate: rule.nextDueDate,
+            endDate: rule.endDate,
+            isActive: rule.isActive,
+            description: rule.description,
+            categoryName: rule.categoryId
+              ? categoryNameMap.get(rule.categoryId) ?? null
+              : null,
+            accountName: rule.accountId
+              ? decryptedAccountMap.get(rule.accountId) ?? null
+              : null,
+            createdAt: rule.createdAt,
+            updatedAt: rule.updatedAt,
+          }))
         ),
         savingsGoals: decryptedSavingsGoals.map((goal) => ({
-          id: goal.id,
           name: goal.name,
           targetAmount: goal.targetAmount,
           targetDate: goal.targetDate,
           icon: goal.icon,
           color: goal.color,
           description: goal.description,
-          accountIds: goal.accounts.map((link) => link.accountId),
           accounts: goal.accounts.map((link) => ({
-            id: link.account.id,
+            name: decryptedAccountMap.get(link.accountId) ?? "Unknown account",
             currency: link.account.currency,
             balance: link.account.balance,
           })),
@@ -455,7 +610,6 @@ export async function exportAllData() {
           updatedAt: goal.updatedAt,
         })),
         personalAssets: decryptedPersonalAssets.map((asset) => ({
-          id: asset.id,
           name: asset.name,
           category: asset.category,
           currentValue: asset.currentValue,
@@ -468,7 +622,138 @@ export async function exportAllData() {
           disposedAt: asset.disposedAt,
           createdAt: asset.createdAt,
           updatedAt: asset.updatedAt,
-          valuations: asset.valuations,
+          valuations: asset.valuations.map((valuation) => ({
+            value: valuation.value,
+            currency: valuation.currency,
+            valuedAt: valuation.valuedAt,
+            createdAt: valuation.createdAt,
+          })),
+        })),
+        subscriptions: await Promise.all(
+          decryptedSubscriptions.map(async (subscription) => ({
+            name: subscription.name,
+            provider: subscription.provider,
+            description: subscription.description,
+            amount: subscription.amount,
+            currency: subscription.currency,
+            billingCycle: subscription.billingCycle,
+            nextBillingDate: subscription.nextBillingDate,
+            startDate: subscription.startDate,
+            trialEndDate: subscription.trialEndDate,
+            cancellationDate: subscription.cancellationDate,
+            status: subscription.status,
+            cancellationUrl: subscription.cancellationUrl,
+            notes: subscription.notes,
+            categoryName: subscription.category?.name || null,
+            accountName: subscription.account
+              ? await decryptAccountName(session.user.id, subscription.account.nameEncrypted)
+              : null,
+            recurringRuleName: subscription.recurringRule
+              ? await decryptRequiredCompanion(
+                  session.user.id,
+                  "recurringRule.name",
+                  subscription.recurringRule.nameEncrypted,
+                  subscription.recurringRule.name
+                )
+              : null,
+            createdAt: subscription.createdAt,
+            updatedAt: subscription.updatedAt,
+          }))
+        ),
+        depositoAccounts: await Promise.all(
+          depositoAccounts.map(async (deposito) => ({
+            accountName: await decryptAccountName(
+              session.user.id,
+              deposito.account.nameEncrypted
+            ),
+            startDate: deposito.startDate,
+            principalAmount: deposito.principalAmount,
+            interestFrequency: deposito.interestFrequency,
+            interestRate: deposito.interestRate,
+            taxRate: deposito.taxRate,
+            termMode: deposito.termMode,
+            maturityDate: deposito.maturityDate,
+            nextInterestDate: deposito.nextInterestDate,
+            status: deposito.status,
+            closedAt: deposito.closedAt,
+            interestPostings: deposito.interestPostings.map((posting) => ({
+              postingDate: posting.postingDate,
+              grossInterest: posting.grossInterest,
+              taxAmount: posting.taxAmount,
+              netInterest: posting.netInterest,
+              balanceBefore: posting.balanceBefore,
+              balanceAfter: posting.balanceAfter,
+              transactionDate: posting.transaction.date,
+              createdAt: posting.createdAt,
+            })),
+            createdAt: deposito.createdAt,
+            updatedAt: deposito.updatedAt,
+          }))
+        ),
+        debtPlans: await Promise.all(
+          debtPlans.map(async (plan) => ({
+            name: plan.name,
+            strategy: plan.strategy,
+            extraMonthlyAmount: plan.extraMonthlyAmount,
+            currency: plan.currency,
+            isActive: plan.isActive,
+            items: await Promise.all(
+              plan.items.map(async (item) => ({
+                accountName: await decryptAccountName(
+                  session.user.id,
+                  item.account.nameEncrypted
+                ),
+                annualInterestRate: item.annualInterestRate,
+                minimumPayment: item.minimumPayment,
+                priorityOverride: item.priorityOverride,
+                paymentDayOfMonth: item.paymentDayOfMonth,
+              }))
+            ),
+            createdAt: plan.createdAt,
+            updatedAt: plan.updatedAt,
+          }))
+        ),
+        liabilityPaymentAudits: liabilityPaymentAudits.map((audit) => ({
+          transactionDate: audit.transaction.date,
+          sourceAccountName:
+            decryptedAccountMap.get(audit.sourceAccountId) ?? "Unknown account",
+          sourceBalanceBefore: audit.sourceBalanceBefore,
+          sourceBalanceAfter: audit.sourceBalanceAfter,
+          targetAccountName:
+            decryptedAccountMap.get(audit.targetAccountId) ?? "Unknown account",
+          targetBalanceBefore: audit.targetBalanceBefore,
+          targetBalanceAfter: audit.targetBalanceAfter,
+          paymentAmount: audit.paymentAmount,
+          currency: audit.currency,
+          exchangeRate: audit.exchangeRate,
+          executedAt: audit.executedAt,
+          isRolledBack: audit.isRolledBack,
+          rolledBackAt: audit.rolledBackAt,
+          rollbackReason: audit.rollbackReason,
+        })),
+        netWorthSnapshots: netWorthSnapshots.map((snapshot) => ({
+          periodYear: snapshot.periodYear,
+          periodMonth: snapshot.periodMonth,
+          snapshotDate: snapshot.snapshotDate,
+          currency: snapshot.currency,
+          totalAssets: snapshot.totalAssets,
+          totalLiabilities: snapshot.totalLiabilities,
+          netWorth: snapshot.netWorth,
+          cashTotal: snapshot.cashTotal,
+          bankTotal: snapshot.bankTotal,
+          investmentCashTotal: snapshot.investmentCashTotal,
+          investmentHoldingTotal: snapshot.investmentHoldingTotal,
+          investmentTotal: snapshot.investmentTotal,
+          personalAssetTotal: snapshot.personalAssetTotal,
+          receivableTotal: snapshot.receivableTotal,
+          loanLiabilityTotal: snapshot.loanLiabilityTotal,
+          creditCardTotal: snapshot.creditCardTotal,
+          liabilityOverpayTotal: snapshot.liabilityOverpayTotal,
+          sourceBreakdownJson: snapshot.sourceBreakdownJson,
+          exchangeRateJson: snapshot.exchangeRateJson,
+          calculationVersion: snapshot.calculationVersion,
+          createdAt: snapshot.createdAt,
+          updatedAt: snapshot.updatedAt,
         })),
       },
     };
@@ -476,7 +761,7 @@ export async function exportAllData() {
     return {
       success: true,
       data: JSON.stringify(backup, null, 2),
-      filename: `finhealth-backup-${format(new Date(), "yyyy-MM-dd-HHmmss")}.json`,
+      filename: `finhealth-financial-archive-${format(new Date(), "yyyy-MM-dd-HHmmss")}.json`,
       summary: {
         accounts: accounts.length,
         transactions: transactions.length,
@@ -495,6 +780,19 @@ export async function exportAllData() {
           (count, asset) => count + asset.valuations.length,
           0
         ),
+        subscriptions: subscriptions.length,
+        depositoAccounts: depositoAccounts.length,
+        depositoInterestPostings: depositoAccounts.reduce(
+          (count, deposito) => count + deposito.interestPostings.length,
+          0
+        ),
+        debtPlans: debtPlans.length,
+        debtPlanItems: debtPlans.reduce(
+          (count, plan) => count + plan.items.length,
+          0
+        ),
+        liabilityPaymentAudits: liabilityPaymentAudits.length,
+        netWorthSnapshots: netWorthSnapshots.length,
       },
     };
   } catch (error) {
@@ -600,6 +898,7 @@ export async function exportBudgetsCSV() {
       "Name",
       "Amount",
       "Period",
+      "Scope",
       "Categories",
       "Start Date",
       "End Date",
@@ -612,6 +911,7 @@ export async function exportBudgetsCSV() {
       b.name,
       b.amount.toString(),
       b.period,
+      b.scope,
       b.categories.map((entry) => entry.category.name).join("|"),
       format(new Date(b.startDate), "yyyy-MM-dd"),
       b.endDate ? format(new Date(b.endDate), "yyyy-MM-dd") : "",
@@ -714,6 +1014,7 @@ export async function exportInvestmentsCSV() {
       "Quantity",
       "Average Buy Price",
       "Currency",
+      "Unit Type",
       "Account",
       "Created At",
     ];
@@ -726,6 +1027,7 @@ export async function exportInvestmentsCSV() {
         i.quantity.toString(),
         i.avgBuyPrice.toString(),
         i.currency,
+        i.unitType,
         i.account
           ? await decryptAccountName(session.user.id, i.account.nameEncrypted)
           : "",
@@ -828,10 +1130,31 @@ export async function exportRecurringRulesCSV() {
       return { success: false, error: "Unauthorized" };
     }
 
-    const rules = await prisma.recurringRule.findMany({
-      where: { userId: session.user.id },
-      orderBy: { nextDueDate: "asc" },
-    });
+    const [rules, accounts, categories] = await Promise.all([
+      prisma.recurringRule.findMany({
+        where: { userId: session.user.id },
+        orderBy: { nextDueDate: "asc" },
+      }),
+      prisma.financialAccount.findMany({
+        where: { userId: session.user.id },
+        select: { id: true, nameEncrypted: true },
+      }),
+      prisma.category.findMany({
+        where: { userId: session.user.id },
+        select: { id: true, name: true },
+      }),
+    ]);
+    const accountNameMap = new Map(
+      await Promise.all(
+        accounts.map(async (account) => [
+          account.id,
+          await decryptAccountName(session.user.id, account.nameEncrypted),
+        ] as const)
+      )
+    );
+    const categoryNameMap = new Map(
+      categories.map((category) => [category.id, category.name])
+    );
 
     // CSV Headers
     const headers = [
@@ -843,6 +1166,8 @@ export async function exportRecurringRulesCSV() {
       "Next Due Date",
       "End Date",
       "Description",
+      "Account",
+      "Category",
       "Is Active",
     ];
 
@@ -864,17 +1189,19 @@ export async function exportRecurringRulesCSV() {
         ),
       }))
     );
-    const rows = decryptedRules.map((r) => [
-      r.name,
-      r.amount.toString(),
-      r.currency,
-      r.type,
-      r.interval,
-      format(new Date(r.nextDueDate), "yyyy-MM-dd"),
-      r.endDate ? format(new Date(r.endDate), "yyyy-MM-dd") : "",
-      r.description || "",
-      r.isActive ? "Yes" : "No",
-    ]);
+    const rows = decryptedRules.map((rule) => [
+        rule.name,
+        rule.amount.toString(),
+        rule.currency,
+        rule.type,
+        rule.interval,
+        format(new Date(rule.nextDueDate), "yyyy-MM-dd"),
+        rule.endDate ? format(new Date(rule.endDate), "yyyy-MM-dd") : "",
+        rule.description || "",
+        rule.accountId ? accountNameMap.get(rule.accountId) ?? "" : "",
+        rule.categoryId ? categoryNameMap.get(rule.categoryId) ?? "" : "",
+        rule.isActive ? "Yes" : "No",
+      ]);
 
     // Combine headers and rows
     const csv = [

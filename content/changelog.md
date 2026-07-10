@@ -1,5 +1,11 @@
 # FinHealth Changelog
 
+## v5.4.1
+
+- Made transaction imports follow the same account, transfer, balance, and privacy checks as transactions you add in FinHealth.
+- Simplified Data Management to a single supported transaction template and clearer CSV analysis exports.
+- Reworked the Financial Data Archive to include more financial history in a readable JSON download, with a clear note that restoring archives in-app is not yet supported.
+
 ## v5.4.0
 
 - Added a Monthly Money Plan to the dashboard so you can see spending room, known upcoming commitments, projected cash pressure, and the three most important financial signals in one place.

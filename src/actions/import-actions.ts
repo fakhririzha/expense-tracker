@@ -2,19 +2,11 @@
 
 import { auth } from "@/auth";
 import prisma from "@/lib/db";
-import { Prisma } from "@/generated/prisma/client/client";
 import {
   decryptAccountRecords,
-  encryptAccountDescription,
   encryptAccountName,
 } from "@/lib/account-crypto";
-import { encryptBudgetName } from "@/lib/budget-crypto";
-import { revalidatePath } from "next/cache";
-import {
-  ACCOUNT_TYPES,
-  type AccountTypeValue,
-  normalizeAccountBalanceForType,
-} from "@/lib/account-types";
+import { createTransaction } from "@/actions/transaction-actions";
 
 // Column mapping types
 export type ColumnMapping = {
@@ -244,7 +236,7 @@ export async function mapToTransactions(
     // Extract values using mapping
     const dateValue = mapping.date ? row[mapping.date] : "";
     const amountValue = mapping.amount ? row[mapping.amount] : "";
-    const typeValue = mapping.type ? row[mapping.type]?.toUpperCase() : "";
+    const typeValue = mapping.type ? row[mapping.type]?.trim().toUpperCase() : "";
     // Sanitize text fields to prevent CSV/Excel formula injection
     const categoryValue = sanitizeCsvCell(mapping.category ? row[mapping.category] : undefined);
     const accountValue = sanitizeCsvCell(mapping.account ? row[mapping.account] : "") ?? "";
@@ -388,18 +380,20 @@ export async function previewImport(
 }
 
 /**
- * Persist an array of parsed transactions to the database, creating related entities as allowed.
+ * Parse and persist CSV transactions, creating related entities as allowed.
  *
- * Processes each ParsedTransaction: invalid rows are recorded as failures; valid rows are inserted as transactions,
- * accounts and categories are looked up or optionally created, and account balances are updated atomically.
+ * Re-parses the uploaded CSV on the server so client preview state is never trusted. Invalid rows are reported as
+ * failures; valid rows use the standard transaction action for validation, encryption, and balance updates.
  *
- * @param transactions - Array of parsed transaction rows (each with fields like date, amount, type, account, toAccount, category, description, currency, isValid, errors, rowNumber). Rows with `isValid === false` are recorded as failures and not persisted.
+ * @param csvContent - Raw CSV content originally selected by the user.
+ * @param mapping - Mapping from CSV headers to supported transaction fields.
  * @param options.createMissingCategories - When true, missing categories referenced by transactions will be created for the user.
  * @param options.createMissingAccounts - When true, missing accounts referenced by transactions will be created for the user.
  * @returns An ImportResult summarizing the operation: `success` is `true` if one or more transactions were imported, `imported` is the count of successfully persisted rows, `failed` is the count of rows that failed to import, and `errors` lists per-row error details.
  */
 export async function importTransactions(
-  transactions: ParsedTransaction[],
+  csvContent: string,
+  mapping: ColumnMapping,
   options?: {
     createMissingCategories?: boolean;
     createMissingAccounts?: boolean;
@@ -413,6 +407,16 @@ export async function importTransactions(
         imported: 0,
         failed: 0,
         errors: [{ row: 0, error: "Unauthorized" }],
+      };
+    }
+
+    const preview = await previewImport(csvContent, mapping);
+    if (!preview.success) {
+      return {
+        success: false,
+        imported: 0,
+        failed: 0,
+        errors: [{ row: 0, error: preview.error || "Failed to parse CSV" }],
       };
     }
 
@@ -449,11 +453,14 @@ export async function importTransactions(
       decryptedAccounts.map((a) => [a.name.toLowerCase(), a])
     );
     const categoryMap = new Map(
-      existingCategories.map((c) => [c.name.toLowerCase(), c])
+      existingCategories.map((category) => [
+        `${category.type}:${category.name.toLowerCase()}`,
+        category,
+      ])
     );
 
     // Process each transaction
-    for (const tx of transactions) {
+    for (const tx of preview.transactions) {
       if (!tx.isValid) {
         result.failed++;
         result.errors.push({
@@ -464,16 +471,17 @@ export async function importTransactions(
       }
 
       try {
+        const accountName = tx.account.trim();
         // Find or create source account
         let account: AccountLookupItem | undefined = accountMap.get(
-          tx.account.toLowerCase()
+          accountName.toLowerCase()
         );
 
         if (!account && options?.createMissingAccounts) {
           // Create new account
           const createdAccount = await prisma.financialAccount.create({
             data: {
-              nameEncrypted: await encryptAccountName(session.user.id, tx.account),
+              nameEncrypted: await encryptAccountName(session.user.id, accountName),
               type: "BANK", // Default type
               currency: tx.currency || "IDR",
               balance: 0,
@@ -482,15 +490,15 @@ export async function importTransactions(
           });
           account = {
             id: createdAccount.id,
-            name: tx.account,
+            name: accountName,
             currency: createdAccount.currency,
           };
-          accountMap.set(tx.account.toLowerCase(), account);
+          accountMap.set(accountName.toLowerCase(), account);
         } else if (!account) {
           result.failed++;
           result.errors.push({
             row: tx.rowNumber,
-            error: `Account "${tx.account}" not found`,
+            error: `Account "${accountName}" not found`,
           });
           continue;
         }
@@ -501,13 +509,14 @@ export async function importTransactions(
         // For TRANSFER type, find or create destination account
         let toAccount: AccountLookupItem | null = null;
         if (tx.type === "TRANSFER" && tx.toAccount) {
-          toAccount = accountMap.get(tx.toAccount.toLowerCase()) ?? null;
+          const toAccountName = tx.toAccount.trim();
+          toAccount = accountMap.get(toAccountName.toLowerCase()) ?? null;
 
           if (!toAccount && options?.createMissingAccounts) {
             // Create new destination account
             const createdToAccount = await prisma.financialAccount.create({
               data: {
-                nameEncrypted: await encryptAccountName(session.user.id, tx.toAccount),
+                nameEncrypted: await encryptAccountName(session.user.id, toAccountName),
                 type: "BANK", // Default type
                 currency: tx.currency || "IDR",
                 balance: 0,
@@ -516,15 +525,15 @@ export async function importTransactions(
             });
             toAccount = {
               id: createdToAccount.id,
-              name: tx.toAccount,
+              name: toAccountName,
               currency: createdToAccount.currency,
             };
-            accountMap.set(tx.toAccount.toLowerCase(), toAccount);
+            accountMap.set(toAccountName.toLowerCase(), toAccount);
           } else if (!toAccount) {
             result.failed++;
             result.errors.push({
               row: tx.rowNumber,
-              error: `Destination account "${tx.toAccount}" not found`,
+              error: `Destination account "${toAccountName}" not found`,
             });
             continue;
           }
@@ -533,68 +542,69 @@ export async function importTransactions(
           }
         }
 
-        // Find or create category
-        let category = tx.category
-          ? categoryMap.get(tx.category.toLowerCase())
-          : null;
+        let categoryId: string | undefined;
+        if (tx.category) {
+          if (tx.type === "TRANSFER") {
+            result.failed++;
+            result.errors.push({
+              row: tx.rowNumber,
+              error: "Transfers cannot include a category",
+            });
+            continue;
+          }
 
-        if (!category && tx.category && options?.createMissingCategories) {
-          // Create new category
-          category = await prisma.category.create({
-            data: {
-              name: tx.category,
-              type: tx.type as "INCOME" | "EXPENSE" | "TRANSFER",
-              userId: session.user.id,
-            },
-          });
-          categoryMap.set(tx.category.toLowerCase(), category);
+          const categoryName = tx.category.trim();
+          const categoryKey = `${tx.type}:${categoryName.toLowerCase()}`;
+          let category = categoryMap.get(categoryKey);
+
+          if (!category && options?.createMissingCategories) {
+            category = await prisma.category.create({
+              data: {
+                name: categoryName,
+                type: tx.type as "INCOME" | "EXPENSE",
+                userId: session.user.id,
+              },
+            });
+            categoryMap.set(categoryKey, category);
+          }
+
+          if (!category) {
+            result.failed++;
+            result.errors.push({
+              row: tx.rowNumber,
+              error: `Category "${categoryName}" not found`,
+            });
+            continue;
+          }
+
+          categoryId = category.id;
         }
 
-        // Parse date
-        const parsedDate = new Date(tx.date);
-
-        // Create transaction and update account balance(s) atomically
-        await prisma.$transaction(async (txClient: Prisma.TransactionClient) => {
-          // Create transaction
-        await txClient.transaction.create({
-          data: {
-            amount: tx.amount,
-            currency: tx.currency || account!.currency,
-            exchangeRate: 1,
-            type: tx.type as "INCOME" | "EXPENSE" | "TRANSFER",
-            description: tx.description,
-            location: tx.location,
-            latitude: parseOptionalNumber(tx.latitude) ?? null,
-            longitude: parseOptionalNumber(tx.longitude) ?? null,
-            googleMapsLink: tx.googleMapsLink,
-            date: parsedDate,
-            accountId: account!.id,
-            toAccountId: tx.type === "TRANSFER" ? toAccount!.id : null,
-            categoryId: category?.id || null,
-            userId: session.user.id,
-            },
-          });
-
-          if (tx.type === "TRANSFER") {
-            // For transfers: decrement source account, increment destination account
-            await txClient.financialAccount.update({
-              where: { id: account!.id },
-              data: { balance: { decrement: tx.amount } },
-            });
-
-            await txClient.financialAccount.update({
-              where: { id: toAccount!.id },
-              data: { balance: { increment: tx.amount } },
-            });
-          } else {
-            // For income/expense: update single account balance
-            const balanceChange = tx.type === "INCOME" ? tx.amount : -tx.amount;
-            await txClient.financialAccount.update({
-              where: { id: account!.id },
-              data: { balance: { increment: balanceChange } },
-            });
-          }
+        const transactionResult = await createTransaction({
+          amount: tx.amount,
+          currency: tx.currency || account.currency,
+          exchangeRate: 1,
+          type: tx.type as "INCOME" | "EXPENSE" | "TRANSFER",
+          description: tx.description,
+          location: tx.location,
+          latitude: parseOptionalNumber(tx.latitude),
+          longitude: parseOptionalNumber(tx.longitude),
+          googleMapsLink: tx.googleMapsLink,
+          date: new Date(tx.date),
+          accountId: account.id,
+          toAccountId: tx.type === "TRANSFER" ? toAccount?.id : undefined,
+          categoryId,
+          isRecurring: false,
         });
+
+        if (!transactionResult.success) {
+          result.failed++;
+          result.errors.push({
+            row: tx.rowNumber,
+            error: transactionResult.error || "Failed to import transaction",
+          });
+          continue;
+        }
 
         result.imported++;
       } catch (error) {
@@ -607,11 +617,6 @@ export async function importTransactions(
       }
     }
 
-    // Revalidate paths
-    revalidatePath("/dashboard");
-    revalidatePath("/dashboard/transactions");
-    revalidatePath("/dashboard/accounts");
-
     result.success = result.imported > 0;
     return result;
   } catch (error) {
@@ -619,343 +624,19 @@ export async function importTransactions(
     return {
       success: false,
       imported: 0,
-      failed: transactions.length,
+      failed: 0,
       errors: [{ row: 0, error: "Failed to import transactions" }],
     };
   }
 }
 
 /**
- * Import multiple account records, validating each row and creating accounts for the authenticated user.
- *
- * Validates required `name` and allowed account `type`, skips rows with errors or duplicate names, creates new accounts with optional `currency`, `balance`, and `description`, and triggers dashboard accounts revalidation.
- *
- * @param accounts - Array of account objects to import. Each object should include:
- *   - `name`: account display name (required)
- *   - `type`: account type (required; one of the supported financial account types)
- *   - `currency`: optional ISO currency code (defaults to "IDR")
- *   - `balance`: optional starting balance (defaults to 0)
- *   - `description`: optional description text
- * @returns An ImportResult summarizing the operation: counts of imported and failed rows and per-row error details. `success` is `true` if at least one account was imported, `false` otherwise.
+ * Return the transaction CSV template used by the importer.
  */
-export async function importAccounts(
-  accounts: Array<{
-    name: string;
-    type: string;
-    currency?: string;
-    balance?: number;
-    description?: string;
-  }>
-): Promise<ImportResult> {
-  try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return {
-        success: false,
-        imported: 0,
-        failed: 0,
-        errors: [{ row: 0, error: "Unauthorized" }],
-      };
-    }
-
-    const result: ImportResult = {
-      success: true,
-      imported: 0,
-      failed: 0,
-      errors: [],
-    };
-
-    const validTypes = ACCOUNT_TYPES as readonly string[];
-    const existingAccounts = await decryptAccountRecords(
-      session.user.id,
-      await prisma.financialAccount.findMany({
-        where: {
-          userId: session.user.id,
-        },
-        select: {
-          id: true,
-          nameEncrypted: true,
-          descriptionEncrypted: true,
-          currency: true,
-        },
-      })
-    );
-
-    for (let i = 0; i < accounts.length; i++) {
-      const acc = accounts[i];
-      const rowNumber = i + 2;
-
-      // Validate
-      if (!acc.name) {
-        result.failed++;
-        result.errors.push({ row: rowNumber, error: "Name is required" });
-        continue;
-      }
-
-      if (!validTypes.includes(acc.type?.toUpperCase())) {
-        result.failed++;
-        result.errors.push({
-          row: rowNumber,
-          error: "Invalid account type",
-        });
-        continue;
-      }
-
-      try {
-        // Check if account with same name exists
-        const existing = existingAccounts.find(
-          (account) => account.name.toLowerCase() === acc.name.toLowerCase()
-        );
-
-        if (existing) {
-          result.failed++;
-          result.errors.push({
-            row: rowNumber,
-            error: `Account "${acc.name}" already exists`,
-          });
-          continue;
-        }
-
-        const accountType = acc.type.toUpperCase() as AccountTypeValue;
-
-        if (accountType === "DEPOSITO") {
-          result.failed++;
-          result.errors.push({
-            row: rowNumber,
-            error: "Deposito accounts must be created from Deposito Tracker.",
-          });
-          continue;
-        }
-
-        await prisma.financialAccount.create({
-          data: {
-            nameEncrypted: await encryptAccountName(session.user.id, acc.name),
-            type: accountType,
-            currency: acc.currency || "IDR",
-            balance: normalizeAccountBalanceForType(accountType, acc.balance || 0),
-            descriptionEncrypted: await encryptAccountDescription(
-              session.user.id,
-              acc.description ?? null
-            ),
-            userId: session.user.id,
-          },
-        });
-
-        result.imported++;
-      } catch (error) {
-        console.error(`Error importing account row ${rowNumber}:`, error);
-        result.failed++;
-        result.errors.push({
-          row: rowNumber,
-          error: "Failed to create account",
-        });
-      }
-    }
-
-    revalidatePath("/dashboard/accounts");
-    result.success = result.imported > 0;
-    return result;
-  } catch (error) {
-    console.error("Import accounts error:", error);
-    return {
-      success: false,
-      imported: 0,
-      failed: accounts.length,
-      errors: [{ row: 0, error: "Failed to import accounts" }],
-    };
-  }
-}
-
-/**
- * Import multiple budgets and create corresponding budget records for the authenticated user.
- *
- * Each input row is validated and either created or reported as a failure. Validation rules:
- * - `name` is required.
- * - `amount` must be greater than zero.
- * - `period` must be one of `MONTHLY`, `QUARTERLY`, or `YEARLY` (case-insensitive).
- * - At least one valid expense category must be resolved from `categories` or legacy `category`.
- * Row numbers in reported errors start at 2 (header = row 1).
- *
- * @param budgets - Array of budget records to import. Each item should contain:
- *   - `name`: display name of the budget
- *   - `amount`: positive numeric budget amount
- *   - `period`: budget period (`MONTHLY` | `QUARTERLY` | `YEARLY`)
- *   - `category` (optional): legacy single category name
- *   - `categories` (optional): pipe-delimited category names such as `Food|Transport`
- *   - `startDate` (optional): ISO date string for the budget start (defaults to now)
- *   - `endDate` (optional): ISO date string for the budget end
- * @returns The import result including counts (`imported`, `failed`), per-row `errors`, and `success` which is `true` if at least one budget was created.
- */
-export async function importBudgets(
-  budgets: Array<{
-    name: string;
-    amount: number;
-    period: string;
-    category?: string;
-    categories?: string;
-    startDate?: string;
-    endDate?: string;
-  }>
-): Promise<ImportResult> {
-  try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return {
-        success: false,
-        imported: 0,
-        failed: 0,
-        errors: [{ row: 0, error: "Unauthorized" }],
-      };
-    }
-
-    const result: ImportResult = {
-      success: true,
-      imported: 0,
-      failed: 0,
-      errors: [],
-    };
-
-    const validPeriods = ["MONTHLY", "QUARTERLY", "YEARLY"];
-
-    // Get categories for lookup
-    const categories = await prisma.category.findMany({
-      where: {
-        userId: session.user.id,
-        type: "EXPENSE",
-      },
-      select: { id: true, name: true },
-    });
-
-    const categoryMap = new Map(
-      categories.map((c) => [c.name.toLowerCase(), c])
-    );
-
-    for (let i = 0; i < budgets.length; i++) {
-      const budget = budgets[i];
-      const rowNumber = i + 2;
-
-      // Validate
-      if (!budget.name) {
-        result.failed++;
-        result.errors.push({ row: rowNumber, error: "Name is required" });
-        continue;
-      }
-
-      if (!budget.amount || budget.amount <= 0) {
-        result.failed++;
-        result.errors.push({
-          row: rowNumber,
-          error: "Amount must be positive",
-        });
-        continue;
-      }
-
-      if (!validPeriods.includes(budget.period?.toUpperCase())) {
-        result.failed++;
-        result.errors.push({
-          row: rowNumber,
-          error: "Period must be MONTHLY, QUARTERLY, or YEARLY",
-        });
-        continue;
-      }
-
-      try {
-        const requestedCategoryNames = (
-          budget.categories
-            ? budget.categories.split("|")
-            : budget.category
-              ? [budget.category]
-              : []
-        )
-          .map((value) => value.trim())
-          .filter((value) => value.length > 0);
-
-        const categoryIds = Array.from(
-          new Set(
-            requestedCategoryNames
-              .map((categoryName) => categoryMap.get(categoryName.toLowerCase())?.id)
-              .filter((value): value is string => !!value)
-          )
-        );
-
-        if (categoryIds.length === 0) {
-          result.failed++;
-          result.errors.push({
-            row: rowNumber,
-            error: "At least one valid expense category is required",
-          });
-          continue;
-        }
-
-        const encryptedName = await encryptBudgetName(
-          session.user.id,
-          budget.name
-        );
-        await prisma.budget.create({
-          data: {
-            name: null,
-            nameEncrypted: encryptedName,
-            amount: budget.amount,
-            period: budget.period.toUpperCase() as "MONTHLY" | "QUARTERLY" | "YEARLY",
-            scope: "CATEGORIES",
-            startDate: budget.startDate ? new Date(budget.startDate) : new Date(),
-            endDate: budget.endDate ? new Date(budget.endDate) : null,
-            categories: {
-              create: categoryIds.map((categoryId) => ({
-                categoryId,
-              })),
-            },
-            userId: session.user.id,
-          },
-        });
-
-        result.imported++;
-      } catch (error) {
-        console.error(`Error importing budget row ${rowNumber}:`, error);
-        result.failed++;
-        result.errors.push({
-          row: rowNumber,
-          error: "Failed to create budget",
-        });
-      }
-    }
-
-    revalidatePath("/dashboard/budgets");
-    result.success = result.imported > 0;
-    return result;
-  } catch (error) {
-    console.error("Import budgets error:", error);
-    return {
-      success: false,
-      imported: 0,
-      failed: budgets.length,
-      errors: [{ row: 0, error: "Failed to import budgets" }],
-    };
-  }
-}
-
-/**
- * Return a CSV template string for the requested import type.
- *
- * @param type - The import template type: "transactions", "accounts", or "budgets"
- * @returns A CSV-formatted template string matching the requested `type`
- */
-export async function getImportTemplate(type: "transactions" | "accounts" | "budgets") {
-  const templates = {
-    transactions: `Date,Amount,Type,Category,Account,To Account,Description,Location,Latitude,Longitude,Google Maps Link,Currency
+export async function getImportTemplate() {
+  return `Date,Amount,Type,Category,Account,To Account,Description,Location,Latitude,Longitude,Google Maps Link,Currency
 2024-01-15,50000,INCOME,Salary,Bank Account,,Monthly salary,Office,-6.200000,106.816666,https://www.google.com/maps/search/?api=1&query=-6.200000%2C106.816666,IDR
 2024-01-16,25000,EXPENSE,Food,Cash,,Groceries,Restaurant,,,,IDR
 2024-01-17,10000,EXPENSE,Transport,Bank Account,,Taxi fare,Train station,-6.175110,106.865036,https://www.google.com/maps/search/?api=1&query=-6.175110%2C106.865036,IDR
-2024-01-18,30000,TRANSFER,,Bank Account,Savings,Transfer to savings,,,,,IDR`,
-    accounts: `Name,Type,Currency,Balance,Description
-Bank Account,BANK,IDR,1000000,Main bank account
-Cash,CASH,IDR,500000,Pocket money
-Credit Card,CREDIT_CARD,IDR,-200000,Credit card debt`,
-    budgets: `Name,Amount,Period,Categories,Start Date,End Date
-Food Budget,2000000,MONTHLY,Food|Groceries,2024-01-01,
-Transport,500000,MONTHLY,Transport,2024-01-01,
-Household,1000000,MONTHLY,Utilities|Home,2024-01-01,`,
-  };
-
-  return templates[type];
+2024-01-18,30000,TRANSFER,,Bank Account,Savings,Transfer to savings,,,,,IDR`;
 }
