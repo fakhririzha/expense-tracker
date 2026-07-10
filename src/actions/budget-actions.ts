@@ -13,6 +13,7 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { decryptAccountName } from "@/lib/account-crypto";
+import { decryptBudgetRecord, encryptBudgetName } from "@/lib/budget-crypto";
 import type {
   BudgetCategorySummary,
   BudgetScopeValue,
@@ -110,6 +111,7 @@ const categorySummarySelect = {
 const budgetSelect = {
   id: true,
   name: true,
+  nameEncrypted: true,
   amount: true,
   period: true,
   scope: true,
@@ -200,9 +202,10 @@ function normalizeCategoryIds(categoryIds: string[]): string[] {
   );
 }
 
-function mapBudgetRecord(budget: {
+async function mapBudgetRecord(userId: string, budget: {
   id: string;
-  name: string;
+  name: string | null;
+  nameEncrypted: string | null;
   amount: number;
   period: BudgetPeriod;
   scope: BudgetScope;
@@ -217,7 +220,8 @@ function mapBudgetRecord(budget: {
       color: string | null;
     };
   }>;
-}): BudgetDetails {
+}): Promise<BudgetDetails> {
+  const decryptedBudget = await decryptBudgetRecord(userId, budget);
   const categories = [...budget.categories]
     .map((entry) => ({
       id: entry.category.id,
@@ -229,7 +233,7 @@ function mapBudgetRecord(budget: {
 
   return {
     id: budget.id,
-    name: budget.name,
+    name: decryptedBudget.name,
     amount: budget.amount,
     period: budget.period,
     scope: budget.scope,
@@ -426,7 +430,12 @@ export async function getBudgets() {
       orderBy: { createdAt: "desc" },
     });
 
-    return { success: true, data: budgets.map(mapBudgetRecord) };
+    return {
+      success: true,
+      data: await Promise.all(
+        budgets.map((budget) => mapBudgetRecord(session.user.id, budget))
+      ),
+    };
   } catch (error) {
     console.error("Get budgets error:", error);
     return { success: false, error: "Failed to fetch budgets", data: [] as BudgetDetails[] };
@@ -449,7 +458,7 @@ export async function getBudget(id: string) {
       return { success: false, error: "Budget not found" };
     }
 
-    return { success: true, data: mapBudgetRecord(budget) };
+    return { success: true, data: await mapBudgetRecord(session.user.id, budget) };
   } catch (error) {
     console.error("Get budget error:", error);
     return { success: false, error: "Failed to fetch budget" };
@@ -483,9 +492,14 @@ export async function createBudget(data: BudgetInput) {
       validatedFields.data.period as BudgetPeriod
     ).start;
 
+    const encryptedName = await encryptBudgetName(
+      session.user.id,
+      validatedFields.data.name
+    );
     const budget = await prisma.budget.create({
       data: {
-        name: validatedFields.data.name,
+        name: null,
+        nameEncrypted: encryptedName,
         amount: validatedFields.data.amount,
         period: validatedFields.data.period,
         scope: BudgetScope.CATEGORIES,
@@ -504,7 +518,7 @@ export async function createBudget(data: BudgetInput) {
 
     revalidateBudgetPaths();
 
-    return { success: true, data: mapBudgetRecord(budget) };
+    return { success: true, data: await mapBudgetRecord(session.user.id, budget) };
   } catch (error) {
     console.error("Create budget error:", error);
     return { success: false, error: "Failed to create budget" };
@@ -553,10 +567,16 @@ export async function updateBudget(id: string, data: Partial<BudgetInput>) {
       }
     }
 
+    const encryptedName =
+      validatedFields.data.name === undefined
+        ? undefined
+        : await encryptBudgetName(session.user.id, validatedFields.data.name);
     const budget = await prisma.budget.update({
       where: { id },
       data: {
-        name: validatedFields.data.name,
+        ...(encryptedName
+          ? { name: null, nameEncrypted: encryptedName }
+          : {}),
         amount: validatedFields.data.amount,
         period: validatedFields.data.period,
         isActive: validatedFields.data.isActive,
@@ -584,7 +604,7 @@ export async function updateBudget(id: string, data: Partial<BudgetInput>) {
 
     revalidateBudgetPaths();
 
-    return { success: true, data: mapBudgetRecord(budget) };
+    return { success: true, data: await mapBudgetRecord(session.user.id, budget) };
   } catch (error) {
     console.error("Update budget error:", error);
     return { success: false, error: "Failed to update budget" };
@@ -636,7 +656,7 @@ export async function getBudgetProgress(
       return { success: false, error: "Budget not found" };
     }
 
-    const budget = mapBudgetRecord(budgetRecord);
+    const budget = await mapBudgetRecord(session.user.id, budgetRecord);
     const now = new Date();
     const { start, end } = getBudgetDateRange(budget.period, now);
 
@@ -692,7 +712,9 @@ export async function getBudgetsSummary() {
       return { success: true, data: [] as BudgetWithProgress[] };
     }
 
-    const budgets = budgetRecords.map(mapBudgetRecord);
+    const budgets = await Promise.all(
+      budgetRecords.map((budget) => mapBudgetRecord(session.user.id, budget))
+    );
     const now = new Date();
     const dateRanges = budgets.map((budget) =>
       getBudgetDateRange(budget.period, now)
@@ -754,7 +776,9 @@ export async function getBudgetVsActual() {
       orderBy: { createdAt: "desc" },
     });
 
-    const budgets = budgetRecords.map(mapBudgetRecord);
+    const budgets = await Promise.all(
+      budgetRecords.map((budget) => mapBudgetRecord(session.user.id, budget))
+    );
     const now = new Date();
     const monthStart = startOfMonth(now);
     const monthEnd = endOfMonth(now);
@@ -903,7 +927,7 @@ export async function getBudgetTransactions(
       return { success: false, error: "Budget not found", data: [] };
     }
 
-    const budget = mapBudgetRecord(budgetRecord);
+    const budget = await mapBudgetRecord(session.user.id, budgetRecord);
     const { start, end } = getBudgetDateRange(budget.period);
 
     const transactions = await prisma.transaction.findMany({

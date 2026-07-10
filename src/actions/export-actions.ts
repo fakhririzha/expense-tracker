@@ -5,6 +5,11 @@ import {
   decryptAccountName,
   decryptAccountRecords,
 } from "@/lib/account-crypto";
+import { decryptBudgetRecords } from "@/lib/budget-crypto";
+import {
+  decryptOptionalCompanion,
+  decryptRequiredCompanion,
+} from "@/lib/encrypted-companion-crypto";
 import prisma from "@/lib/db";
 import { format } from "date-fns";
 import { decryptUserField } from "@/lib/user-encryption";
@@ -36,30 +41,16 @@ function sanitizeCsvCell(value: string): string {
 
 async function decryptPersonalAssetFields<
   T extends {
-    name: string;
+    name: string | null;
     nameEncrypted: string | null;
     notes: string | null;
     notesEncrypted: string | null;
   }
 >(userId: string, asset: T): Promise<T & { name: string; notes: string | null }> {
-  let name = asset.name;
-  let notes = asset.notes;
-
-  if (asset.nameEncrypted) {
-    try {
-      name = await decryptUserField(userId, "personalAsset.name", asset.nameEncrypted);
-    } catch {
-      // Keep required plaintext fallback.
-    }
-  }
-
-  if (asset.notesEncrypted) {
-    try {
-      notes = await decryptUserField(userId, "personalAsset.notes", asset.notesEncrypted);
-    } catch {
-      // Keep plaintext fallback.
-    }
-  }
+  const [name, notes] = await Promise.all([
+    decryptRequiredCompanion(userId, "personalAsset.name", asset.nameEncrypted, asset.name),
+    decryptOptionalCompanion(userId, "personalAsset.notes", asset.notesEncrypted, asset.notes),
+  ]);
 
   return { ...asset, name, notes };
 }
@@ -300,7 +291,12 @@ export async function exportAllData() {
       }),
     ]);
 
-    const [decryptedAccounts, decryptedTransactions, decryptedPersonalAssets] =
+    const [
+      decryptedAccounts,
+      decryptedTransactions,
+      decryptedBudgets,
+      decryptedPersonalAssets,
+    ] =
       await Promise.all([
         decryptAccountRecords(session.user.id, accounts),
         Promise.all(
@@ -334,6 +330,7 @@ export async function exportAllData() {
             ),
           }))
         ),
+        decryptBudgetRecords(session.user.id, budgets),
         Promise.all(
       personalAssets.map((asset) => decryptPersonalAssetFields(session.user.id, asset))
         ),
@@ -341,6 +338,42 @@ export async function exportAllData() {
     const decryptedAccountMap = new Map(
       decryptedAccounts.map((account) => [account.id, account.name])
     );
+    const [decryptedRecurringRules, decryptedSavingsGoals] = await Promise.all([
+      Promise.all(
+        recurringRules.map(async (rule) => ({
+          ...rule,
+          name: await decryptRequiredCompanion(
+            session.user.id,
+            "recurringRule.name",
+            rule.nameEncrypted,
+            rule.name
+          ),
+          description: await decryptOptionalCompanion(
+            session.user.id,
+            "recurringRule.description",
+            rule.descriptionEncrypted,
+            rule.description
+          ),
+        }))
+      ),
+      Promise.all(
+        savingsGoals.map(async (goal) => ({
+          ...goal,
+          name: await decryptRequiredCompanion(
+            session.user.id,
+            "savingsGoal.name",
+            goal.nameEncrypted,
+            goal.name
+          ),
+          description: await decryptOptionalCompanion(
+            session.user.id,
+            "savingsGoal.description",
+            goal.descriptionEncrypted,
+            goal.description
+          ),
+        }))
+      ),
+    ]);
 
     // Create a JSON backup
     const backup = {
@@ -373,7 +406,7 @@ export async function exportAllData() {
           })),
         })),
         categories,
-        budgets: budgets.map((b) => ({
+        budgets: decryptedBudgets.map((b) => ({
           id: b.id,
           name: b.name,
           amount: b.amount,
@@ -397,8 +430,14 @@ export async function exportAllData() {
           symbol: t.asset.symbol,
           accountName: t.accountId ? decryptedAccountMap.get(t.accountId) ?? null : null,
         })),
-        recurringRules,
-        savingsGoals: savingsGoals.map((goal) => ({
+        recurringRules: decryptedRecurringRules.map(
+          ({ nameEncrypted, descriptionEncrypted, ...rule }) => {
+            void nameEncrypted;
+            void descriptionEncrypted;
+            return rule;
+          }
+        ),
+        savingsGoals: decryptedSavingsGoals.map((goal) => ({
           id: goal.id,
           name: goal.name,
           targetAmount: goal.targetAmount,
@@ -568,7 +607,8 @@ export async function exportBudgetsCSV() {
     ];
 
     // CSV Rows
-    const rows = budgets.map((b) => [
+    const decryptedBudgets = await decryptBudgetRecords(session.user.id, budgets);
+    const rows = decryptedBudgets.map((b) => [
       b.name,
       b.amount.toString(),
       b.period,
@@ -807,7 +847,24 @@ export async function exportRecurringRulesCSV() {
     ];
 
     // CSV Rows
-    const rows = rules.map((r) => [
+    const decryptedRules = await Promise.all(
+      rules.map(async (rule) => ({
+        ...rule,
+        name: await decryptRequiredCompanion(
+          session.user.id,
+          "recurringRule.name",
+          rule.nameEncrypted,
+          rule.name
+        ),
+        description: await decryptOptionalCompanion(
+          session.user.id,
+          "recurringRule.description",
+          rule.descriptionEncrypted,
+          rule.description
+        ),
+      }))
+    );
+    const rows = decryptedRules.map((r) => [
       r.name,
       r.amount.toString(),
       r.currency,

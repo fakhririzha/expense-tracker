@@ -5,9 +5,15 @@ import prisma from "@/lib/db";
 import { Prisma } from "@/generated/prisma/client/client";
 import { addDays, addMonths, addWeeks, addYears } from "date-fns";
 import { isDepositoAccountType } from "@/lib/account-types";
+import {
+  decryptOptionalCompanion,
+  decryptRequiredCompanion,
+  encryptOptionalCompanion,
+  encryptRequiredCompanion,
+} from "@/lib/encrypted-companion-crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { encryptUserField, decryptUserField } from "@/lib/user-encryption";
+import { encryptUserField } from "@/lib/user-encryption";
 
 const recurringRuleSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -93,18 +99,15 @@ export async function createRecurringRule(data: RecurringRuleInput) {
     }
 
     // Encrypt sensitive fields
-    const encryptedName = restData.name
-      ? await encryptUserField(session.user.id, "recurringRule.name", restData.name)
-      : null;
-    
-    const encryptedDescription = restData.description
-      ? await encryptUserField(session.user.id, "recurringRule.description", restData.description)
-      : null;
+    const [encryptedName, encryptedDescription] = await Promise.all([
+      encryptRequiredCompanion(session.user.id, "recurringRule.name", restData.name),
+      encryptOptionalCompanion(session.user.id, "recurringRule.description", restData.description),
+    ]);
 
     const rule = await prisma.recurringRule.create({
       data: {
         ...restData,
-        // Keep plaintext name (required field), also store encrypted
+        name: null,
         nameEncrypted: encryptedName,
         // Nullify optional plaintext after encryption
         description: restData.description ? null : undefined,
@@ -184,16 +187,22 @@ export async function updateRecurringRule(
     }
 
     // Encrypt sensitive fields if provided
-    let encryptedName: string | null = null;
-    let encryptedDescription: string | null = null;
+    let encryptedName: string | undefined;
+    let encryptedDescription: string | null | undefined;
     
-    if (data.name) {
-      encryptedName = await encryptUserField(session.user.id, "recurringRule.name", data.name);
+    if (data.name !== undefined) {
+      encryptedName = await encryptRequiredCompanion(
+        session.user.id,
+        "recurringRule.name",
+        data.name
+      );
     }
     if (data.description !== undefined) {
-      encryptedDescription = data.description
-        ? await encryptUserField(session.user.id, "recurringRule.description", data.description)
-        : null;
+      encryptedDescription = await encryptOptionalCompanion(
+        session.user.id,
+        "recurringRule.description",
+        data.description
+      );
     }
 
     const updateData: Record<string, unknown> = {
@@ -202,7 +211,8 @@ export async function updateRecurringRule(
     };
     
     // If name is being updated, also store encrypted version
-    if (data.name) {
+    if (data.name !== undefined) {
+      updateData.name = null;
       updateData.nameEncrypted = encryptedName;
     }
     // If description is being updated, nullify plaintext and store encrypted
@@ -302,33 +312,20 @@ export async function getRecurringRules() {
     // Decrypt sensitive fields
     const decryptedRules = await Promise.all(
       rules.map(async (rule) => {
-        // Use encrypted name if available, otherwise fall back to plaintext
-        let finalName = rule.name;
-        if (rule.nameEncrypted) {
-          try {
-            finalName = await decryptUserField(
-              session.user.id,
-              "recurringRule.name",
-              rule.nameEncrypted
-            );
-          } catch {
-            // Fall back to plaintext
-          }
-        }
-
-        // Use encrypted description if available, otherwise fall back to plaintext
-        let finalDescription = rule.description;
-        if (rule.descriptionEncrypted) {
-          try {
-            finalDescription = await decryptUserField(
-              session.user.id,
-              "recurringRule.description",
-              rule.descriptionEncrypted
-            );
-          } catch {
-            // Fall back to plaintext
-          }
-        }
+        const [finalName, finalDescription] = await Promise.all([
+          decryptRequiredCompanion(
+            session.user.id,
+            "recurringRule.name",
+            rule.nameEncrypted,
+            rule.name
+          ),
+          decryptOptionalCompanion(
+            session.user.id,
+            "recurringRule.description",
+            rule.descriptionEncrypted,
+            rule.description
+          ),
+        ]);
 
         return {
           ...rule,
@@ -386,6 +383,27 @@ export async function processRecurringTransactions() {
           continue;
         }
 
+        const [name, description] = await Promise.all([
+          decryptRequiredCompanion(
+            rule.userId,
+            "recurringRule.name",
+            rule.nameEncrypted,
+            rule.name
+          ),
+          decryptOptionalCompanion(
+            rule.userId,
+            "recurringRule.description",
+            rule.descriptionEncrypted,
+            rule.description
+          ),
+        ]);
+        const transactionDescription = description ?? name;
+        const descriptionEncrypted = await encryptUserField(
+          rule.userId,
+          "transaction.description",
+          transactionDescription
+        );
+
         // Create the transaction
         await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
           const account = await tx.financialAccount.findFirst({
@@ -421,7 +439,8 @@ export async function processRecurringTransactions() {
               currency: rule.currency,
               exchangeRate: 1, // TODO: Fetch actual exchange rate
               type: rule.type,
-              description: rule.description || rule.name,
+              description: null,
+              descriptionEncrypted,
               date: rule.nextDueDate,
               isRecurring: true,
               userId: rule.userId,

@@ -455,7 +455,7 @@ enum RecurringInterval {
 
 model RecurringRule {
   id            String            @id @default(cuid())
-  name          String
+  name          String?
   nameEncrypted String?           @db.Text // Encrypted name
   amount        Float
   currency      String            @default("IDR")
@@ -501,7 +501,7 @@ enum SubscriptionStatus {
 
 model Subscription {
   id                       String                    @id @default(cuid())
-  name                     String
+  name                     String?
   nameEncrypted            String?                   @db.Text
   provider                 String?
   providerEncrypted        String?                   @db.Text
@@ -730,8 +730,9 @@ model BudgetCategory {
 }
 
 model Budget {
-  id        String       @id @default(cuid())
-  name      String
+  id            String       @id @default(cuid())
+  name          String?      // Legacy plaintext name during encryption rollout
+  nameEncrypted String?      @db.Text // Encrypted budget name
   amount    Float
   period    BudgetPeriod
   scope     BudgetScope  @default(CATEGORIES)
@@ -766,7 +767,7 @@ model SavingsGoalAccount {
 
 model SavingsGoal {
   id                   String    @id @default(cuid())
-  name                 String
+  name                 String?
   nameEncrypted        String?   @db.Text // Encrypted name
   targetAmount         Float
   targetDate           DateTime?
@@ -802,7 +803,7 @@ enum PersonalAssetCategory {
 
 model PersonalAsset {
   id                   String                @id @default(cuid())
-  name                 String
+  name                 String?
   nameEncrypted        String?               @db.Text
   category             PersonalAssetCategory
   currentValue         Float

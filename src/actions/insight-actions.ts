@@ -11,6 +11,8 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { decryptAccountName } from "@/lib/account-crypto";
+import { decryptBudgetRecords } from "@/lib/budget-crypto";
+import { decryptRequiredCompanion } from "@/lib/encrypted-companion-crypto";
 import { formatBudgetCategorySummary } from "@/lib/budget-utils";
 import {
   compareDebtPayoffStrategies,
@@ -60,7 +62,6 @@ import {
   isRenewalEligibleSubscriptionStatus,
   resolveSubscriptionStatus,
 } from "@/lib/subscription-utils";
-import { decryptUserField } from "@/lib/user-encryption";
 
 const insightTypeSchema = z.enum([
   "budget_warning",
@@ -116,24 +117,19 @@ function getBudgetQueryFloor(now: Date): Date {
 
 async function decryptGoalNames(
   userId: string,
-  goals: Array<{ id: string; name: string; nameEncrypted: string | null }>
+  goals: Array<{ id: string; name: string | null; nameEncrypted: string | null }>
 ): Promise<Map<string, string>> {
   const pairs = await Promise.all(
     goals.map(async (goal) => {
-      if (!goal.nameEncrypted) {
-        return [goal.id, goal.name] as const;
-      }
-
-      try {
-        const decrypted = await decryptUserField(
+      return [
+        goal.id,
+        await decryptRequiredCompanion(
           userId,
           "savingsGoal.name",
-          goal.nameEncrypted
-        );
-        return [goal.id, decrypted] as const;
-      } catch {
-        return [goal.id, goal.name] as const;
-      }
+          goal.nameEncrypted,
+          goal.name
+        ),
+      ] as const;
     })
   );
 
@@ -542,6 +538,7 @@ export async function getFinancialInsights(
         select: {
           id: true,
           name: true,
+          nameEncrypted: true,
           amount: true,
           period: true,
           scope: true,
@@ -682,6 +679,7 @@ export async function getFinancialInsights(
       ).catch(() => null),
     ]);
 
+    const decryptedBudgets = await decryptBudgetRecords(session.user.id, budgets);
     const mainCurrency = user.mainCurrency;
     const converter = await createInsightCurrencyConverter({
       targetCurrency: mainCurrency,
@@ -837,7 +835,7 @@ export async function getFinancialInsights(
         : 0;
 
     const budgetProgress = buildBudgetProgress({
-      budgets,
+      budgets: decryptedBudgets,
       transactions,
       expenseAllocations: expenseAllocationRows,
       now,

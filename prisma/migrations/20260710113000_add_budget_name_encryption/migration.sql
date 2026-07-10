@@ -1,0 +1,3 @@
+ALTER TABLE `Budget`
+  MODIFY `name` VARCHAR(191) NULL,
+  ADD COLUMN `nameEncrypted` TEXT NULL;

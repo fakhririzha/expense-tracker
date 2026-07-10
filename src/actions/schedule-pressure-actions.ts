@@ -18,6 +18,7 @@ import {
   type RecurringInterval,
 } from "@/generated/prisma/client/client";
 import prisma from "@/lib/db";
+import { decryptRequiredCompanion } from "@/lib/encrypted-companion-crypto";
 import { getExchangeRate } from "@/lib/finance-service";
 import { decryptUserField } from "@/lib/user-encryption";
 
@@ -98,16 +99,20 @@ async function decryptName(
   userId: string,
   field: "account.name" | "recurringRule.name" | "subscription.name",
   encrypted: string | null,
-  fallback: string
+  fallback: string | null
 ) {
+  if (field !== "account.name") {
+    return decryptRequiredCompanion(userId, field, encrypted, fallback);
+  }
+
   if (!encrypted) {
-    return fallback;
+    return fallback ?? "";
   }
 
   try {
     return await decryptUserField(userId, field, encrypted);
   } catch {
-    return fallback;
+    return fallback ?? "";
   }
 }
 

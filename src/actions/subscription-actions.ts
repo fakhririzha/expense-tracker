@@ -31,7 +31,12 @@ import {
   type SubscriptionStatusFilter,
   UPCOMING_RENEWALS_DAYS,
 } from "@/lib/subscription-utils";
-import { decryptUserField, encryptUserField } from "@/lib/user-encryption";
+import {
+  decryptOptionalCompanion,
+  decryptRequiredCompanion,
+  encryptOptionalCompanion,
+  encryptRequiredCompanion,
+} from "@/lib/encrypted-companion-crypto";
 
 const editableStatusSchema = z.enum(EDITABLE_SUBSCRIPTION_STATUSES);
 const billingCycleSchema = z.enum(["WEEKLY", "MONTHLY", "QUARTERLY", "YEARLY"]);
@@ -321,15 +326,7 @@ async function decryptSubscriptionText(
   encrypted: string | null,
   plaintext: string | null
 ): Promise<string | null> {
-  if (!encrypted) {
-    return plaintext;
-  }
-
-  try {
-    return await decryptUserField(userId, field, encrypted);
-  } catch {
-    return plaintext;
-  }
+  return decryptOptionalCompanion(userId, field, encrypted, plaintext);
 }
 
 async function toSubscriptionListItem(
@@ -338,7 +335,7 @@ async function toSubscriptionListItem(
 ): Promise<SubscriptionListItem> {
   const [name, provider, description, cancellationUrl, notes, recurringRuleName] =
     await Promise.all([
-      decryptSubscriptionText(
+      decryptRequiredCompanion(
         userId,
         "subscription.name",
         subscription.nameEncrypted,
@@ -368,13 +365,14 @@ async function toSubscriptionListItem(
         subscription.notesEncrypted,
         subscription.notes
       ),
-      subscription.recurringRule?.nameEncrypted
-        ? decryptUserField(
+      subscription.recurringRule
+        ? decryptRequiredCompanion(
             userId,
             "recurringRule.name",
-            subscription.recurringRule.nameEncrypted
-          ).catch(() => subscription.recurringRule?.name ?? null)
-        : Promise.resolve(subscription.recurringRule?.name ?? null),
+            subscription.recurringRule.nameEncrypted,
+            subscription.recurringRule.name
+          )
+        : Promise.resolve(null),
     ]);
   const accountName = subscription.account
     ? await decryptAccountName(userId, subscription.account.nameEncrypted)
@@ -392,8 +390,8 @@ async function toSubscriptionListItem(
 
   const recurringRule = subscription.recurringRule
     ? {
-        id: subscription.recurringRule.id,
-        name: recurringRuleName ?? subscription.recurringRule.name,
+      id: subscription.recurringRule.id,
+        name: recurringRuleName ?? "Recurring rule",
         amount: subscription.recurringRule.amount,
         currency: subscription.recurringRule.currency,
         interval: subscription.recurringRule.interval,
@@ -418,7 +416,7 @@ async function toSubscriptionListItem(
 
   return {
     id: subscription.id,
-    name: name ?? subscription.name,
+    name,
     provider,
     description,
     amount: subscription.amount,
@@ -524,17 +522,13 @@ async function buildEncryptedSubscriptionFields(
 ) {
   const [nameEncrypted, providerEncrypted, descriptionEncrypted, cancellationUrlEncrypted, notesEncrypted] =
     await Promise.all([
-      data.name ? encryptUserField(userId, "subscription.name", data.name) : Promise.resolve(null),
-      data.provider
-        ? encryptUserField(userId, "subscription.provider", data.provider)
+      data.name
+        ? encryptRequiredCompanion(userId, "subscription.name", data.name)
         : Promise.resolve(null),
-      data.description
-        ? encryptUserField(userId, "subscription.description", data.description)
-        : Promise.resolve(null),
-      data.cancellationUrl
-        ? encryptUserField(userId, "subscription.cancellationUrl", data.cancellationUrl)
-        : Promise.resolve(null),
-      data.notes ? encryptUserField(userId, "subscription.notes", data.notes) : Promise.resolve(null),
+      encryptOptionalCompanion(userId, "subscription.provider", data.provider),
+      encryptOptionalCompanion(userId, "subscription.description", data.description),
+      encryptOptionalCompanion(userId, "subscription.cancellationUrl", data.cancellationUrl),
+      encryptOptionalCompanion(userId, "subscription.notes", data.notes),
     ]);
 
   return {
@@ -562,23 +556,21 @@ async function syncRecurringRuleWithSubscription(
     status: SubscriptionStatus;
   }
 ) {
-  const recurringNameEncrypted = await encryptUserField(
+  const recurringNameEncrypted = await encryptRequiredCompanion(
     userId,
     "recurringRule.name",
     subscription.name
   );
-  const recurringDescriptionEncrypted = subscription.description
-    ? await encryptUserField(
-        userId,
-        "recurringRule.description",
-        subscription.description
-      )
-    : null;
+  const recurringDescriptionEncrypted = await encryptOptionalCompanion(
+    userId,
+    "recurringRule.description",
+    subscription.description
+  );
 
   await tx.recurringRule.update({
     where: { id: recurringRuleId },
     data: {
-      name: subscription.name,
+      name: null,
       nameEncrypted: recurringNameEncrypted,
       amount: subscription.amount,
       currency: subscription.currency,
@@ -868,7 +860,7 @@ export async function createSubscription(data: SubscriptionInput) {
 
     const subscription = await prisma.subscription.create({
       data: {
-        name: normalized.name,
+        name: null,
         nameEncrypted: encryptedFields.nameEncrypted,
         provider: normalized.provider ? null : null,
         providerEncrypted: encryptedFields.providerEncrypted,
@@ -917,6 +909,7 @@ export async function updateSubscription(id: string, data: SubscriptionUpdateInp
       select: {
         id: true,
         name: true,
+        nameEncrypted: true,
         amount: true,
         currency: true,
         billingCycle: true,
@@ -990,14 +983,20 @@ export async function updateSubscription(id: string, data: SubscriptionUpdateInp
     }
 
     const encryptedFields = await buildEncryptedSubscriptionFields(authResult.userId, normalized);
-    const nextName = normalized.name ?? existing.name;
+    const nextName = normalized.name ?? await decryptRequiredCompanion(
+      authResult.userId,
+      "subscription.name",
+      existing.nameEncrypted,
+      existing.name
+    );
     let nextDescription = normalized.description;
     if (nextDescription === undefined && existing.descriptionEncrypted) {
       try {
-        nextDescription = await decryptUserField(
+        nextDescription = await decryptOptionalCompanion(
           authResult.userId,
           "subscription.description",
-          existing.descriptionEncrypted
+          existing.descriptionEncrypted,
+          existing.description
         );
       } catch {
         nextDescription = existing.description;
@@ -1010,7 +1009,7 @@ export async function updateSubscription(id: string, data: SubscriptionUpdateInp
       const updated = await tx.subscription.update({
         where: { id },
         data: {
-          name: normalized.name ?? undefined,
+          name: normalized.name !== undefined ? null : undefined,
           nameEncrypted: normalized.name ? encryptedFields.nameEncrypted : undefined,
           provider: normalized.provider !== undefined ? null : undefined,
           providerEncrypted:
@@ -1116,6 +1115,7 @@ export async function linkSubscriptionToRecurringRule(
         select: {
           id: true,
           name: true,
+          nameEncrypted: true,
           amount: true,
           currency: true,
           billingCycle: true,
@@ -1179,18 +1179,20 @@ export async function linkSubscriptionToRecurringRule(
       return { success: false, error: "Recurring rule is already linked to another subscription" };
     }
 
-    let description = subscription.description;
-    if (subscription.descriptionEncrypted) {
-      try {
-        description = await decryptUserField(
-          authResult.userId,
-          "subscription.description",
-          subscription.descriptionEncrypted
-        );
-      } catch {
-        description = subscription.description;
-      }
-    }
+    const [name, description] = await Promise.all([
+      decryptRequiredCompanion(
+        authResult.userId,
+        "subscription.name",
+        subscription.nameEncrypted,
+        subscription.name
+      ),
+      decryptOptionalCompanion(
+        authResult.userId,
+        "subscription.description",
+        subscription.descriptionEncrypted,
+        subscription.description
+      ),
+    ]);
 
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.subscription.update({
@@ -1199,7 +1201,7 @@ export async function linkSubscriptionToRecurringRule(
       });
 
       await syncRecurringRuleWithSubscription(tx, authResult.userId, recurringRuleId, {
-        name: subscription.name,
+        name,
         description,
         amount: subscription.amount,
         currency: subscription.currency,
@@ -1260,6 +1262,7 @@ export async function createRecurringRuleFromSubscription(subscriptionId: string
       select: {
         id: true,
         name: true,
+        nameEncrypted: true,
         amount: true,
         currency: true,
         billingCycle: true,
@@ -1300,32 +1303,30 @@ export async function createRecurringRuleFromSubscription(subscriptionId: string
       };
     }
 
-    let description = subscription.description;
-    if (subscription.descriptionEncrypted) {
-      try {
-        description = await decryptUserField(
-          authResult.userId,
-          "subscription.description",
-          subscription.descriptionEncrypted
-        );
-      } catch {
-        description = subscription.description;
-      }
-    }
+    const [name, description] = await Promise.all([
+      decryptRequiredCompanion(
+        authResult.userId,
+        "subscription.name",
+        subscription.nameEncrypted,
+        subscription.name
+      ),
+      decryptOptionalCompanion(
+        authResult.userId,
+        "subscription.description",
+        subscription.descriptionEncrypted,
+        subscription.description
+      ),
+    ]);
 
-    const recurringNameEncrypted = await encryptUserField(
-      authResult.userId,
-      "recurringRule.name",
-      subscription.name
-    );
-    const recurringDescriptionEncrypted = description
-      ? await encryptUserField(authResult.userId, "recurringRule.description", description)
-      : null;
+    const [recurringNameEncrypted, recurringDescriptionEncrypted] = await Promise.all([
+      encryptRequiredCompanion(authResult.userId, "recurringRule.name", name),
+      encryptOptionalCompanion(authResult.userId, "recurringRule.description", description),
+    ]);
 
     const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const recurringRule = await tx.recurringRule.create({
         data: {
-          name: subscription.name,
+          name: null,
           nameEncrypted: recurringNameEncrypted,
           amount: subscription.amount,
           currency: subscription.currency,

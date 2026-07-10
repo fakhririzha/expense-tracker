@@ -202,7 +202,8 @@ expense-tracker/
 ## Data Model Notes
 
 - `FinancialAccount` stores account names and descriptions in encrypted-only columns.
-- `Budget` uses scoped many-to-many category coverage so one budget can track multiple expense categories.
+- `Budget` stores names in encrypted form and uses scoped many-to-many category coverage so one budget can track multiple expense categories.
+- Recurring rules, savings goals, subscriptions, and personal assets store their sensitive labels and notes in encrypted companion fields.
 - `TransactionSplit` supports manual split expense allocation.
 - `NetWorthSnapshot` stores frozen month-end values for historical reporting.
 - `PushSubscription`, `NotificationPreference`, and `NotificationEvent` back browser push notifications.

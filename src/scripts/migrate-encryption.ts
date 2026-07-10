@@ -158,138 +158,6 @@ async function migrateTradeHistory(): Promise<MigrationResult> {
   return result;
 }
 
-async function migrateRecurringRules(): Promise<MigrationResult> {
-  const result: MigrationResult = {
-    model: "RecurringRule",
-    processed: 0,
-    encrypted: 0,
-    errors: 0,
-  };
-
-  try {
-    const users = await prisma.user.findMany({
-      select: { id: true, encryptionSalt: true },
-    });
-
-    for (const user of users) {
-      if (!user.encryptionSalt) continue;
-
-      const masterKey = getMasterKey();
-      const userKey = deriveUserKey(masterKey, user.encryptionSalt);
-
-      const rules = await prisma.recurringRule.findMany({
-        where: {
-          userId: user.id,
-          name: { not: undefined },
-        },
-        select: {
-          id: true,
-          name: true,
-          description: true,
-        },
-      });
-
-      for (const rule of rules) {
-        try {
-          if (rule.name) {
-            const encryptedName = encrypt(rule.name, userKey);
-            await prisma.recurringRule.update({
-              where: { id: rule.id },
-              data: { nameEncrypted: encryptedName },
-            });
-          }
-
-          if (rule.description) {
-            const encryptedDesc = encrypt(rule.description, userKey);
-            await prisma.recurringRule.update({
-              where: { id: rule.id },
-              data: { descriptionEncrypted: encryptedDesc },
-            });
-          }
-
-          result.encrypted++;
-        } catch (error) {
-          console.error(`Error encrypting recurring rule ${rule.id}:`, error);
-          result.errors++;
-        }
-        result.processed++;
-      }
-    }
-
-    console.log(`RecurringRule: Processed ${result.processed}, Encrypted ${result.encrypted}, Errors ${result.errors}`);
-  } catch (error) {
-    console.error("Error migrating recurring rules:", error);
-  }
-
-  return result;
-}
-
-async function migrateSavingsGoals(): Promise<MigrationResult> {
-  const result: MigrationResult = {
-    model: "SavingsGoal",
-    processed: 0,
-    encrypted: 0,
-    errors: 0,
-  };
-
-  try {
-    const users = await prisma.user.findMany({
-      select: { id: true, encryptionSalt: true },
-    });
-
-    for (const user of users) {
-      if (!user.encryptionSalt) continue;
-
-      const masterKey = getMasterKey();
-      const userKey = deriveUserKey(masterKey, user.encryptionSalt);
-
-      const goals = await prisma.savingsGoal.findMany({
-        where: {
-          userId: user.id,
-          name: { not: undefined },
-        },
-        select: {
-          id: true,
-          name: true,
-          description: true,
-        },
-      });
-
-      for (const goal of goals) {
-        try {
-          if (goal.name) {
-            const encryptedName = encrypt(goal.name, userKey);
-            await prisma.savingsGoal.update({
-              where: { id: goal.id },
-              data: { nameEncrypted: encryptedName },
-            });
-          }
-
-          if (goal.description) {
-            const encryptedDesc = encrypt(goal.description, userKey);
-            await prisma.savingsGoal.update({
-              where: { id: goal.id },
-              data: { descriptionEncrypted: encryptedDesc },
-            });
-          }
-
-          result.encrypted++;
-        } catch (error) {
-          console.error(`Error encrypting savings goal ${goal.id}:`, error);
-          result.errors++;
-        }
-        result.processed++;
-      }
-    }
-
-    console.log(`SavingsGoal: Processed ${result.processed}, Encrypted ${result.encrypted}, Errors ${result.errors}`);
-  } catch (error) {
-    console.error("Error migrating savings goals:", error);
-  }
-
-  return result;
-}
-
 async function main() {
   console.log("Starting encryption migration...\n");
 
@@ -302,8 +170,9 @@ async function main() {
     await migrateTransactions();
     await migrateAccounts();
     await migrateTradeHistory();
-    await migrateRecurringRules();
-    await migrateSavingsGoals();
+    console.log(
+      "Recurring rules and savings goals: skipped. Use `pnpm db:backfill:encrypted-companions`."
+    );
 
     console.log("\n✓ Encryption migration completed!");
   } catch (error) {

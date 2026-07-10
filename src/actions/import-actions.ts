@@ -8,6 +8,7 @@ import {
   encryptAccountDescription,
   encryptAccountName,
 } from "@/lib/account-crypto";
+import { encryptBudgetName } from "@/lib/budget-crypto";
 import { revalidatePath } from "next/cache";
 import {
   ACCOUNT_TYPES,
@@ -886,9 +887,14 @@ export async function importBudgets(
           continue;
         }
 
+        const encryptedName = await encryptBudgetName(
+          session.user.id,
+          budget.name
+        );
         await prisma.budget.create({
           data: {
-            name: budget.name,
+            name: null,
+            nameEncrypted: encryptedName,
             amount: budget.amount,
             period: budget.period.toUpperCase() as "MONTHLY" | "QUARTERLY" | "YEARLY",
             scope: "CATEGORIES",
