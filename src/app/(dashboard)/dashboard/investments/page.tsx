@@ -6,6 +6,7 @@ import {
   PortfolioAsset,
   PortfolioTable,
 } from "@/components/investments/PortfolioTable";
+import { ContextualEmptyState } from "@/components/onboarding/ContextualEmptyState";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { formatCurrency, formatPercentage } from "@/lib/utils";
@@ -176,6 +177,13 @@ export default function InvestmentsPage() {
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
         </div>
+      ) : assets.length === 0 ? (
+        <ContextualEmptyState
+          title="Add your first holding"
+          description="Add holdings to track market value, trades, and PnL."
+          icon={<BarChart3 className="h-5 w-5" />}
+          action={<AddInvestmentDialog onSuccess={() => {}} />}
+        />
       ) : (
         <Card>
           <CardHeader>

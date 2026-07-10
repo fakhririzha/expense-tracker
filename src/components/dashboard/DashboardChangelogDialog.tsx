@@ -1,61 +1,36 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useState } from "react";
+import { History } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
-
-const CHANGELOG_STORAGE_KEY = "dashboard-changelog-last-seen";
 
 interface DashboardChangelogDialogProps {
   markdown: string;
-  version: string;
 }
 
 export function DashboardChangelogDialog({
   markdown,
-  version,
 }: DashboardChangelogDialogProps) {
-  const isHydrated = useSyncExternalStore(
-    () => () => {},
-    () => true,
-    () => false
-  );
-  const [dismissedVersion, setDismissedVersion] = useState<string | null>(() => {
-    if (typeof window === "undefined") {
-      return null;
-    }
-
-    try {
-      return window.localStorage.getItem(CHANGELOG_STORAGE_KEY);
-    } catch (error) {
-      console.error("Failed to read changelog visibility state", error);
-      return null;
-    }
-  });
-
-  const open = isHydrated && dismissedVersion !== version;
-
-  function handleOpenChange(nextOpen: boolean) {
-    if (!nextOpen) {
-      setDismissedVersion(version);
-
-      try {
-        window.localStorage.setItem(CHANGELOG_STORAGE_KEY, version);
-      } catch (error) {
-        console.error("Failed to persist changelog visibility state", error);
-      }
-    }
-  }
+  const [open, setOpen] = useState(false);
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button type="button" variant="outline" size="sm">
+          <History className="h-4 w-4" />
+          Changelog
+        </Button>
+      </DialogTrigger>
       <DialogContent className="max-w-3xl border-2 border-foreground bg-card p-0 shadow-[8px_8px_0_0_#000] sm:max-h-[85vh]">
         <DialogHeader className="border-b-2 border-foreground bg-secondary px-6 py-4">
           <DialogTitle className="font-heading text-2xl font-black uppercase tracking-wide">

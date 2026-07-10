@@ -1,6 +1,7 @@
 "use client";
 
 import { UpcomingBankPressureAlert } from "@/components/alerts/UpcomingBankPressureAlert";
+import { ContextualEmptyState } from "@/components/onboarding/ContextualEmptyState";
 import { AddRecurringRuleDialog } from "@/components/recurring/AddRecurringRuleDialog";
 import { EditRecurringRuleDialog } from "@/components/recurring/EditRecurringRuleDialog";
 import { Button } from "@/components/ui/button";
@@ -134,6 +135,13 @@ export default function RecurringPage() {
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
         </div>
+      ) : activeRules.length === 0 && inactiveRules.length === 0 ? (
+        <ContextualEmptyState
+          title="Create your first recurring rule"
+          description="Automate repeated income, expenses, or transfers."
+          icon={<Calendar className="h-5 w-5" />}
+          action={<AddRecurringRuleDialog onSuccess={() => {}} />}
+        />
       ) : (
         <>
           <Card>

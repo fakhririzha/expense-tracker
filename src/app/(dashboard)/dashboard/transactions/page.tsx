@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useDeleteTransaction, useTransactions } from "@/hooks/useTransactionQueries";
 import { useAccounts } from "@/hooks/useAccountQueries";
 import { useCategories } from "@/hooks/useCategoryQueries";
+import { ContextualEmptyState } from "@/components/onboarding/ContextualEmptyState";
 import { AddTransactionDialog } from "@/components/transactions/AddTransactionDialog";
 import { EditTransactionDialog } from "@/components/transactions/EditTransactionDialog";
 import {
@@ -266,6 +267,9 @@ export default function TransactionsPage() {
   };
 
   const transactions = transactionPage?.transactions ?? [];
+  const hasActiveFilters = Object.values(filters).some(Boolean);
+  const hasNoTransactions =
+    !isLoading && !hasActiveFilters && (transactionPage?.total ?? 0) === 0;
   const tablePage = isPlaceholderData ? page : transactionPage?.page ?? page;
   const tablePageSize = isPlaceholderData
     ? pageSize
@@ -295,6 +299,12 @@ export default function TransactionsPage() {
         <div className="flex h-64 items-center justify-center">
           <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary"></div>
         </div>
+      ) : hasNoTransactions ? (
+        <ContextualEmptyState
+          title="Add your first transaction"
+          description="Add your first income or expense to activate reports and insights."
+          action={<AddTransactionDialog onSuccess={() => {}} />}
+        />
       ) : (
         <TransactionTable
           transactions={transactions}

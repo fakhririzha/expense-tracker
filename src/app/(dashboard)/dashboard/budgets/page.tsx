@@ -6,6 +6,7 @@ import { BudgetCard } from "@/components/budgets/BudgetCard";
 import { BudgetProgress } from "@/components/budgets/BudgetProgress";
 import { EditBudgetDialog } from "@/components/budgets/EditBudgetDialog";
 import { BudgetVsActualChart } from "@/components/budgets/BudgetVsActualChart";
+import { ContextualEmptyState } from "@/components/onboarding/ContextualEmptyState";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
@@ -169,6 +170,13 @@ export default function BudgetsPage() {
             <div className="flex items-center justify-center h-64">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
+          ) : (budgets as BudgetWithProgress[]).length === 0 ? (
+            <ContextualEmptyState
+              title="Create your first budget"
+              description="Create a monthly budget to compare planned vs actual spending."
+              icon={<Wallet className="h-5 w-5" />}
+              action={<AddBudgetDialog onSuccess={() => {}} />}
+            />
           ) : filteredBudgets.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12">
