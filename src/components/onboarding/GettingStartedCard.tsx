@@ -17,6 +17,7 @@ import {
   useOnboardingProgress,
   useUpdateChecklistState,
 } from "@/hooks/useOnboardingQueries";
+import type { OnboardingProgressItem } from "@/actions/onboarding-actions";
 import type { OnboardingChecklistId } from "@/lib/onboarding/constants";
 
 function getStatusLabel(status: "complete" | "skipped" | "incomplete") {
@@ -110,7 +111,7 @@ export function GettingStartedCard() {
             Loading setup progress...
           </div>
         ) : (
-          progress?.items.map((item) => (
+          progress?.items.map((item: OnboardingProgressItem) => (
             <div
               key={item.id}
               className="flex flex-col gap-4 border-b-2 border-border pb-4 last:border-b-0 last:pb-0 lg:flex-row lg:items-start lg:justify-between"

@@ -119,6 +119,7 @@ expense-tracker/
 - `/api/cron/deposito`
 - `/api/cron/monthly-net-worth-snapshots`
 - `/api/cron/notifications`
+- `/api/cron/weekly-ai-insights`
 - `/api/cron/pegadaian-gold-prices`
 - `/api/cron/recurring`
 - `/api/investments/[id]/trades`
@@ -164,6 +165,9 @@ pnpm db:backfill:account-encryption
 | `CHAT_API_ENDPOINT` | OpenAI-compatible chat completions endpoint used for bill photo OCR in Add Transaction | Required for OCR bill scan |
 | `CHAT_API_KEY` | Bearer key for the chat completions endpoint | Required for OCR bill scan |
 | `CHAT_API_MODEL` | Vision-capable chat model used to parse bill photos | Required for OCR bill scan |
+| `WEEKLY_INSIGHTS_CHAT_API_ENDPOINT` | OpenAI-compatible chat completions endpoint used for weekly AI insights | Required for weekly AI insights |
+| `WEEKLY_INSIGHTS_CHAT_API_KEY` | Bearer key for weekly AI insight generation | Required for weekly AI insights |
+| `WEEKLY_INSIGHTS_CHAT_API_MODEL` | Text-capable chat model used to create weekly AI insights | Required for weekly AI insights |
 
 Generate a new encryption key with:
 
@@ -302,6 +306,7 @@ enum NotificationType {
   MONTHLY_NET_WORTH_SNAPSHOT,
   GOAL_PROGRESS,
   IMPORT_EXPORT_COMPLETION
+  WEEKLY_AI_INSIGHT
 }
 ```
 
@@ -454,6 +459,7 @@ Notable current hooks include:
 - The service worker lives at `public/sw.js`.
 - Offline fallback content lives at `public/offline.html`.
 - Notification settings UI lives on `/dashboard/profile`.
+- Weekly AI insights use dedicated `WEEKLY_INSIGHTS_CHAT_API_*` configuration, send only weekly aggregates plus the limited approved top transaction descriptions, and persist encrypted report content.
 - Daily push dispatch is handled by `/api/cron/notifications`.
 - Notification payloads must only deep-link to safe `/dashboard` paths.
 
@@ -572,6 +578,7 @@ Manual verification should cover the touched feature area plus affected cross-fe
 - `/api/cron/monthly-net-worth-snapshots` at `0 17 * * *`
 - `/api/cron/recurring` at `15 17 * * *`
 - `/api/cron/notifications` at `30 17 * * *`
+- `/api/cron/weekly-ai-insights` at `0 1 * * 1`
 - `/api/cron/deposito` at `0 18 * * *`
 - `/api/cron/pegadaian-gold-prices` at `45 17 * * *`
 

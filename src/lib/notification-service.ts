@@ -55,6 +55,7 @@ export interface NotificationPreferencesInput {
   monthlySnapshotEnabled?: boolean;
   goalProgressEnabled?: boolean;
   importExportCompletionEnabled?: boolean;
+  weeklyAiInsightEnabled?: boolean;
   subscriptionReminderLeadDays?: number;
   recurringReminderLeadDays?: number;
   budgetThresholdPercent?: number;
@@ -76,6 +77,7 @@ export interface NotificationPreferenceSnapshot {
   monthlySnapshotEnabled: boolean;
   goalProgressEnabled: boolean;
   importExportCompletionEnabled: boolean;
+  weeklyAiInsightEnabled: boolean;
   subscriptionReminderLeadDays: number;
   recurringReminderLeadDays: number;
   budgetThresholdPercent: number;
@@ -132,6 +134,7 @@ const notificationPreferenceSelect = {
   monthlySnapshotEnabled: true,
   goalProgressEnabled: true,
   importExportCompletionEnabled: true,
+  weeklyAiInsightEnabled: true,
   subscriptionReminderLeadDays: true,
   recurringReminderLeadDays: true,
   budgetThresholdPercent: true,
@@ -185,6 +188,7 @@ const notificationTargetPaths: Record<NotificationType, string> = {
   [NotificationType.MONTHLY_NET_WORTH_SNAPSHOT]: "/dashboard/reports",
   [NotificationType.GOAL_PROGRESS]: "/dashboard/goals",
   [NotificationType.IMPORT_EXPORT_COMPLETION]: "/dashboard/data",
+  [NotificationType.WEEKLY_AI_INSIGHT]: "/dashboard/insights",
 };
 
 function getDefaultPreferenceSnapshot(): NotificationPreferenceSnapshot {
@@ -197,6 +201,7 @@ function getDefaultPreferenceSnapshot(): NotificationPreferenceSnapshot {
     monthlySnapshotEnabled: true,
     goalProgressEnabled: true,
     importExportCompletionEnabled: false,
+    weeklyAiInsightEnabled: true,
     subscriptionReminderLeadDays: DEFAULT_SUBSCRIPTION_REMINDER_DAYS,
     recurringReminderLeadDays: DEFAULT_RECURRING_REMINDER_DAYS,
     budgetThresholdPercent: DEFAULT_BUDGET_THRESHOLD_PERCENT,
@@ -270,6 +275,7 @@ function mapPreferenceRow(
     monthlySnapshotEnabled: row.monthlySnapshotEnabled,
     goalProgressEnabled: row.goalProgressEnabled,
     importExportCompletionEnabled: row.importExportCompletionEnabled,
+    weeklyAiInsightEnabled: row.weeklyAiInsightEnabled,
     subscriptionReminderLeadDays: row.subscriptionReminderLeadDays,
     recurringReminderLeadDays: row.recurringReminderLeadDays,
     budgetThresholdPercent: row.budgetThresholdPercent,
@@ -345,6 +351,7 @@ async function loadNotificationDispatchContext(
         monthlySnapshotEnabled: preference.monthlySnapshotEnabled,
         goalProgressEnabled: preference.goalProgressEnabled,
         importExportCompletionEnabled: preference.importExportCompletionEnabled,
+        weeklyAiInsightEnabled: preference.weeklyAiInsightEnabled,
         subscriptionReminderLeadDays: preference.subscriptionReminderLeadDays,
         recurringReminderLeadDays: preference.recurringReminderLeadDays,
         budgetThresholdPercent: preference.budgetThresholdPercent,
@@ -440,6 +447,8 @@ function getPreferenceFlagForType(
       return preference.goalProgressEnabled;
     case NotificationType.IMPORT_EXPORT_COMPLETION:
       return preference.importExportCompletionEnabled;
+    case NotificationType.WEEKLY_AI_INSIGHT:
+      return preference.weeklyAiInsightEnabled;
     default:
       return false;
   }
@@ -1199,6 +1208,20 @@ export async function sendMonthlySnapshotReadyNotification(
     body: "Your monthly snapshot is ready.",
     targetPath: "/dashboard/reports",
     dedupeKey: `snapshot:${periodKey}`,
+  });
+}
+
+export async function sendWeeklyAiInsightReadyNotification(
+  userId: string,
+  periodKey: string
+) {
+  return sendUserNotification({
+    userId,
+    type: NotificationType.WEEKLY_AI_INSIGHT,
+    title: "FinHealth update",
+    body: "Your weekly insight is ready.",
+    targetPath: "/dashboard/insights",
+    dedupeKey: `weekly-ai-insight:${periodKey}`,
   });
 }
 

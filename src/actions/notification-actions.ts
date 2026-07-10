@@ -35,6 +35,7 @@ const notificationPreferencesSchema = z.object({
   monthlySnapshotEnabled: z.boolean().optional(),
   goalProgressEnabled: z.boolean().optional(),
   importExportCompletionEnabled: z.boolean().optional(),
+  weeklyAiInsightEnabled: z.boolean().optional(),
   subscriptionReminderLeadDays: z.number().int().min(0).max(30).optional(),
   recurringReminderLeadDays: z.number().int().min(0).max(30).optional(),
   budgetThresholdPercent: z.number().int().min(1).max(100).optional(),

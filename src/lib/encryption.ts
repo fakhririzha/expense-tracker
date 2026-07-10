@@ -92,6 +92,7 @@ export const FIELD_CLASSIFICATIONS: Record<string, FieldClassification> = {
   "transaction.referenceNumber": FieldClassification.HIGH,
   "transaction.createdBy": FieldClassification.MEDIUM,
   "transactionSplit.description": FieldClassification.HIGH,
+  "weeklyAiInsight.content": FieldClassification.HIGH,
   
   // TradeHistory model
   "tradeHistory.notes": FieldClassification.HIGH,

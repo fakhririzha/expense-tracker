@@ -57,6 +57,7 @@ model User {
   notificationPreference NotificationPreference?
   notificationEvents NotificationEvent[]
   ocrUsageEvents    OcrUsageEvent[]
+  weeklyAiInsights  WeeklyAiInsight[]
   onboardingState   UserOnboardingState?
 }
 
@@ -856,6 +857,7 @@ enum NotificationType {
   MONTHLY_NET_WORTH_SNAPSHOT
   GOAL_PROGRESS
   IMPORT_EXPORT_COMPLETION
+  WEEKLY_AI_INSIGHT
 }
 
 enum NotificationDeliveryStatus {
@@ -902,6 +904,7 @@ model NotificationPreference {
   monthlySnapshotEnabled       Boolean @default(true)
   goalProgressEnabled          Boolean @default(true)
   importExportCompletionEnabled Boolean @default(false)
+  weeklyAiInsightEnabled       Boolean @default(true)
   subscriptionReminderLeadDays Int     @default(3)
   recurringReminderLeadDays    Int     @default(1)
   budgetThresholdPercent       Int     @default(80)
@@ -911,6 +914,36 @@ model NotificationPreference {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+enum WeeklyAiInsightStatus {
+  PENDING
+  GENERATED
+  FAILED
+}
+
+model WeeklyAiInsight {
+  id                  String                @id @default(cuid())
+  periodStart         DateTime
+  periodEnd           DateTime
+  previousPeriodStart DateTime?
+  previousPeriodEnd   DateTime?
+  status              WeeklyAiInsightStatus @default(PENDING)
+  contentEncrypted    String?               @db.Text
+  model               String?
+  promptVersion       String?
+  failureReason       String?
+  generatedAt         DateTime?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, periodStart])
+  @@index([userId, periodStart])
+  @@index([userId, status, periodStart])
 }
 
 model NotificationEvent {

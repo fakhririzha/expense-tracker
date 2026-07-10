@@ -17,7 +17,7 @@ import { CalendarEvent } from "@/actions/calendar-actions";
 import { CalendarDay, CalendarDayCompact } from "./CalendarDay";
 import { DayEventsSheet } from "./DayEventsSheet";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TransactionType } from "@/generated/prisma/client/client";
 

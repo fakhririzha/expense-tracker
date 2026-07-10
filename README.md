@@ -61,6 +61,9 @@ VAPID_SUBJECT="mailto:you@example.com"
 CHAT_API_ENDPOINT="https://provider.example.com/v1/chat/completions"
 CHAT_API_KEY="replace-with-chat-api-key"
 CHAT_API_MODEL="replace-with-vision-capable-model"
+WEEKLY_INSIGHTS_CHAT_API_ENDPOINT="https://provider.example.com/v1/chat/completions"
+WEEKLY_INSIGHTS_CHAT_API_KEY="replace-with-weekly-insights-chat-api-key"
+WEEKLY_INSIGHTS_CHAT_API_MODEL="replace-with-text-capable-model"
 ```
 
 Optional:
@@ -125,6 +128,9 @@ Notes:
 | `CHAT_API_ENDPOINT` | OpenAI-compatible chat completions endpoint for bill photo scanning | Required for OCR bill scan |
 | `CHAT_API_KEY` | Bearer token for the chat completions endpoint | Required for OCR bill scan |
 | `CHAT_API_MODEL` | Vision-capable chat model used to parse bill photos | Required for OCR bill scan |
+| `WEEKLY_INSIGHTS_CHAT_API_ENDPOINT` | OpenAI-compatible chat completions endpoint for weekly AI insights | Required for weekly AI insights |
+| `WEEKLY_INSIGHTS_CHAT_API_KEY` | Bearer token for weekly AI insight generation | Required for weekly AI insights |
+| `WEEKLY_INSIGHTS_CHAT_API_MODEL` | Text-capable chat model used to create weekly AI insights | Required for weekly AI insights |
 
 ## Current App Surface
 
@@ -158,6 +164,7 @@ Notes:
 - `/api/investments/[id]/trades`
 - `/api/cron/monthly-net-worth-snapshots`
 - `/api/cron/notifications`
+- `/api/cron/weekly-ai-insights`
 - `/api/cron/pegadaian-gold-prices`
 - `/api/cron/recurring`
 

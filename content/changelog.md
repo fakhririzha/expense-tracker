@@ -1,5 +1,10 @@
 # FinHealth Changelog
 
+## v5.3.0
+
+- Added private weekly AI insights that compare your completed week with the week before it when possible, then suggest one practical next step.
+- Weekly briefs appear on Insights, keep a 12-month history, and can send a generic ready notification without exposing financial details in the push message.
+
 ## v5.2.0
 
 - Protected budget names with the same encrypted storage used for account names, while keeping your budget labels available throughout planning, forecasts, insights, imports, and exports.
