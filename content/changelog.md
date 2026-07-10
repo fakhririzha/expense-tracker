@@ -1,5 +1,10 @@
 # FinHealth Changelog
 
+## v5.2.0
+
+- Protected budget names with the same encrypted storage used for account names, while keeping your budget labels available throughout planning, forecasts, insights, imports, and exports.
+- Protected recurring rules, savings goals, subscriptions, and personal assets with encrypted storage for their names and related private details, while keeping them readable throughout the app.
+
 ## v5.1.0
 
 - Added Guided Setup for new and returning users, including a welcome flow, setup goal selection, a dashboard checklist, and a guided tour for the main dashboard and navigation.

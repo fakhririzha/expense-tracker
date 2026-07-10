@@ -8,6 +8,8 @@ import {
   decryptAccountRecords,
   sortAccountsByName,
 } from "@/lib/account-crypto";
+import { decryptBudgetRecords } from "@/lib/budget-crypto";
+import { decryptRequiredCompanion } from "@/lib/encrypted-companion-crypto";
 import prisma from "@/lib/db";
 import { isLiquidAccountType } from "@/lib/account-types";
 import { buildBudgetForecastEvents } from "@/lib/forecasting/budget-forecast-events";
@@ -394,6 +396,7 @@ export async function getCashFlowForecast(
             select: {
               id: true,
               name: true,
+              nameEncrypted: true,
               amount: true,
               currency: true,
               type: true,
@@ -417,6 +420,7 @@ export async function getCashFlowForecast(
             select: {
               id: true,
               name: true,
+              nameEncrypted: true,
               amount: true,
               currency: true,
               billingCycle: true,
@@ -485,6 +489,7 @@ export async function getCashFlowForecast(
             select: {
               id: true,
               name: true,
+              nameEncrypted: true,
               amount: true,
               period: true,
               scope: true,
@@ -500,7 +505,12 @@ export async function getCashFlowForecast(
         : Promise.resolve([]),
     ]);
 
-    const [decryptedFutureTransactions, decryptedSubscriptions, decryptedHistoryTransactions] =
+    const [
+      decryptedFutureTransactions,
+      decryptedRecurringRules,
+      decryptedSubscriptions,
+      decryptedHistoryTransactions,
+    ] =
       await Promise.all([
         Promise.all(
           futureTransactions.map(async (transaction) => ({
@@ -524,8 +534,25 @@ export async function getCashFlowForecast(
           }))
         ),
         Promise.all(
+          recurringRules.map(async (rule) => ({
+            ...rule,
+            name: await decryptRequiredCompanion(
+              session.user.id,
+              "recurringRule.name",
+              rule.nameEncrypted,
+              rule.name
+            ),
+          }))
+        ),
+        Promise.all(
           subscriptions.map(async (subscription) => ({
             ...subscription,
+            name: await decryptRequiredCompanion(
+              session.user.id,
+              "subscription.name",
+              subscription.nameEncrypted,
+              subscription.name
+            ),
             account: subscription.account
               ? {
                   ...subscription.account,
@@ -559,6 +586,7 @@ export async function getCashFlowForecast(
           }))
         ),
       ]);
+    const decryptedBudgets = await decryptBudgetRecords(session.user.id, budgets);
 
     let currentLiquidBalance = 0;
     for (const account of liquidAccounts) {
@@ -607,7 +635,7 @@ export async function getCashFlowForecast(
     );
 
     const recurringEvents = await buildRecurringForecastEvents({
-      rules: recurringRules.map((rule) => ({
+      rules: decryptedRecurringRules.map((rule) => ({
         ...rule,
         account: rule.accountId ? accountMap.get(rule.accountId) ?? null : null,
         category: null,
@@ -693,7 +721,7 @@ export async function getCashFlowForecast(
       const plannedExpenseByCategoryId = new Map<string, number>();
       let uncategorizedPlannedExpense = 0;
 
-      for (const budget of budgets) {
+      for (const budget of decryptedBudgets) {
         const range = getBudgetPeriodRange(budget.period, startDate);
         const categoryIds = budget.categories.map((entry) => entry.categoryId);
         const spent = budget.scope === "CATEGORIES"
@@ -811,7 +839,7 @@ export async function getCashFlowForecast(
 
       variableSpendingEvents.push(
         ...buildBudgetForecastEvents({
-          budgets: budgets.map((budget) => ({
+          budgets: decryptedBudgets.map((budget) => ({
             ...budget,
             categoryIds: budget.categories.map((entry) => entry.categoryId),
           })),

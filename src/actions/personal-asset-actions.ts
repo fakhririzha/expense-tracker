@@ -6,8 +6,13 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { Prisma } from "@/generated/prisma/client/client";
 import prisma from "@/lib/db";
+import {
+  decryptOptionalCompanion,
+  decryptRequiredCompanion,
+  encryptOptionalCompanion,
+  encryptRequiredCompanion,
+} from "@/lib/encrypted-companion-crypto";
 import { getExchangeRate } from "@/lib/finance-service";
-import { decryptUserField, encryptUserField } from "@/lib/user-encryption";
 import {
   PERSONAL_ASSET_CATEGORIES,
   type PersonalAssetCategory,
@@ -72,29 +77,17 @@ function revalidatePersonalAssetPaths(): void {
 
 async function decryptPersonalAsset(
   userId: string,
-  asset: PersonalAssetRecord & {
+  asset: Omit<PersonalAssetRecord, "name" | "notes"> & {
+    name: string | null;
+    notes: string | null;
     nameEncrypted?: string | null;
     notesEncrypted?: string | null;
   }
 ): Promise<PersonalAssetRecord> {
-  let name = asset.name;
-  let notes = asset.notes;
-
-  if (asset.nameEncrypted) {
-    try {
-      name = await decryptUserField(userId, "personalAsset.name", asset.nameEncrypted);
-    } catch {
-      // Keep the required plaintext fallback for existing development data.
-    }
-  }
-
-  if (asset.notesEncrypted) {
-    try {
-      notes = await decryptUserField(userId, "personalAsset.notes", asset.notesEncrypted);
-    } catch {
-      // Keep the plaintext fallback when encrypted data cannot be read.
-    }
-  }
+  const [name, notes] = await Promise.all([
+    decryptRequiredCompanion(userId, "personalAsset.name", asset.nameEncrypted ?? null, asset.name),
+    decryptOptionalCompanion(userId, "personalAsset.notes", asset.notesEncrypted ?? null, asset.notes),
+  ]);
 
   return {
     ...asset,
@@ -253,19 +246,21 @@ export async function createPersonalAsset(data: PersonalAssetInput) {
     const purchaseCurrency = parsed.data.purchaseCurrency
       ? normalizeCurrency(parsed.data.purchaseCurrency)
       : null;
-    const encryptedName = await encryptUserField(
+    const encryptedName = await encryptRequiredCompanion(
       session.user.id,
       "personalAsset.name",
       parsed.data.name
     );
-    const encryptedNotes = parsed.data.notes
-      ? await encryptUserField(session.user.id, "personalAsset.notes", parsed.data.notes)
-      : null;
+    const encryptedNotes = await encryptOptionalCompanion(
+      session.user.id,
+      "personalAsset.notes",
+      parsed.data.notes
+    );
 
     const asset = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const created = await tx.personalAsset.create({
         data: {
-          name: parsed.data.name,
+          name: null,
           nameEncrypted: encryptedName,
           category: parsed.data.category,
           currentValue: parsed.data.currentValue,
@@ -332,7 +327,8 @@ export async function updatePersonalAsset(
     };
 
     if (parsed.data.name !== undefined) {
-      updateData.nameEncrypted = await encryptUserField(
+      updateData.name = null;
+      updateData.nameEncrypted = await encryptRequiredCompanion(
         session.user.id,
         "personalAsset.name",
         parsed.data.name
@@ -341,9 +337,11 @@ export async function updatePersonalAsset(
 
     if (parsed.data.notes !== undefined) {
       updateData.notes = parsed.data.notes ? null : parsed.data.notes;
-      updateData.notesEncrypted = parsed.data.notes
-        ? await encryptUserField(session.user.id, "personalAsset.notes", parsed.data.notes)
-        : null;
+      updateData.notesEncrypted = await encryptOptionalCompanion(
+        session.user.id,
+        "personalAsset.notes",
+        parsed.data.notes
+      );
     }
 
     const asset = await prisma.personalAsset.update({

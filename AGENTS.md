@@ -203,11 +203,11 @@ openssl rand -base64 32
 
 **DebtPlan / DebtPlanItem**: User-owned debt payoff plan with strategy (avalanche, snowball, custom), extra monthly amount, plan currency, and per-liability APR, minimum payment, and optional custom priority.
 
-**Budget**: User-owned budget rules with period, date range, `BudgetScope`, and many-to-many category coverage through `BudgetCategory`. Category-scoped budgets can cover one or more expense categories, while legacy global budgets remain compatible for older all-spending records.
+**Budget**: User-owned budget rules with an encrypted name, period, date range, `BudgetScope`, and many-to-many category coverage through `BudgetCategory`. Category-scoped budgets can cover one or more expense categories, while legacy global budgets remain compatible for older all-spending records.
 
 **BudgetCategory**: Join model connecting budgets to one or more expense categories for scoped budget tracking and category usage counts.
 
-**SavingsGoal**: User-owned goal with target amount, optional target date, encrypted descriptive fields, and one or more linked funding accounts through `SavingsGoalAccount`. Progress is derived live from the sum of linked account balances (converted to the user's main currency); there is no manual current-amount ledger.
+**SavingsGoal**: User-owned goal with encrypted name and description fields, a target amount, optional target date, and one or more linked funding accounts through `SavingsGoalAccount`. Progress is derived live from the sum of linked account balances (converted to the user's main currency); there is no manual current-amount ledger.
 
 **SavingsGoalAccount**: Join model connecting a savings goal to one or more `FinancialAccount` sources (Bank, Cash, Investment, or Deposito).
 
@@ -388,7 +388,16 @@ Use the field names defined in `FIELD_CLASSIFICATIONS` where applicable, such as
 - `transaction.referenceNumber`
 - `transactionSplit.description`
 - `recurringRule.name`
+- `recurringRule.description`
 - `subscription.name`
+- `subscription.provider`
+- `subscription.description`
+- `subscription.cancellationUrl`
+- `subscription.notes`
+- `savingsGoal.name`
+- `savingsGoal.description`
+- `personalAsset.name`
+- `personalAsset.notes`
 - `tradeHistory.notes`
 - `personalAsset.notes`
 - `pushSubscription.endpoint`

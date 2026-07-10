@@ -83,6 +83,9 @@ export const FIELD_CLASSIFICATIONS: Record<string, FieldClassification> = {
   // FinancialAccount model
   "account.name": FieldClassification.MEDIUM,
   "account.description": FieldClassification.HIGH,
+
+  // Budget model
+  "budget.name": FieldClassification.MEDIUM,
   
   // Transaction model
   "transaction.description": FieldClassification.HIGH,

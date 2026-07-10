@@ -5,7 +5,12 @@ import { decryptAccountName } from "@/lib/account-crypto";
 import prisma from "@/lib/db";
 import { isGoalSourceAccountType } from "@/lib/account-types";
 import { computeGoalProgress } from "@/lib/goal-progress";
-import { encryptUserField, decryptUserField } from "@/lib/user-encryption";
+import {
+  decryptOptionalCompanion,
+  decryptRequiredCompanion,
+  encryptOptionalCompanion,
+  encryptRequiredCompanion,
+} from "@/lib/encrypted-companion-crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -89,33 +94,21 @@ async function getUserMainCurrency(userId: string): Promise<string> {
 async function decryptGoalTextFields(
   userId: string,
   goal: {
-    name: string;
+    name: string | null;
     nameEncrypted: string | null;
     description: string | null;
     descriptionEncrypted: string | null;
   }
 ): Promise<{ name: string; description: string | null }> {
-  let name = goal.name;
-  if (goal.nameEncrypted) {
-    try {
-      name = await decryptUserField(userId, "savingsGoal.name", goal.nameEncrypted);
-    } catch {
-      // Fall back to plaintext
-    }
-  }
-
-  let description = goal.description;
-  if (goal.descriptionEncrypted) {
-    try {
-      description = await decryptUserField(
-        userId,
-        "savingsGoal.description",
-        goal.descriptionEncrypted
-      );
-    } catch {
-      // Fall back to plaintext
-    }
-  }
+  const [name, description] = await Promise.all([
+    decryptRequiredCompanion(userId, "savingsGoal.name", goal.nameEncrypted, goal.name),
+    decryptOptionalCompanion(
+      userId,
+      "savingsGoal.description",
+      goal.descriptionEncrypted,
+      goal.description
+    ),
+  ]);
 
   return { name, description };
 }
@@ -157,7 +150,7 @@ async function buildGoalWithProgress(
   userId: string,
   goal: {
     id: string;
-    name: string;
+    name: string | null;
     nameEncrypted: string | null;
     targetAmount: number;
     targetDate: Date | null;
@@ -375,23 +368,16 @@ export async function createGoal(data: GoalInput) {
     const { name, targetAmount, targetDate, icon, color, description } =
       validatedFields.data;
 
-    const encryptedName = name
-      ? await encryptUserField(session.user.id, "savingsGoal.name", name)
-      : null;
-
-    const encryptedDescription = description
-      ? await encryptUserField(
-          session.user.id,
-          "savingsGoal.description",
-          description
-        )
-      : null;
+    const [encryptedName, encryptedDescription] = await Promise.all([
+      encryptRequiredCompanion(session.user.id, "savingsGoal.name", name),
+      encryptOptionalCompanion(session.user.id, "savingsGoal.description", description),
+    ]);
 
     const mainCurrency = await getUserMainCurrency(session.user.id);
 
     const goal = await prisma.savingsGoal.create({
       data: {
-        name,
+        name: null,
         targetAmount,
         targetDate: targetDate || null,
         icon: icon || null,
@@ -463,24 +449,22 @@ export async function updateGoal(id: string, data: Partial<GoalInput>) {
       validatedAccountIds = accountValidation.accountIds;
     }
 
-    let encryptedName: string | null = null;
-    let encryptedDescription: string | null = null;
+    let encryptedName: string | undefined;
+    let encryptedDescription: string | null | undefined;
 
-    if (validatedFields.data.name) {
-      encryptedName = await encryptUserField(
+    if (validatedFields.data.name !== undefined) {
+      encryptedName = await encryptRequiredCompanion(
         session.user.id,
         "savingsGoal.name",
         validatedFields.data.name
       );
     }
     if (validatedFields.data.description !== undefined) {
-      encryptedDescription = validatedFields.data.description
-        ? await encryptUserField(
-            session.user.id,
-            "savingsGoal.description",
-            validatedFields.data.description
-          )
-        : null;
+      encryptedDescription = await encryptOptionalCompanion(
+        session.user.id,
+        "savingsGoal.description",
+        validatedFields.data.description
+      );
     }
 
     const mainCurrency = await getUserMainCurrency(session.user.id);
@@ -500,7 +484,7 @@ export async function updateGoal(id: string, data: Partial<GoalInput>) {
         where: { id },
         data: {
           ...(validatedFields.data.name !== undefined
-            ? { name: validatedFields.data.name, nameEncrypted: encryptedName }
+            ? { name: null, nameEncrypted: encryptedName }
             : {}),
           ...(validatedFields.data.targetAmount !== undefined
             ? { targetAmount: validatedFields.data.targetAmount }

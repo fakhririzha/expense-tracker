@@ -1,0 +1,7 @@
+ALTER TABLE `RecurringRule` MODIFY `name` VARCHAR(191) NULL;
+
+ALTER TABLE `SavingsGoal` MODIFY `name` VARCHAR(191) NULL;
+
+ALTER TABLE `Subscription` MODIFY `name` VARCHAR(191) NULL;
+
+ALTER TABLE `PersonalAsset` MODIFY `name` VARCHAR(191) NULL;

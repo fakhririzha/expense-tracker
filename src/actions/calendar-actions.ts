@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/auth";
+import { decryptRequiredCompanion } from "@/lib/encrypted-companion-crypto";
 import prisma from "@/lib/db";
 import { decryptAccountName } from "@/lib/account-crypto";
 import {
@@ -144,7 +145,12 @@ export async function getCalendarEvents(params: {
     for (const rule of recurringRules) {
       events.push({
         id: `recurring-${rule.id}`,
-        name: rule.name,
+        name: await decryptRequiredCompanion(
+          session.user.id,
+          "recurringRule.name",
+          rule.nameEncrypted,
+          rule.name
+        ),
         amount: rule.amount,
         currency: rule.currency,
         type: rule.type,
@@ -295,7 +301,12 @@ export async function getUpcomingBills(params: {
     for (const rule of recurringRules) {
       events.push({
         id: `recurring-${rule.id}`,
-        name: rule.name,
+        name: await decryptRequiredCompanion(
+          session.user.id,
+          "recurringRule.name",
+          rule.nameEncrypted,
+          rule.name
+        ),
         amount: rule.amount,
         currency: rule.currency,
         type: rule.type,
@@ -443,7 +454,12 @@ export async function getEventsForDate(params: {
     for (const rule of recurringRules) {
       events.push({
         id: `recurring-${rule.id}`,
-        name: rule.name,
+        name: await decryptRequiredCompanion(
+          session.user.id,
+          "recurringRule.name",
+          rule.nameEncrypted,
+          rule.name
+        ),
         amount: rule.amount,
         currency: rule.currency,
         type: rule.type,
