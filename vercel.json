@@ -14,11 +14,15 @@
         },
         {
             "path": "/api/cron/deposito",
-            "schedule": "0 18 * * *"
+            "schedule": "45 17 * * *"
         },
         {
             "path": "/api/cron/pegadaian-gold-prices",
-            "schedule": "45 17 * * *"
+            "schedule": "0 18 * * *"
+        },
+        {
+            "path": "/api/cron/weekly-ai-insights",
+            "schedule": "15 18 * * 1"
         }
     ]
 }

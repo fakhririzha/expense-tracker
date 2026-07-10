@@ -32,6 +32,7 @@ interface PreferenceDraft {
   monthlySnapshotEnabled: boolean;
   goalProgressEnabled: boolean;
   importExportCompletionEnabled: boolean;
+  weeklyAiInsightEnabled: boolean;
   subscriptionReminderLeadDays: number;
   recurringReminderLeadDays: number;
   budgetThresholdPercent: number;
@@ -510,6 +511,25 @@ export function NotificationSettingsPanel() {
                   onCheckedChange={(checked) =>
                     setDraft((current) =>
                       current ? { ...current, goalProgressEnabled: checked } : current
+                    )
+                  }
+                />
+              </label>
+
+              <label className="flex items-center justify-between gap-4 neo-border bg-white p-4">
+                <div>
+                  <p className="font-bold">Weekly AI insights</p>
+                  <p className="text-sm text-muted-foreground">
+                    Notify when your private weekly financial brief is ready.
+                  </p>
+                </div>
+                <Switch
+                  checked={draft.weeklyAiInsightEnabled}
+                  onCheckedChange={(checked) =>
+                    setDraft((current) =>
+                      current
+                        ? { ...current, weeklyAiInsightEnabled: checked }
+                        : current
                     )
                   }
                 />
