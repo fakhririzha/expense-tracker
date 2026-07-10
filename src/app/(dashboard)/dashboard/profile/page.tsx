@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { AccountDeletionDialog } from "@/components/profile/AccountDeletionDialog";
 import { FinancialTargetsForm } from "@/components/profile/FinancialTargetsForm";
+import { GuidedSetupSettingsCard } from "@/components/profile/GuidedSetupSettingsCard";
 import { NotificationSettingsPanel } from "@/components/profile/NotificationSettingsPanel";
 import {
   Card,
@@ -110,6 +111,8 @@ export default async function ProfilePage() {
               />
             </CardContent>
           </Card>
+
+          <GuidedSetupSettingsCard />
 
           <NotificationSettingsPanel />
 

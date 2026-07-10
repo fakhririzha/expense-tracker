@@ -5,13 +5,15 @@ import { MonthlyBudgetStatus } from "@/components/dashboard/MonthlyBudgetStatus"
 import { RetirementProgress } from "@/components/dashboard/RetirementProgress";
 import { WealthHealthCard } from "@/components/dashboard/WealthHealthBadge";
 import { DashboardChangelogDialog } from "@/components/dashboard/DashboardChangelogDialog";
+import { GettingStartedCard } from "@/components/onboarding/GettingStartedCard";
+import { TourLauncherButton } from "@/components/onboarding/TourLauncherButton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getExecutiveMetrics } from "@/lib/executive-service";
 import { getPeriodLabel } from "@/lib/net-worth-period";
 import { getNetWorthSnapshotSummaryForUser } from "@/lib/net-worth-snapshot-service";
+import { ONBOARDING_TOUR_TARGETS } from "@/lib/onboarding/constants";
 import { formatCurrency, formatPercentage } from "@/lib/utils";
 import { endOfMonth, startOfMonth } from "date-fns";
-import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import {
@@ -37,9 +39,7 @@ async function getDashboardChangelog() {
       return null;
     }
 
-    const version = createHash("sha256").update(trimmedMarkdown).digest("hex");
-
-    return { markdown: trimmedMarkdown, version };
+    return { markdown: trimmedMarkdown };
   } catch (error) {
     console.error("Failed to load dashboard changelog", error);
     return null;
@@ -89,25 +89,40 @@ export default async function DashboardPage() {
       : null;
 
   return (
-    <div className="p-6 space-y-6">
-      {changelog ? (
-        <DashboardChangelogDialog
-          markdown={changelog.markdown}
-          version={changelog.version}
-        />
-      ) : null}
-
+    <div
+      data-tour-id={ONBOARDING_TOUR_TARGETS.dashboardRoot}
+      className="p-6 space-y-6"
+    >
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold">Dashboard</h1>
-        <p className="text-muted-foreground">
-          Welcome back, {session.user.name || "User"}
-        </p>
+      <div
+        data-tour-id={ONBOARDING_TOUR_TARGETS.dashboardWelcome}
+        className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between"
+      >
+        <div>
+          <h1 className="text-3xl font-bold">Dashboard</h1>
+          <p className="text-muted-foreground">
+            Welcome back, {session.user.name || "User"}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {changelog ? (
+            <DashboardChangelogDialog markdown={changelog.markdown} />
+          ) : null}
+          <TourLauncherButton />
+        </div>
       </div>
 
+      <GettingStartedCard />
+
       {/* Key Metrics Grid */}
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <Card className="bg-primary text-primary-foreground">
+      <div
+        data-tour-id={ONBOARDING_TOUR_TARGETS.dashboardOverview}
+        className="grid gap-4 md:grid-cols-2 xl:grid-cols-3"
+      >
+        <Card
+          data-tour-id={ONBOARDING_TOUR_TARGETS.dashboardNetWorth}
+          className="bg-primary text-primary-foreground"
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-xl font-bold font-heading">Net Worth</CardTitle>
             <Wallet className="h-6 w-6 opacity-80" />
@@ -138,7 +153,10 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-secondary text-secondary-foreground">
+        <Card
+          data-tour-id={ONBOARDING_TOUR_TARGETS.dashboardInvestmentsSummary}
+          className="bg-secondary text-secondary-foreground"
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-xl font-bold font-heading">
               Total Investments
@@ -171,7 +189,10 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-card">
+        <Card
+          data-tour-id={ONBOARDING_TOUR_TARGETS.dashboardCashSavings}
+          className="bg-card"
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-xl font-bold font-heading">Cash & Savings</CardTitle>
             <PiggyBank className="h-6 w-6 text-foreground opacity-80" />
@@ -186,7 +207,10 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-accent text-accent-foreground">
+        <Card
+          data-tour-id={ONBOARDING_TOUR_TARGETS.dashboardPersonalAssets}
+          className="bg-accent text-accent-foreground"
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-xl font-bold font-heading">
               Personal Assets
@@ -203,7 +227,10 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-card">
+        <Card
+          data-tour-id={ONBOARDING_TOUR_TARGETS.dashboardReceivables}
+          className="bg-card"
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-xl font-bold font-heading">
               Loans Receivable
@@ -220,7 +247,10 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-card">
+        <Card
+          data-tour-id={ONBOARDING_TOUR_TARGETS.dashboardSubscriptions}
+          className="bg-card"
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-xl font-bold font-heading">
               Subscriptions
@@ -246,7 +276,10 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-destructive text-destructive-foreground">
+        <Card
+          data-tour-id={ONBOARDING_TOUR_TARGETS.dashboardDebt}
+          className="bg-destructive text-destructive-foreground"
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-xl font-bold font-heading">Total Debt</CardTitle>
             <CreditCard className="h-6 w-6 opacity-80" />
@@ -265,7 +298,10 @@ export default async function DashboardPage() {
       </div>
 
       {/* Health Score and Retirement Progress */}
-      <div className="grid gap-6 md:grid-cols-2">
+      <div
+        data-tour-id={ONBOARDING_TOUR_TARGETS.dashboardHealthRetirement}
+        className="grid gap-6 md:grid-cols-2"
+      >
         {metrics.healthTier && metrics.debtToWealthRatio !== null ? (
           <WealthHealthCard
             tier={metrics.healthTier}
@@ -301,7 +337,10 @@ export default async function DashboardPage() {
       </div>
 
       {/* Monthly Cash Flow */}
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div
+        data-tour-id={ONBOARDING_TOUR_TARGETS.dashboardCashFlow}
+        className="grid gap-4 md:grid-cols-2 xl:grid-cols-3"
+      >
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-xl font-bold font-heading">
@@ -345,7 +384,7 @@ export default async function DashboardPage() {
 
       {/* Investment Performance Summary */}
       {metrics.portfolioSummary ? (
-        <Card>
+        <Card data-tour-id={ONBOARDING_TOUR_TARGETS.dashboardInvestmentPerformance}>
           <CardHeader>
             <CardTitle className="text-xl font-bold font-heading">Investment Performance</CardTitle>
           </CardHeader>
@@ -399,7 +438,7 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
       ) : (
-        <Card>
+        <Card data-tour-id={ONBOARDING_TOUR_TARGETS.dashboardInvestmentPerformance}>
           <CardHeader>
             <CardTitle className="text-xl font-bold font-heading">
               Investment Performance

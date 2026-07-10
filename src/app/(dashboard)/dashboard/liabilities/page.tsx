@@ -1,10 +1,13 @@
 import { Metadata } from "next";
+import Link from "next/link";
 import { DebtPayoffPlanner } from "@/components/liability/DebtPayoffPlanner";
 import { LiabilityPaymentDialog } from "@/components/liability/LiabilityPaymentDialog";
 import { LiabilityPaymentHistory } from "@/components/liability/LiabilityPaymentHistory";
+import { ContextualEmptyState } from "@/components/onboarding/ContextualEmptyState";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getAccountsSummary } from "@/actions/account-actions";
-import { CreditCard, Landmark, AlertCircle } from "lucide-react";
+import { CreditCard, Landmark } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Liabilities | Expense Tracker",
@@ -94,18 +97,16 @@ export default async function LiabilitiesPage() {
 
       {/* No liabilities warning */}
       {!hasLiabilities && (
-        <Card className="border-yellow-200 bg-yellow-50 dark:border-yellow-900/50 dark:bg-yellow-900/20 pt-0">
-          <CardContent className="flex items-start gap-3 pt-6">
-            <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5" />
-            <div>
-              <p className="font-medium text-yellow-800 dark:text-yellow-200">No liability accounts found</p>
-              <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
-                Create a loan or credit card account first to start making payments.
-                Go to Accounts to add a new liability account.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+        <ContextualEmptyState
+          title="Add your first debt"
+          description="Add debts to unlock payment audits and payoff planning."
+          icon={<CreditCard className="h-5 w-5" />}
+          action={
+            <Button asChild>
+              <Link href="/dashboard/accounts">Open accounts</Link>
+            </Button>
+          }
+        />
       )}
 
       {/* Debt payoff planner */}

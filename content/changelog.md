@@ -1,5 +1,13 @@
 # FinHealth Changelog
 
+## v5.1.0
+
+- Added Guided Setup for new and returning users, including a welcome flow, setup goal selection, a dashboard checklist, and a guided tour for the main dashboard and navigation.
+- Added contextual empty states across key finance pages so first-time setup steps now explain what to add next and link to the right creation flow.
+- Added Guided Setup controls in Profile so you can restart the welcome flow, replay the dashboard tour, or show the checklist again without resetting your financial data.
+- Kept existing users unblocked by treating missing setup progress safely and by avoiding repeated prompts after setup is skipped or completed.
+- Fixed the dashboard tour so selecting Finish closes the tour cleanly and returns control to the dashboard immediately.
+
 ## v5.0.1
 
 - Compressed bill photos before scanning to reduce OCR upload size, aiming for smaller previews while keeping receipts readable.

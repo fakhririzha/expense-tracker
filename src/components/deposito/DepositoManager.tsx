@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import {
-  AlertCircle,
   Clock3,
   Landmark,
   Lock,
@@ -13,6 +12,7 @@ import {
 import { CloseDepositoDialog } from "@/components/deposito/CloseDepositoDialog";
 import { EditDepositoDialog } from "@/components/deposito/EditDepositoDialog";
 import { OpenDepositoDialog } from "@/components/deposito/OpenDepositoDialog";
+import { ContextualEmptyState } from "@/components/onboarding/ContextualEmptyState";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -186,19 +186,12 @@ export function DepositoManager() {
       </div>
 
       {activeDepositos.length === 0 && maturedDepositos.length === 0 && !summaryLoading ? (
-        <Card className="border-yellow-200 bg-yellow-50 pt-0 dark:border-yellow-900/50 dark:bg-yellow-900/20">
-          <CardContent className="flex items-start gap-3 pt-6">
-            <AlertCircle className="mt-0.5 h-5 w-5 text-yellow-600" />
-            <div>
-              <p className="font-medium text-yellow-800 dark:text-yellow-200">
-                No active deposito records found
-              </p>
-              <p className="mt-1 text-sm text-yellow-700 dark:text-yellow-300">
-                Open a deposito from a bank or cash account to start automatic interest tracking.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+        <ContextualEmptyState
+          title="Open your first deposito"
+          description="Track locked balances and daily interest processing."
+          icon={<Landmark className="h-5 w-5" />}
+          action={<OpenDepositoDialog />}
+        />
       ) : null}
 
       <Card>

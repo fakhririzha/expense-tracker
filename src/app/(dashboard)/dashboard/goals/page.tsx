@@ -5,6 +5,7 @@ import { AddGoalDialog } from "@/components/goals/AddGoalDialog";
 import { EditGoalDialog } from "@/components/goals/EditGoalDialog";
 import { GoalCard } from "@/components/goals/GoalCard";
 import { GoalSummary } from "@/components/goals/GoalSummary";
+import { ContextualEmptyState } from "@/components/onboarding/ContextualEmptyState";
 import {
   Select,
   SelectContent,
@@ -12,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2 } from "lucide-react";
+import { Loader2, Target } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useGoalsSummary, useGoalsStats } from "@/hooks/useGoalQueries";
 
@@ -136,7 +137,14 @@ export default function GoalsPage() {
         </Select>
       </div>
 
-      {sortedGoals.length === 0 ? (
+      {(goals as GoalWithProgress[]).length === 0 ? (
+        <ContextualEmptyState
+          title="Set your first savings target"
+          description="Set a savings target and track your progress over time."
+          icon={<Target className="h-5 w-5" />}
+          action={<AddGoalDialog onSuccess={() => {}} />}
+        />
+      ) : sortedGoals.length === 0 ? (
         <div className="text-center py-12">
           <div className="text-6xl mb-4">🎯</div>
           <h3 className="text-lg font-medium">No goals found</h3>

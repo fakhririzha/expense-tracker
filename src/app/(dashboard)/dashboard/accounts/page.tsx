@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import { AddAccountDialog } from "@/components/accounts/AddAccountDialog";
 import { EditAccountDialog } from "@/components/accounts/EditAccountDialog";
+import { ContextualEmptyState } from "@/components/onboarding/ContextualEmptyState";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -345,6 +346,7 @@ export default function AccountsPage() {
     setEditingAccount(account);
     setIsEditDialogOpen(true);
   };
+  const hasNoAccounts = !isLoading && accountList.length === 0;
 
   return (
     <div className="space-y-6">
@@ -425,6 +427,13 @@ export default function AccountsPage() {
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
         </div>
+      ) : hasNoAccounts ? (
+        <ContextualEmptyState
+          title="Add your first account"
+          description="Start by adding your main bank, cash, or investment account."
+          icon={<Wallet className="h-5 w-5" />}
+          action={<AddAccountDialog onSuccess={() => {}} />}
+        />
       ) : (
         <>
           <AccountTableSection

@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import type { SubscriptionListItem } from "@/actions/subscription-actions";
 import { UpcomingBankPressureAlert } from "@/components/alerts/UpcomingBankPressureAlert";
+import { ContextualEmptyState } from "@/components/onboarding/ContextualEmptyState";
 import { SubscriptionDetailDrawer } from "@/components/subscriptions/SubscriptionDetailDrawer";
 import { SubscriptionFormDialog } from "@/components/subscriptions/SubscriptionFormDialog";
 import { SubscriptionPageHeader } from "@/components/subscriptions/SubscriptionPageHeader";
@@ -86,6 +87,13 @@ export function SubscriptionManager() {
               <div className="flex h-64 items-center justify-center">
                 <Loader2 className="h-8 w-8 animate-spin" />
               </div>
+            ) : statusFilter === "ALL" && subscriptions.length === 0 ? (
+              <ContextualEmptyState
+                title="Add your first subscription"
+                description="Track recurring charges before they surprise you."
+                embedded
+                action={<SubscriptionFormDialog mode="create" />}
+              />
             ) : (
               <SubscriptionTable
                 subscriptions={subscriptions as SubscriptionListItem[]}

@@ -1,5 +1,8 @@
 "use client";
 
+import Link from "next/link";
+
+import { ContextualEmptyState } from "@/components/onboarding/ContextualEmptyState";
 import { DateRangePicker } from "@/components/reports/DateRangePicker";
 import { SpendingTrendsChart } from "@/components/reports/SpendingTrendsChart";
 import { CategoryBreakdownChart } from "@/components/reports/CategoryBreakdownChart";
@@ -25,6 +28,7 @@ import {
   useIncomeVsExpense,
   useReportMonthlySummary,
 } from "@/hooks/useReportQueries";
+import { useOnboardingProgress } from "@/hooks/useOnboardingQueries";
 import {
   useNetWorthSnapshotSummary,
   useNetWorthTrend,
@@ -42,6 +46,7 @@ export default function ReportsPage() {
   const [groupBy, setGroupBy] = useState<"day" | "week" | "month">("week");
   const { mainCurrency } = useCurrency();
   const [activeTab, setActiveTab] = useState("overview");
+  const { data: onboardingProgress } = useOnboardingProgress();
 
   const hasDateRange = !!(dateRange?.from && dateRange?.to);
   const startDate = useMemo(() => dateRange?.from ?? new Date(), [dateRange?.from]);
@@ -100,6 +105,13 @@ export default function ReportsPage() {
   const totalIncome = incomeCategories.reduce((sum, c) => sum + c.amount, 0);
   const netFlow = totalIncome - totalExpenses;
   const latestSnapshot = netWorthSummary?.latestSnapshot ?? null;
+  const needsReportPrerequisites =
+    onboardingProgress?.items.some(
+      (item) =>
+        (item.id === "create_first_account" ||
+          item.id === "add_first_transaction") &&
+        item.status !== "complete"
+    ) ?? false;
 
   return (
     <div className="container mx-auto py-6 space-y-6">
@@ -121,6 +133,23 @@ export default function ReportsPage() {
           </div>
         ) : null}
       </div>
+
+      {needsReportPrerequisites ? (
+        <ContextualEmptyState
+          title="Build your report foundation"
+          description="Reports become useful after you add accounts and transactions."
+          action={
+            <>
+              <Button asChild>
+                <Link href="/dashboard/accounts">Add accounts</Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link href="/dashboard/transactions">Add transactions</Link>
+              </Button>
+            </>
+          }
+        />
+      ) : null}
 
       {/* Loading State */}
       {isLoading && (

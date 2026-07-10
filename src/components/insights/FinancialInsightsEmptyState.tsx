@@ -1,15 +1,16 @@
 import Link from "next/link";
 
+import { ContextualEmptyState } from "@/components/onboarding/ContextualEmptyState";
 import { Button } from "@/components/ui/button";
 
 export function FinancialInsightsEmptyState() {
   return (
-    <div className="rounded-xl border border-dashed bg-muted/30 p-6 text-center">
-      <p className="text-base font-semibold">No urgent insights right now</p>
-      <p className="mt-2 text-sm text-muted-foreground">
-        Add more activity to unlock richer guidance across budgets, goals, and reports.
-      </p>
-      <div className="mt-4 flex flex-wrap justify-center gap-2">
+    <ContextualEmptyState
+      title="No insights yet"
+      description="Insights appear after FinHealth has enough activity to analyze."
+      embedded
+      action={
+        <>
         <Button asChild size="sm" variant="outline">
           <Link href="/dashboard/transactions">Add transactions</Link>
         </Button>
@@ -19,7 +20,8 @@ export function FinancialInsightsEmptyState() {
         <Button asChild size="sm" variant="outline">
           <Link href="/dashboard/goals">Open goals</Link>
         </Button>
-      </div>
-    </div>
+        </>
+      }
+    />
   );
 }
