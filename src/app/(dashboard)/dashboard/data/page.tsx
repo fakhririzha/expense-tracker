@@ -20,18 +20,17 @@ import {
   Layers,
   Boxes,
 } from "lucide-react";
-import { useState } from "react";
 
 const exportCards = [
   {
     title: "Transactions",
-    description: "Export all your income, expenses, and transfers",
+    description: "Export your full transaction history for analysis",
     icon: Table,
     type: "transactions" as const,
   },
   {
     title: "Accounts",
-    description: "Export your bank accounts, cash, and cards",
+    description: "Export your financial account snapshot",
     icon: Wallet,
     type: "accounts" as const,
   },
@@ -68,37 +67,30 @@ const exportCards = [
 ];
 
 /**
- * Renders the Data Management page for exporting, importing, and downloading CSV templates.
+ * Renders the Data Management page for analysis exports, financial archives, and transaction CSV imports.
  *
- * The page provides: an Export Data section with per-entity CSV exports and a full JSON backup; an
- * Import Data section with a transactions importer and downloadable CSV templates (transactions,
- * accounts, budgets) that show download state; and a concise Import/Export guide describing formats
- * and requirements.
+ * The page provides per-entity CSV exports, a non-restorable financial data archive, one supported
+ * transaction template, and a transaction import flow.
  *
  * @returns The React element for the Data Management UI.
  */
 export default function DataManagementPage() {
-  const [isDownloadingTemplate, setIsDownloadingTemplate] = useState<string | null>(null);
-
-  const handleDownloadTemplate = async (type: "transactions" | "accounts" | "budgets") => {
-    setIsDownloadingTemplate(type);
+  const handleDownloadTemplate = async () => {
     try {
-      const template = await getImportTemplate(type);
+      const template = await getImportTemplate();
       
       // Create and trigger download
       const blob = new Blob([template], { type: "text/csv" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${type}-template.csv`;
+      a.download = "transactions-template.csv";
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error("Failed to download template:", error);
-    } finally {
-      setIsDownloadingTemplate(null);
     }
   };
 
@@ -117,7 +109,7 @@ export default function DataManagementPage() {
         <div>
           <h2 className="text-xl font-semibold">Export Data</h2>
           <p className="text-sm text-muted-foreground">
-            Download your data in CSV format for backup or analysis
+            Download CSV snapshots for spreadsheet analysis
           </p>
         </div>
 
@@ -151,25 +143,23 @@ export default function DataManagementPage() {
           <CardHeader>
             <div className="flex items-center gap-2">
               <Package className="h-5 w-5 text-primary" />
-              <CardTitle>Full Backup</CardTitle>
+            <CardTitle>Financial Data Archive</CardTitle>
             </div>
             <CardDescription>
-              Export all your data as a JSON file for complete backup
+              Download a complete JSON archive of your financial records
             </CardDescription>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground mb-4">
-              This includes all your accounts, transactions, budgets, categories,
-              investments, personal assets, valuation histories, recurring rules,
-              and savings goals. Perfect for backup
-              or migrating to another device.
+              This includes your financial records and history in a readable JSON
+              archive. It is not currently restorable in FinHealth.
             </p>
             <ExportDialog
               defaultType="all"
               trigger={
                 <Button>
                   <Package className="mr-2 h-4 w-4" />
-                  Export All Data
+                  Download Archive
                 </Button>
               }
             />
@@ -224,51 +214,22 @@ export default function DataManagementPage() {
                 <FileText className="h-5 w-5 text-primary" />
                 <CardTitle>CSV Templates</CardTitle>
               </div>
-              <CardDescription>
-                Download templates for proper formatting
-              </CardDescription>
+              <CardDescription>Download the supported transaction format</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <p className="text-sm text-muted-foreground">
-                Use these templates to ensure your CSV files are formatted correctly
-                for import.
+                Use the transaction template to match FinHealth&apos;s supported import
+                columns.
               </p>
               <div className="space-y-2">
                 <Button
                   variant="outline"
                   size="sm"
                   className="w-full justify-start"
-                  onClick={() => handleDownloadTemplate("transactions")}
-                  disabled={isDownloadingTemplate !== null}
+                  onClick={handleDownloadTemplate}
                 >
                   <Download className="mr-2 h-4 w-4" />
-                  {isDownloadingTemplate === "transactions"
-                    ? "Downloading..."
-                    : "Transactions Template"}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full justify-start"
-                  onClick={() => handleDownloadTemplate("accounts")}
-                  disabled={isDownloadingTemplate !== null}
-                >
-                  <Download className="mr-2 h-4 w-4" />
-                  {isDownloadingTemplate === "accounts"
-                    ? "Downloading..."
-                    : "Accounts Template"}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full justify-start"
-                  onClick={() => handleDownloadTemplate("budgets")}
-                  disabled={isDownloadingTemplate !== null}
-                >
-                  <Download className="mr-2 h-4 w-4" />
-                  {isDownloadingTemplate === "budgets"
-                    ? "Downloading..."
-                    : "Budgets Template"}
+                  Transactions Template
                 </Button>
               </div>
             </CardContent>
@@ -291,7 +252,7 @@ export default function DataManagementPage() {
                 <li>• CSV files with headers</li>
                 <li>• Dates in ISO format (YYYY-MM-DD)</li>
                 <li>• Amounts as numbers without currency symbols</li>
-                <li>• Full backup exports as JSON</li>
+                <li>• Financial data archives are JSON and cannot be restored in-app</li>
               </ul>
             </div>
             <div>
@@ -300,7 +261,7 @@ export default function DataManagementPage() {
                 <li>• CSV file with header row</li>
                 <li>• Required: Date, Amount, Type, Account</li>
                 <li>• Type must be: INCOME, EXPENSE, or TRANSFER</li>
-                <li>• Account names must match existing accounts</li>
+                <li>• Account names must match existing accounts, or you can create Bank accounts during import</li>
               </ul>
             </div>
           </div>

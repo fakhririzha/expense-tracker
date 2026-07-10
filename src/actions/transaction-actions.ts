@@ -398,13 +398,41 @@ const transactionSchema = z
 
 export type TransactionInput = z.infer<typeof transactionSchema>;
 
-export async function createTransaction(data: TransactionInput) {
+type CreateTransactionResult =
+  | {
+      success: true;
+      data: Awaited<ReturnType<typeof prisma.transaction.create>>;
+    }
+  | { success: false; error: string };
+
+export async function createTransaction(
+  data: TransactionInput
+): Promise<CreateTransactionResult> {
   try {
     const authResult = await assertAuthenticatedUser();
     if (!authResult.success) {
       return { success: false, error: authResult.error };
     }
 
+    const result = await createTransactionForUser(authResult.userId, data);
+    if (result.success) {
+      revalidatePath("/dashboard");
+      revalidatePath("/dashboard/transactions");
+      revalidatePath("/dashboard/accounts");
+    }
+
+    return result;
+  } catch (error) {
+    console.error("Create transaction error:", error);
+    return { success: false, error: "Failed to create transaction" };
+  }
+}
+
+async function createTransactionForUser(
+  userId: string,
+  data: TransactionInput
+): Promise<CreateTransactionResult> {
+  try {
     const validatedFields = transactionSchema.safeParse(data);
     if (!validatedFields.success) {
       return {
@@ -413,7 +441,6 @@ export async function createTransaction(data: TransactionInput) {
       };
     }
 
-    const userId = authResult.userId;
     const { amount, type, accountId, toAccountId, splits, ...rest } = validatedFields.data;
     const categoryId = sanitizeOptionalForeignKey(rest.categoryId);
     const recurringRuleId = sanitizeOptionalForeignKey(rest.recurringRuleId);
@@ -603,10 +630,6 @@ export async function createTransaction(data: TransactionInput) {
 
       return transaction;
     });
-
-    revalidatePath("/dashboard");
-    revalidatePath("/dashboard/transactions");
-    revalidatePath("/dashboard/accounts");
 
     return { success: true, data: result };
   } catch (error) {
