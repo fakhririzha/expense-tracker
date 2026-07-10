@@ -1,7 +1,7 @@
 import { getExecutiveMetrics } from "@/lib/executive-service";
 import { getBudgetSpendingSummary } from "@/actions/budget-actions";
 import { useQuery } from "@tanstack/react-query";
-import { endOfMonth, startOfMonth } from "date-fns";
+import { startOfMonth } from "date-fns";
 
 export interface SidebarMetricsSnapshot {
   retirementTarget: number | null;
@@ -34,11 +34,10 @@ export function useSidebarMetrics() {
     queryKey: sidebarMetricsKeys.currentMonth(year, month),
     queryFn: async (): Promise<SidebarMetricsSnapshot> => {
       const startDate = startOfMonth(now);
-      const endDate = endOfMonth(now);
 
       const [metricsResult, monthSummaryResult] = await Promise.allSettled([
         getExecutiveMetrics(),
-        getBudgetSpendingSummary(startDate, endDate),
+        getBudgetSpendingSummary(startDate, now),
       ]);
 
       const metrics =

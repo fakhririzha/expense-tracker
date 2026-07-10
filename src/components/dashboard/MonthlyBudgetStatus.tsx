@@ -21,16 +21,16 @@ export function MonthlyBudgetStatus({
       <Card className="bg-secondary">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-xl font-bold font-heading">
-            Monthly Budget
+            Overall Spending Limit
           </CardTitle>
           <WalletCards className="h-6 w-6 opacity-80" />
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm font-bold">
-            Set a monthly budget target to track this month&apos;s spending.
+            Set an overall monthly spending limit to track this month&apos;s spending.
           </p>
           <Button asChild size="sm" variant="outline">
-            <Link href="/dashboard/profile">Set Budget Target</Link>
+            <Link href="/dashboard/profile">Set Spending Limit</Link>
           </Button>
         </CardContent>
       </Card>
@@ -42,7 +42,7 @@ export function MonthlyBudgetStatus({
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-xl font-bold font-heading">
-            Monthly Budget
+            Overall Spending Limit
           </CardTitle>
           <AlertTriangle className="h-6 w-6 text-destructive" />
         </CardHeader>
@@ -63,7 +63,7 @@ export function MonthlyBudgetStatus({
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-xl font-bold font-heading">
-          Monthly Budget
+          Overall Spending Limit
         </CardTitle>
         <WalletCards
           className={`h-6 w-6 ${

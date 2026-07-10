@@ -30,7 +30,7 @@ const financialTargetsFormSchema = z.object({
     .nullable(),
   monthlyBudget: z
     .number()
-    .positive("Monthly budget target must be positive")
+    .positive("Overall monthly spending limit must be positive")
     .nullable(),
 });
 
@@ -100,7 +100,7 @@ export function FinancialTargetsForm({
           name="monthlyBudget"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Monthly Budget Target</FormLabel>
+              <FormLabel>Overall Monthly Spending Limit</FormLabel>
               <FormControl>
                 <MoneyInput
                   placeholder="e.g. 10000000"
@@ -113,8 +113,9 @@ export function FinancialTargetsForm({
                 />
               </FormControl>
               <FormDescription>
-                Your total spending limit for each calendar month in{" "}
-                {mainCurrency}. Leave blank to remove it.
+                Your guardrail across all spending for each calendar month in{" "}
+                {mainCurrency}. Category budgets are managed separately. Leave
+                blank to remove it.
               </FormDescription>
               <FormMessage />
             </FormItem>

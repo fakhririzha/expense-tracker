@@ -56,14 +56,14 @@ export function BudgetVsActualChart({ data }: BudgetVsActualChartProps) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Budget vs Actual</CardTitle>
+          <CardTitle>Category Budget vs Actual</CardTitle>
           <CardDescription>
-            Compare your budgeted amounts with actual spending
+            Compare category limits with actual spending
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col items-center justify-center py-12">
           <p className="text-muted-foreground text-center">
-            No budget data available. Create budgets to see the comparison chart.
+            No category budget data available. Create category budgets to see the comparison chart.
           </p>
         </CardContent>
       </Card>
@@ -73,9 +73,9 @@ export function BudgetVsActualChart({ data }: BudgetVsActualChartProps) {
   return (
     <Card>
         <CardHeader>
-          <CardTitle>Budget vs Actual</CardTitle>
+          <CardTitle>Category Budget vs Actual</CardTitle>
           <CardDescription>
-            Compare your budgeted amounts with actual spending by budget
+            Compare category limits with actual spending by budget rule
           </CardDescription>
         </CardHeader>
       <CardContent>

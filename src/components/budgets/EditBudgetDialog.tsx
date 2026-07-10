@@ -185,9 +185,9 @@ export function EditBudgetDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-125 max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Edit Budget</DialogTitle>
+          <DialogTitle>Edit Category Budget</DialogTitle>
           <DialogDescription>
-            Update the budget details.
+            Update this category spending limit.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -199,7 +199,7 @@ export function EditBudgetDialog({
                 <FormItem>
                   <FormLabel>Name</FormLabel>
                   <FormControl>
-                    <Input placeholder="Groceries Budget" {...field} />
+                    <Input placeholder="Groceries" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -277,7 +277,7 @@ export function EditBudgetDialog({
                     </p>
                   ) : (
                     <p className="text-xs text-muted-foreground">
-                      Select one or more expense categories for this budget.
+                      Select one or more expense categories for this category budget.
                     </p>
                   )}
                   <FormMessage />

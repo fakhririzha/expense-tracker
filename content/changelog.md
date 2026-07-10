@@ -1,5 +1,11 @@
 # FinHealth Changelog
 
+## v5.4.0
+
+- Added a Monthly Money Plan to the dashboard so you can see spending room, known upcoming commitments, projected cash pressure, and the three most important financial signals in one place.
+- Clarified the difference between your overall monthly spending limit and category budgets, including clearer setup, progress, and summary language throughout the app.
+- Simplified the dashboard's financial position into net worth, cash runway, total debt, and savings rate so urgent decisions appear before supporting metrics.
+
 ## v5.3.0
 
 - Added private weekly AI insights that compare your completed week with the week before it when possible, then suggest one practical next step.

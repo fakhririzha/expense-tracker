@@ -64,6 +64,12 @@ export interface BudgetWithProgress extends BudgetDetails {
   projectedSpending: number;
 }
 
+export interface BudgetsSummaryData {
+  budgets: BudgetWithProgress[];
+  overallMonthlySpendingLimit: number | null;
+  currency: string;
+}
+
 interface BudgetAccountSummary {
   id: string;
   name: string;
@@ -692,24 +698,48 @@ export async function getBudgetProgress(
   }
 }
 
-export async function getBudgetsSummary() {
+export async function getBudgetsSummary(): Promise<{
+  success: boolean;
+  data?: BudgetsSummaryData;
+  error?: string;
+}> {
   try {
     const session = await auth();
     if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized", data: [] as BudgetWithProgress[] };
+      return { success: false, error: "Unauthorized" };
     }
 
-    const budgetRecords = await prisma.budget.findMany({
-      where: {
-        userId: session.user.id,
-        isActive: true,
-      },
-      select: budgetSelect,
-      orderBy: { createdAt: "desc" },
-    });
+    const [user, budgetRecords] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: {
+          mainCurrency: true,
+          monthlyBudget: true,
+        },
+      }),
+      prisma.budget.findMany({
+        where: {
+          userId: session.user.id,
+          isActive: true,
+        },
+        select: budgetSelect,
+        orderBy: { createdAt: "desc" },
+      }),
+    ]);
+
+    if (!user) {
+      return { success: false, error: "User not found" };
+    }
 
     if (budgetRecords.length === 0) {
-      return { success: true, data: [] as BudgetWithProgress[] };
+      return {
+        success: true,
+        data: {
+          budgets: [],
+          overallMonthlySpendingLimit: user.monthlyBudget,
+          currency: user.mainCurrency,
+        },
+      };
     }
 
     const budgets = await Promise.all(
@@ -753,10 +783,17 @@ export async function getBudgetsSummary() {
       return buildBudgetProgressRecord(budget, spent, now);
     });
 
-    return { success: true, data: budgetsWithProgress };
+    return {
+      success: true,
+      data: {
+        budgets: budgetsWithProgress,
+        overallMonthlySpendingLimit: user.monthlyBudget,
+        currency: user.mainCurrency,
+      },
+    };
   } catch (error) {
     console.error("Get budgets summary error:", error);
-    return { success: false, error: "Failed to fetch budgets summary", data: [] as BudgetWithProgress[] };
+    return { success: false, error: "Failed to fetch budgets summary" };
   }
 }
 

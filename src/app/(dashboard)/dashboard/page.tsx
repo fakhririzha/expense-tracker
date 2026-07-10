@@ -1,7 +1,6 @@
-import { getBudgetSpendingSummary } from "@/actions/budget-actions";
-import { getSubscriptionSummary } from "@/actions/subscription-actions";
+import { getDashboardMoneyPlan } from "@/actions/dashboard-money-plan-actions";
 import { auth } from "@/auth";
-import { MonthlyBudgetStatus } from "@/components/dashboard/MonthlyBudgetStatus";
+import { DashboardMoneyPlan } from "@/components/dashboard/DashboardMoneyPlan";
 import { RetirementProgress } from "@/components/dashboard/RetirementProgress";
 import { WealthHealthCard } from "@/components/dashboard/WealthHealthBadge";
 import { DashboardChangelogDialog } from "@/components/dashboard/DashboardChangelogDialog";
@@ -12,21 +11,10 @@ import { getExecutiveMetrics } from "@/lib/executive-service";
 import { getPeriodLabel } from "@/lib/net-worth-period";
 import { getNetWorthSnapshotSummaryForUser } from "@/lib/net-worth-snapshot-service";
 import { ONBOARDING_TOUR_TARGETS } from "@/lib/onboarding/constants";
-import { formatCurrency, formatPercentage } from "@/lib/utils";
-import { endOfMonth, startOfMonth } from "date-fns";
+import { formatCurrency } from "@/lib/utils";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import {
-    BarChart3,
-    Boxes,
-    CreditCard,
-    HandCoins,
-    PiggyBank,
-    Repeat2,
-    TrendingDown,
-    TrendingUp,
-    Wallet,
-} from "lucide-react";
+import { CreditCard, PiggyBank, TrendingUp, Wallet } from "lucide-react";
 import { redirect } from "next/navigation";
 
 async function getDashboardChangelog() {
@@ -47,8 +35,7 @@ async function getDashboardChangelog() {
 }
 
 /**
- * Render the authenticated user's dashboard, showing executive metrics, monthly cash flow,
- * health and retirement progress, and investment performance summaries.
+ * Render the authenticated user's action-led dashboard and financial position.
  *
  * @returns The dashboard page React element; may trigger a redirect to `/login` when the user is not authenticated or render an error message if executive metrics fail to load.
  */
@@ -58,17 +45,14 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  const now = new Date();
   const [
     metricsResult,
-    currentMonthSummary,
-    subscriptionSummaryResult,
+    moneyPlanResult,
     changelog,
     snapshotSummary,
   ] = await Promise.all([
     getExecutiveMetrics(),
-    getBudgetSpendingSummary(startOfMonth(now), endOfMonth(now)),
-    getSubscriptionSummary(),
+    getDashboardMoneyPlan(),
     getDashboardChangelog(),
     getNetWorthSnapshotSummaryForUser(session.user.id, 12),
   ]);
@@ -83,10 +67,6 @@ export default async function DashboardPage() {
 
   const metrics = metricsResult.data;
   const currency = metrics.displayCurrency;
-  const currentMonthExpenses =
-    currentMonthSummary.success && currentMonthSummary.data
-      ? currentMonthSummary.data.totalSpent
-      : null;
 
   return (
     <div
@@ -114,188 +94,101 @@ export default async function DashboardPage() {
 
       <GettingStartedCard />
 
-      {/* Key Metrics Grid */}
-      <div
+      {moneyPlanResult.success && moneyPlanResult.data ? (
+        <DashboardMoneyPlan plan={moneyPlanResult.data} />
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>Monthly Money Plan</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground">
+            {moneyPlanResult.error || "Your monthly money plan is unavailable right now."}
+          </CardContent>
+        </Card>
+      )}
+
+      <section
         data-tour-id={ONBOARDING_TOUR_TARGETS.dashboardOverview}
-        className="grid gap-4 md:grid-cols-2 xl:grid-cols-3"
+        className="space-y-4"
       >
-        <Card
-          data-tour-id={ONBOARDING_TOUR_TARGETS.dashboardNetWorth}
-          className="bg-primary text-primary-foreground"
-        >
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xl font-bold font-heading">Net Worth</CardTitle>
-            <Wallet className="h-6 w-6 opacity-80" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-black tracking-tight">
-              {metrics.netWorth === null
-                ? "Unavailable"
-                : formatCurrency(metrics.netWorth, currency)}
-            </div>
-            <p className="text-sm font-medium opacity-80 mt-1">
-              Total assets minus liabilities
-            </p>
-            {snapshotSummary.latestSnapshot ? (
-              <p className="text-sm font-medium opacity-80 mt-2">
-                {`Latest month-end snapshot: ${getPeriodLabel({
-                  year: snapshotSummary.latestSnapshot.periodYear,
-                  month: snapshotSummary.latestSnapshot.periodMonth,
-                })}`}
-                {snapshotSummary.previousSnapshot && snapshotSummary.netWorthChange !== null
-                  ? ` • ${snapshotSummary.netWorthChange >= 0 ? "+" : ""}${formatCurrency(
-                      snapshotSummary.netWorthChange,
-                      snapshotSummary.currency ?? currency
-                    )} vs previous`
-                  : ""}
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-muted-foreground">
+            Your position
+          </p>
+          <h2 className="text-2xl font-black font-heading">Financial position</h2>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
+          <Card data-tour-id={ONBOARDING_TOUR_TARGETS.dashboardNetWorth}>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-base font-black font-heading">Net worth</CardTitle>
+              <Wallet className="h-5 w-5 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-black tracking-tight">
+                {metrics.netWorth === null
+                  ? "Unavailable"
+                  : formatCurrency(metrics.netWorth, currency)}
               </p>
-            ) : null}
-          </CardContent>
-        </Card>
-
-        <Card
-          data-tour-id={ONBOARDING_TOUR_TARGETS.dashboardInvestmentsSummary}
-          className="bg-secondary text-secondary-foreground"
-        >
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xl font-bold font-heading">
-              Total Investments
-            </CardTitle>
-            <BarChart3 className="h-6 w-6 opacity-80" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-black tracking-tight">
-              {metrics.totalInvestments === null
-                ? "Unavailable"
-                : formatCurrency(metrics.totalInvestments, currency)}
-            </div>
-            {metrics.portfolioSummary && (
-                <p
-                  className={`text-sm font-medium mt-1 ${
-                    metrics.portfolioSummary.totalUnrealizedPnL >= 0
-                      ? "text-green-800"
-                      : "text-red-800"
-                  }`}
-                >
-                  {formatPercentage(metrics.portfolioSummary.totalUnrealizedPnLPercent)}{" "}
-                  unrealized
-                </p>
-            )}
-            {metrics.valuationError && (
-              <p className="text-sm font-medium mt-1 text-red-800">
-                Live valuation unavailable
+              <p className="mt-1 text-xs font-medium text-muted-foreground">
+                {snapshotSummary.latestSnapshot
+                  ? `Snapshot ${getPeriodLabel({
+                      year: snapshotSummary.latestSnapshot.periodYear,
+                      month: snapshotSummary.latestSnapshot.periodMonth,
+                    })}`
+                  : "Assets minus liabilities"}
               </p>
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        <Card
-          data-tour-id={ONBOARDING_TOUR_TARGETS.dashboardCashSavings}
-          className="bg-card"
-        >
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xl font-bold font-heading">Cash & Savings</CardTitle>
-            <PiggyBank className="h-6 w-6 text-foreground opacity-80" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-black tracking-tight">
-              {formatCurrency(metrics.totalCash + metrics.totalSavings, currency)}
-            </div>
-            <p className="text-sm font-medium text-muted-foreground mt-1">
-              {metrics.monthsOfRunway.toFixed(1)} months runway
-            </p>
-          </CardContent>
-        </Card>
+          <Card data-tour-id={ONBOARDING_TOUR_TARGETS.dashboardCashSavings}>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-base font-black font-heading">Cash runway</CardTitle>
+              <PiggyBank className="h-5 w-5 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-black tracking-tight">
+                {metrics.monthsOfRunway.toFixed(1)} months
+              </p>
+              <p className="mt-1 text-xs font-medium text-muted-foreground">
+                {formatCurrency(metrics.totalCash + metrics.totalSavings, currency)} liquid
+              </p>
+            </CardContent>
+          </Card>
 
-        <Card
-          data-tour-id={ONBOARDING_TOUR_TARGETS.dashboardPersonalAssets}
-          className="bg-accent text-accent-foreground"
-        >
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xl font-bold font-heading">
-              Personal Assets
-            </CardTitle>
-            <Boxes className="h-6 w-6 opacity-80" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-black tracking-tight">
-              {formatCurrency(metrics.totalPersonalAssets, currency)}
-            </div>
-            <p className="text-sm font-medium opacity-80 mt-1">
-              Owned items at current value
-            </p>
-          </CardContent>
-        </Card>
+          <Card data-tour-id={ONBOARDING_TOUR_TARGETS.dashboardDebt}>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-base font-black font-heading">Total debt</CardTitle>
+              <CreditCard className="h-5 w-5 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-black tracking-tight">
+                {formatCurrency(metrics.totalDebt, currency)}
+              </p>
+              <p className="mt-1 text-xs font-medium text-muted-foreground">
+                {metrics.debtToWealthRatio === null
+                  ? "Debt ratio unavailable"
+                  : `${metrics.debtToWealthRatio.toFixed(1)}% debt-to-wealth`}
+              </p>
+            </CardContent>
+          </Card>
 
-        <Card
-          data-tour-id={ONBOARDING_TOUR_TARGETS.dashboardReceivables}
-          className="bg-card"
-        >
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xl font-bold font-heading">
-              Loans Receivable
-            </CardTitle>
-            <HandCoins className="h-6 w-6 text-foreground opacity-80" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-black tracking-tight">
-              {formatCurrency(metrics.totalLoanReceivables, currency)}
-            </div>
-            <p className="text-sm font-medium text-muted-foreground mt-1">
-              Principal owed to you
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card
-          data-tour-id={ONBOARDING_TOUR_TARGETS.dashboardSubscriptions}
-          className="bg-card"
-        >
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xl font-bold font-heading">
-              Subscriptions
-            </CardTitle>
-            <Repeat2 className="h-6 w-6 text-foreground opacity-80" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-black tracking-tight">
-              {formatCurrency(
-                subscriptionSummaryResult.success && subscriptionSummaryResult.data
-                  ? subscriptionSummaryResult.data.totalMonthlyCost
-                  : 0,
-                subscriptionSummaryResult.success && subscriptionSummaryResult.data
-                  ? subscriptionSummaryResult.data.displayCurrency
-                  : currency
-              )}
-            </div>
-            <p className="text-sm font-medium text-muted-foreground mt-1">
-              {subscriptionSummaryResult.success && subscriptionSummaryResult.data
-                ? `${subscriptionSummaryResult.data.activeCount} active • ${subscriptionSummaryResult.data.trialEndingSoonCount} trial(s) ending soon`
-                : "Subscription snapshot unavailable"}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card
-          data-tour-id={ONBOARDING_TOUR_TARGETS.dashboardDebt}
-          className="bg-destructive text-destructive-foreground"
-        >
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xl font-bold font-heading">Total Debt</CardTitle>
-            <CreditCard className="h-6 w-6 opacity-80" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-black tracking-tight">
-              {formatCurrency(metrics.totalDebt, currency)}
-            </div>
-            <p className="text-sm font-medium opacity-80 mt-1">
-              {metrics.debtToWealthRatio === null
-                ? "Debt ratio unavailable"
-                : `${metrics.debtToWealthRatio.toFixed(1)}% debt-to-wealth`}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+          <Card data-tour-id={ONBOARDING_TOUR_TARGETS.dashboardCashFlow}>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-base font-black font-heading">Savings rate</CardTitle>
+              <TrendingUp className="h-5 w-5 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-black tracking-tight">
+                {metrics.savingsRate.toFixed(1)}%
+              </p>
+              <p className="mt-1 text-xs font-medium text-muted-foreground">
+                Based on the last 6 months
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
 
       {/* Health Score and Retirement Progress */}
       <div
@@ -334,52 +227,6 @@ export default async function DashboardPage() {
             currency={currency}
           />
         )}
-      </div>
-
-      {/* Monthly Cash Flow */}
-      <div
-        data-tour-id={ONBOARDING_TOUR_TARGETS.dashboardCashFlow}
-        className="grid gap-4 md:grid-cols-2 xl:grid-cols-3"
-      >
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xl font-bold font-heading">
-              Monthly Income (Avg)
-            </CardTitle>
-            <TrendingUp className="h-6 w-6 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-black text-green-600 tracking-tight">
-              {formatCurrency(metrics.avgMonthlyIncome, currency)}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Based on last 6 months
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xl font-bold font-heading">
-              Monthly Expenses (Avg)
-            </CardTitle>
-            <TrendingDown className="h-6 w-6 text-red-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-black text-red-600 tracking-tight">
-              {formatCurrency(metrics.avgMonthlyExpenses, currency)}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Savings rate: {metrics.savingsRate.toFixed(1)}%
-            </p>
-          </CardContent>
-        </Card>
-
-        <MonthlyBudgetStatus
-          monthlyBudget={metrics.monthlyBudget}
-          currentMonthExpenses={currentMonthExpenses}
-          currency={currency}
-        />
       </div>
 
       {/* Investment Performance Summary */}
