@@ -2,13 +2,15 @@
 
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
-import { formatCurrency } from "@/lib/utils";
+import type { RetirementProjection } from "@/lib/retirement-projection";
+import { formatCurrency, formatDate } from "@/lib/utils";
 import { Target, TrendingUp } from "lucide-react";
 import Link from "next/link";
 
 interface RetirementProgressProps {
   currentNetWorth: number;
   targetAmount: number | null;
+  projection: RetirementProjection | null;
   currency?: string;
 }
 
@@ -25,6 +27,7 @@ interface RetirementProgressProps {
 export function RetirementProgress({
   currentNetWorth,
   targetAmount,
+  projection,
   currency = "IDR",
 }: RetirementProgressProps) {
   if (!targetAmount || targetAmount <= 0) {
@@ -81,6 +84,27 @@ export function RetirementProgress({
             </span>{" "}
             remaining to reach your goal
           </p>
+        </div>
+      )}
+
+      {!isComplete && projection && (
+        <div className="border-t-2 border-black pt-2 text-sm font-bold opacity-80">
+          Save{" "}
+          <span className="font-black text-foreground">
+            {formatCurrency(projection.requiredMonthlySavings, currency)}
+          </span>{" "}
+          per month to reach your target by{" "}
+          <span className="font-black text-foreground">
+            {formatDate(projection.retirementDate)}
+          </span>
+          .
+        </div>
+      )}
+
+      {!isComplete && !projection && (
+        <div className="border-t-2 border-black pt-2 text-sm font-bold opacity-80">
+          Add your date of birth and retirement age in Profile to see your
+          monthly savings target.
         </div>
       )}
     </div>

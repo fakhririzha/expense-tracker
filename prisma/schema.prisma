@@ -24,6 +24,8 @@ model User {
   // Financial targets
   retirementTarget Float?
   monthlyBudget    Float?
+  dateOfBirth      DateTime?
+  retirementAge    Int?
 
   // Encryption metadata for field-level encryption
   encryptionSalt    String? @db.Text // Base64-encoded salt for key derivation

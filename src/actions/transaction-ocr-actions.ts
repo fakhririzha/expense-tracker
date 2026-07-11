@@ -6,7 +6,7 @@ import prisma from "@/lib/db";
 import { z } from "zod";
 
 const MAX_IMAGE_SIZE = 1 * 1024 * 1024;
-const DAILY_OCR_LIMIT = 2;
+const DEFAULT_DAILY_OCR_LIMIT = 2;
 const JAKARTA_UTC_OFFSET_MS = 7 * 60 * 60 * 1000;
 const ALLOWED_IMAGE_TYPES = new Set([
   "image/jpeg",
@@ -66,6 +66,14 @@ interface ChatCompletionResponse {
       content?: unknown;
     };
   }>;
+}
+
+function getDailyOcrLimit(): number {
+  const configuredLimit = Number.parseInt(process.env.DAILY_OCR_LIMIT ?? "", 10);
+
+  return Number.isSafeInteger(configuredLimit) && configuredLimit > 0
+    ? configuredLimit
+    : DEFAULT_DAILY_OCR_LIMIT;
 }
 
 function getChatConfig() {
@@ -193,6 +201,7 @@ function normalizeParsedResult(
 
 async function reserveOcrUsage(userId: string, imageBytes: number) {
   const { start, end } = getJakartaDayBounds();
+  const dailyOcrLimit = getDailyOcrLimit();
 
   return prisma.$transaction(
     async (tx) => {
@@ -206,11 +215,11 @@ async function reserveOcrUsage(userId: string, imageBytes: number) {
         },
       });
 
-      if (todayCount >= DAILY_OCR_LIMIT) {
+      if (todayCount >= dailyOcrLimit) {
         return {
           success: false as const,
           error:
-            "Daily bill scan limit reached. You can scan up to 2 bill photos per day.",
+            `Daily bill scan limit reached. You can scan up to ${dailyOcrLimit} bill photos per day.`,
         };
       }
 
