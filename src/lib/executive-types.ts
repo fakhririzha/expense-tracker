@@ -1,6 +1,8 @@
 // Types and constants for executive metrics - no "use server" directive
 // These can be imported by both client and server components
 
+import type { RetirementProjection } from "@/lib/retirement-projection";
+
 export type HealthTier = "S" | "A" | "B" | "C" | "F";
 
 export interface HealthTierInfo {
@@ -96,6 +98,7 @@ export interface ExecutiveMetrics {
   // Retirement Progress
   retirementTarget: number | null;
   retirementProgress: number | null;
+  retirementProjection: RetirementProjection | null;
   monthlyBudget: number | null;
 
   // Currency

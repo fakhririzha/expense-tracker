@@ -1,5 +1,10 @@
 # FinHealth Changelog
 
+## v5.4.2
+
+- Added a retirement timeline to Financial Targets so you can set your date of birth and target retirement age.
+- See the monthly amount to save toward your retirement target based on your current net worth, both in Profile and on the dashboard.
+
 ## v5.4.1
 
 - Made transaction imports follow the same account, transfer, balance, and privacy checks as transactions you add in FinHealth.

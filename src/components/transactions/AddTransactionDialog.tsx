@@ -882,8 +882,7 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
                     Scan bill photo
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Upload one receipt image. It will be compressed before scanning,
-                    with a limit of 2 scans per day.
+                    Upload one receipt image. It will be compressed before scanning.
                   </p>
                 </div>
                 <div>

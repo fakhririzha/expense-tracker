@@ -224,6 +224,7 @@ export default async function DashboardPage() {
           <RetirementProgress
             currentNetWorth={metrics.netWorth}
             targetAmount={metrics.retirementTarget}
+            projection={metrics.retirementProjection}
             currency={currency}
           />
         )}

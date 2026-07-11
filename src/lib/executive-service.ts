@@ -9,6 +9,7 @@ import { auth } from "@/auth";
 import prisma from "@/lib/db";
 import { getExchangeRate } from "@/lib/finance-service";
 import { getCurrentPortfolioValuation } from "@/lib/investment-valuation-service";
+import { calculateRetirementProjection } from "@/lib/retirement-projection";
 import {
   type ExecutiveMetrics,
   HEALTH_TIERS,
@@ -98,6 +99,8 @@ export async function getExecutiveMetrics(): Promise<{
         mainCurrency: true,
         retirementTarget: true,
         monthlyBudget: true,
+        dateOfBirth: true,
+        retirementAge: true,
       },
     });
 
@@ -266,6 +269,12 @@ export async function getExecutiveMetrics(): Promise<{
         : netWorth === null
           ? null
           : 0;
+    const retirementProjection = calculateRetirementProjection({
+      retirementTarget,
+      currentNetWorth: netWorth,
+      dateOfBirth: user.dateOfBirth,
+      retirementAge: user.retirementAge,
+    });
 
     return {
       success: true,
@@ -296,6 +305,7 @@ export async function getExecutiveMetrics(): Promise<{
         valuationError,
         retirementTarget,
         retirementProgress,
+        retirementProjection,
         monthlyBudget: user.monthlyBudget,
         displayCurrency: mainCurrency,
       },

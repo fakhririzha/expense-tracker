@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import prisma from "@/lib/db";
+import { getExecutiveMetrics } from "@/lib/executive-service";
 import { CircleDollarSign, Mail, ShieldAlert, Target, UserRound } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -21,16 +22,21 @@ export default async function ProfilePage() {
     redirect("/login");
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: {
-      name: true,
-      email: true,
-      mainCurrency: true,
-      retirementTarget: true,
-      monthlyBudget: true,
-    },
-  });
+  const [user, metricsResult] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: {
+        name: true,
+        email: true,
+        mainCurrency: true,
+        retirementTarget: true,
+        monthlyBudget: true,
+        dateOfBirth: true,
+        retirementAge: true,
+      },
+    }),
+    getExecutiveMetrics(),
+  ]);
 
   if (!user) {
     redirect("/login");
@@ -106,8 +112,15 @@ export default async function ProfilePage() {
                 defaultValues={{
                   retirementTarget: user.retirementTarget,
                   monthlyBudget: user.monthlyBudget,
+                  dateOfBirth: user.dateOfBirth
+                    ? user.dateOfBirth.toISOString().slice(0, 10)
+                    : null,
+                  retirementAge: user.retirementAge,
                 }}
                 mainCurrency={user.mainCurrency}
+                currentNetWorth={
+                  metricsResult.success ? metricsResult.data?.netWorth ?? null : null
+                }
               />
             </CardContent>
           </Card>
