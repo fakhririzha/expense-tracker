@@ -1,0 +1,6 @@
+# Keep command writes limited to this repository while allowing authenticated
+# developer tools such as GitHub CLI to reach their remote services.
+sandbox_mode = "workspace-write"
+
+[sandbox_workspace_write]
+network_access = true
