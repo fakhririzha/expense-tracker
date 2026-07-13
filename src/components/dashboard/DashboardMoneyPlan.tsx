@@ -130,7 +130,7 @@ function MoneyPlanHero({ plan }: { plan: DashboardMoneyPlanData }) {
         <div>
           <p
             className={cn(
-              "text-4xl font-black tracking-tight md:text-5xl",
+              "text-3xl font-black tracking-tight sm:text-4xl md:text-5xl",
               isOverPlan && "text-destructive"
             )}
           >
@@ -231,7 +231,7 @@ function MoneyPlanHero({ plan }: { plan: DashboardMoneyPlanData }) {
 
 function MoneyPlanActions({ plan }: { plan: DashboardMoneyPlanData }) {
   return (
-    <Card>
+    <Card className="min-w-0">
       <CardHeader className="md:grid-cols-[1fr_auto]">
         <div>
           <CardTitle className="flex items-center gap-2 text-xl font-black font-heading">
@@ -294,7 +294,7 @@ function UpcomingMoney({ plan }: { plan: DashboardMoneyPlanData }) {
     plan.forecastMinimumBalance !== null && plan.forecastMinimumBalance < 0;
 
   return (
-    <Card>
+    <Card className="min-w-0">
       <CardHeader className="md:grid-cols-[1fr_auto]">
         <div>
           <CardTitle className="flex items-center gap-2 text-xl font-black font-heading">
@@ -418,7 +418,7 @@ export function DashboardMoneyPlan({ plan }: { plan: DashboardMoneyPlanData }) {
         </h2>
       </div>
       <MoneyPlanHero plan={plan} />
-      <div className="grid gap-6 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <MoneyPlanActions plan={plan} />
         <UpcomingMoney plan={plan} />
       </div>
