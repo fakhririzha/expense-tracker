@@ -116,6 +116,7 @@ expense-tracker/
 - `/api/accounts/by-type`
 - `/api/auth/[...nextauth]`
 - `/api/categories`
+- `/api/cron/bank-interest`
 - `/api/cron/deposito`
 - `/api/cron/monthly-net-worth-snapshots`
 - `/api/cron/notifications`
@@ -519,10 +520,14 @@ The project currently includes these `src/components/ui` primitives:
 
 ## Changelog Updates
 
-- Update `content/changelog.md` for user-facing changes.
+- Every publishable code change must add a new, unique top-level `## vX.Y.Z` entry to `content/changelog.md` before the release branch is created.
+- Use the exact version requested by the user when one is provided. Otherwise infer the next semantic version from the change: patch for fixes or maintenance, minor for backward-compatible features, and major only for breaking changes.
+- The new version must be the first version heading in the file and must be greater than the previous latest version. Do not append changes to a version that has already been published.
 - Write entries in product language, not implementation language.
 - Put the newest release at the top.
 - For maintenance-only work, say so plainly.
+
+For example, when the current latest release is `v5.5.1`, the next fix or maintenance release is `v5.5.2`; if the user explicitly requests `v5.7.0`, use `v5.7.0` instead.
 
 ## Security Considerations
 
@@ -569,6 +574,24 @@ Manual verification should cover the touched feature area plus affected cross-fe
 - PWA install prompt and offline fallback behavior
 - Import/export and category management
 
+## GitHub Delivery Workflow
+
+Use this workflow to deliver every completed code change. For AI-agent delivery, the exact changelog version branch described here overrides the `feature/...` and `fix/...` branch examples in `CONTRIBUTING.md`.
+
+1. Before making changes, check out `main`, fetch `origin/main`, and fast-forward the local branch. Confirm the worktree contains no unrelated changes; preserve intended user changes and never discard them to clean the tree.
+2. Complete the requested code changes and add the new changelog entry described above while still based on the updated `main` commit.
+3. Read the first `## vX.Y.Z` heading from `content/changelog.md` and use that exact value as the branch name, for example `v5.7.0`.
+4. Check local branches, remote branches, and existing pull requests before creating the branch. If the version branch already exists anywhere, stop and require a new changelog version; never reuse an already-published release branch.
+5. Create the version branch from `main` while carrying the intended worktree changes, then run the relevant validation. Always run `git diff --check` and `pnpm lint`; run `pnpm build` when the change needs build-level TypeScript, Next.js, Prisma, authentication, routing, or shared-domain validation. Complete the relevant manual checks from this file.
+6. Review the complete diff, stage only the intended files, and generate a concise Conventional Commit message that follows `CONTRIBUTING.md`.
+7. Commit the staged changes, push the version branch to `origin` with upstream tracking, and create a ready-for-review pull request targeting `main`. The PR description must summarize the change, user impact, root cause when applicable, and validation performed.
+8. Run a separate code-review pass against the published PR diff. Review correctness, regressions, authentication and user ownership, encryption, financial balance integrity, migrations, and relevant validation coverage. Classify findings as critical, high, medium, or low, and post a concise review summary and any findings as a PR comment.
+9. Wait for every applicable GitHub status check to finish successfully. If the repository has no applicable checks, record that explicitly in the review summary.
+10. Fix every critical or high-severity finding on the same branch, update the changelog if the user-facing outcome changes, commit and push the fixes, and then rerun both the code review and status checks against the new head commit. Medium and low findings may be documented without blocking the merge.
+11. Merge the PR into `main` with a merge commit only when it is conflict-free, all applicable checks have passed, the review capability was available and completed, and no critical or high findings remain. Pin the merge to the reviewed head SHA so an unreviewed push cannot be merged accidentally.
+12. Do not merge when a check is pending or failing, the PR is conflicted, the review cannot be completed, or a critical or high finding remains. Leave the PR open and report the blocker instead.
+13. After a successful merge, check out local `main`, fast-forward it from `origin/main`, and verify that the worktree is clean and synchronized. Keep the release branch on the remote unless the user explicitly requests deletion.
+
 ## Deployment
 
 ### Vercel Cron Jobs
@@ -578,11 +601,12 @@ Manual verification should cover the touched feature area plus affected cross-fe
 - `/api/cron/monthly-net-worth-snapshots` at `0 17 * * *`
 - `/api/cron/recurring` at `15 17 * * *`
 - `/api/cron/notifications` at `30 17 * * *`
-- `/api/cron/weekly-ai-insights` at `0 1 * * 1`
-- `/api/cron/deposito` at `0 18 * * *`
-- `/api/cron/pegadaian-gold-prices` at `45 17 * * *`
+- `/api/cron/deposito` at `45 17 * * *`
+- `/api/cron/pegadaian-gold-prices` at `0 18 * * *`
+- `/api/cron/weekly-ai-insights` at `15 18 * * 1`
+- `/api/cron/bank-interest` at `30 18 * * *`
 
-The Pegadaian reference-price refresh runs once per day at `17:45 UTC`, and deposito interest processing runs once per day at `18:00 UTC`.
+Deposito interest processing runs once per day at `17:45 UTC`, the Pegadaian reference-price refresh runs at `18:00 UTC`, weekly AI insights run Mondays at `18:15 UTC`, and automatic bank interest runs daily at `18:30 UTC` (`01:30 Asia/Jakarta`).
 
 ### Required Production Configuration
 

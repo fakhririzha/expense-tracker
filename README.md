@@ -160,6 +160,7 @@ Notes:
 - `/api/accounts/by-type`
 - `/api/auth/[...nextauth]`
 - `/api/categories`
+- `/api/cron/bank-interest`
 - `/api/cron/deposito`
 - `/api/investments/[id]/trades`
 - `/api/cron/monthly-net-worth-snapshots`
@@ -257,17 +258,25 @@ For functional changes, manually verify the touched flow and its balance/reporti
     },
     {
       "path": "/api/cron/deposito",
-      "schedule": "0 18 * * *"
+      "schedule": "45 17 * * *"
     },
     {
       "path": "/api/cron/pegadaian-gold-prices",
-      "schedule": "45 17 * * *"
+      "schedule": "0 18 * * *"
+    },
+    {
+      "path": "/api/cron/weekly-ai-insights",
+      "schedule": "15 18 * * 1"
+    },
+    {
+      "path": "/api/cron/bank-interest",
+      "schedule": "30 18 * * *"
     }
   ]
 }
 ```
 
-The Pegadaian cron refreshes the stored reference price once per day at `17:45 UTC`, and the deposito cron posts due interest once per day at `18:00 UTC`.
+The deposito cron posts due interest once per day at `17:45 UTC`, Pegadaian refreshes stored reference prices at `18:00 UTC`, weekly AI insights run Mondays at `18:15 UTC`, and automatic bank interest runs daily at `18:30 UTC` (`01:30 Asia/Jakarta`).
 
 Before deploying:
 
