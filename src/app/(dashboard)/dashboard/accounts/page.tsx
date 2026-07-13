@@ -42,6 +42,12 @@ interface Account {
   balance: number;
   description: string | null;
   isActive: boolean;
+  bankInterestSetting: {
+    enabled: boolean;
+    annualRate: number;
+    frequency: "DAILY" | "MONTHLY" | "YEARLY";
+    nextPostingDate: Date | null;
+  } | null;
 }
 
 const ACCOUNT_PAGE_SIZES = [10, 25, 50] as const;

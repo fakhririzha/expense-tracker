@@ -14,11 +14,31 @@ import {
   isLiabilityAccountType,
   normalizeAccountBalanceForType,
 } from "@/lib/account-types";
+import {
+  BANK_INTEREST_FREQUENCIES,
+  getNextBankInterestDate,
+} from "@/lib/bank-interest";
 import prisma from "@/lib/db";
 import { getExchangeRate } from "@/lib/finance-service";
 import { getCurrentPortfolioValuation } from "@/lib/investment-valuation-service";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+
+const bankInterestSchema = z
+  .object({
+    enabled: z.boolean(),
+    annualRate: z.number().finite().min(0).max(100),
+    frequency: z.enum(BANK_INTEREST_FREQUENCIES),
+  })
+  .superRefine((value, context) => {
+    if (value.enabled && value.annualRate <= 0) {
+      context.addIssue({
+        code: "custom",
+        path: ["annualRate"],
+        message: "Annual interest rate must be greater than zero",
+      });
+    }
+  });
 
 const accountSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -27,9 +47,21 @@ const accountSchema = z.object({
   balance: z.number().default(0),
   description: z.string().optional(),
   isActive: z.boolean().default(true),
+  bankInterest: bankInterestSchema.optional(),
 });
 
+const accountUpdateSchema = accountSchema.partial();
+
 export type AccountInput = z.infer<typeof accountSchema>;
+
+function revalidateAccountPaths(): void {
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/accounts");
+  revalidatePath("/dashboard/transactions");
+  revalidatePath("/dashboard/reports");
+  revalidatePath("/dashboard/insights");
+  revalidatePath("/dashboard/calendar");
+}
 
 export async function createAccount(data: AccountInput) {
   try {
@@ -53,6 +85,16 @@ export async function createAccount(data: AccountInput) {
       };
     }
 
+    if (
+      validatedFields.data.bankInterest?.enabled &&
+      validatedFields.data.type !== "BANK"
+    ) {
+      return {
+        success: false,
+        error: "Automatic bank interest is only available for Bank accounts.",
+      };
+    }
+
     // Encrypt sensitive fields
     const encryptedName = await encryptAccountName(
       session.user.id,
@@ -62,6 +104,13 @@ export async function createAccount(data: AccountInput) {
       session.user.id,
       validatedFields.data.description ?? null
     );
+
+    const now = new Date();
+    const bankInterest = validatedFields.data.bankInterest;
+    const interestEnabled =
+      validatedFields.data.type === "BANK" &&
+      validatedFields.data.isActive &&
+      bankInterest?.enabled === true;
 
     const account = await prisma.financialAccount.create({
       data: {
@@ -75,11 +124,27 @@ export async function createAccount(data: AccountInput) {
         nameEncrypted: encryptedName,
         descriptionEncrypted: encryptedDescription,
         userId: session.user.id,
+        ...(bankInterest
+          ? {
+              bankInterestSetting: {
+                create: {
+                  userId: session.user.id,
+                  enabled: bankInterest.enabled,
+                  annualRate: bankInterest.annualRate,
+                  frequency: bankInterest.frequency,
+                  enabledAt: bankInterest.enabled ? now : null,
+                  nextPostingDate: interestEnabled
+                    ? getNextBankInterestDate(now, bankInterest.frequency)
+                    : null,
+                },
+              },
+            }
+          : {}),
       },
+      include: { bankInterestSetting: true },
     });
 
-    revalidatePath("/dashboard");
-    revalidatePath("/dashboard/accounts");
+    revalidateAccountPaths();
 
     return { success: true, data: account };
   } catch (error) {
@@ -95,8 +160,17 @@ export async function updateAccount(id: string, data: Partial<AccountInput>) {
       return { success: false, error: "Unauthorized" };
     }
 
+    const validatedFields = accountUpdateSchema.safeParse(data);
+    if (!validatedFields.success) {
+      return {
+        success: false,
+        error: validatedFields.error.issues[0].message,
+      };
+    }
+
     const existingAccount = await prisma.financialAccount.findFirst({
       where: { id, userId: session.user.id },
+      include: { bankInterestSetting: true },
     });
 
     if (!existingAccount) {
@@ -105,7 +179,7 @@ export async function updateAccount(id: string, data: Partial<AccountInput>) {
 
     if (
       isDepositoAccountType(existingAccount.type) ||
-      isDepositoAccountType(data.type ?? existingAccount.type)
+      isDepositoAccountType(validatedFields.data.type ?? existingAccount.type)
     ) {
       return {
         success: false,
@@ -115,21 +189,33 @@ export async function updateAccount(id: string, data: Partial<AccountInput>) {
 
     // Encrypt sensitive fields if provided
     const updateData: Record<string, unknown> = {};
-    const nextType = data.type ?? existingAccount.type;
+    const validatedData = validatedFields.data;
+    const nextType = validatedData.type ?? existingAccount.type;
+    const nextIsActive = validatedData.isActive ?? existingAccount.isActive;
 
-    if (data.type !== undefined) {
-      updateData.type = data.type;
-    }
-    if (data.currency !== undefined) {
-      updateData.currency = data.currency;
-    }
-    if (data.isActive !== undefined) {
-      updateData.isActive = data.isActive;
+    if (validatedData.bankInterest?.enabled && nextType !== "BANK") {
+      return {
+        success: false,
+        error: "Automatic bank interest is only available for Bank accounts.",
+      };
     }
 
-    if (data.balance !== undefined) {
-      updateData.balance = normalizeAccountBalanceForType(nextType, data.balance);
-    } else if (data.type !== undefined) {
+    if (validatedData.type !== undefined) {
+      updateData.type = validatedData.type;
+    }
+    if (validatedData.currency !== undefined) {
+      updateData.currency = validatedData.currency;
+    }
+    if (validatedData.isActive !== undefined) {
+      updateData.isActive = validatedData.isActive;
+    }
+
+    if (validatedData.balance !== undefined) {
+      updateData.balance = normalizeAccountBalanceForType(
+        nextType,
+        validatedData.balance
+      );
+    } else if (validatedData.type !== undefined) {
       updateData.balance = normalizeAccountBalanceForType(
         nextType,
         existingAccount.balance
@@ -137,26 +223,86 @@ export async function updateAccount(id: string, data: Partial<AccountInput>) {
     }
     
     // If name is being updated, also store encrypted version
-    if (data.name !== undefined) {
+    if (validatedData.name !== undefined) {
       updateData.nameEncrypted = await encryptAccountName(
         session.user.id,
-        data.name
+        validatedData.name
       );
     }
-    if (data.description !== undefined) {
+    if (validatedData.description !== undefined) {
       updateData.descriptionEncrypted = await encryptAccountDescription(
         session.user.id,
-        data.description ?? null
+        validatedData.description ?? null
       );
     }
 
-    const account = await prisma.financialAccount.update({
-      where: { id },
-      data: updateData,
+    const now = new Date();
+    const account = await prisma.$transaction(async (tx) => {
+      await tx.financialAccount.update({
+        where: { id },
+        data: updateData,
+      });
+
+      const requestedInterest = validatedData.bankInterest;
+      const existingInterest = existingAccount.bankInterestSetting;
+      const eligibleForPosting = nextType === "BANK" && nextIsActive;
+
+      if (requestedInterest) {
+        const shouldSchedule = requestedInterest.enabled && eligibleForPosting;
+        const shouldResetSchedule =
+          shouldSchedule &&
+          (!existingInterest?.enabled ||
+            existingInterest.frequency !== requestedInterest.frequency ||
+            !existingInterest.nextPostingDate);
+
+        await tx.bankInterestSetting.upsert({
+          where: { accountId: id },
+          create: {
+            accountId: id,
+            userId: session.user.id,
+            enabled: requestedInterest.enabled,
+            annualRate: requestedInterest.annualRate,
+            frequency: requestedInterest.frequency,
+            enabledAt: requestedInterest.enabled ? now : null,
+            nextPostingDate: shouldSchedule
+              ? getNextBankInterestDate(now, requestedInterest.frequency)
+              : null,
+          },
+          update: {
+            enabled: requestedInterest.enabled,
+            annualRate: requestedInterest.annualRate,
+            frequency: requestedInterest.frequency,
+            enabledAt:
+              requestedInterest.enabled && !existingInterest?.enabled
+                ? now
+                : existingInterest?.enabledAt,
+            nextPostingDate: shouldSchedule
+              ? shouldResetSchedule
+                ? getNextBankInterestDate(now, requestedInterest.frequency)
+                : existingInterest?.nextPostingDate
+              : null,
+          },
+        });
+      } else if (existingInterest) {
+        await tx.bankInterestSetting.update({
+          where: { accountId: id },
+          data: {
+            nextPostingDate:
+              existingInterest.enabled && eligibleForPosting
+                ? existingInterest.nextPostingDate ??
+                  getNextBankInterestDate(now, existingInterest.frequency)
+                : null,
+          },
+        });
+      }
+
+      return tx.financialAccount.findUniqueOrThrow({
+        where: { id },
+        include: { bankInterestSetting: true },
+      });
     });
 
-    revalidatePath("/dashboard");
-    revalidatePath("/dashboard/accounts");
+    revalidateAccountPaths();
 
     return { success: true, data: account };
   } catch (error) {
@@ -231,6 +377,7 @@ export async function getAccounts(type?: AccountTypeValue) {
 
     const accounts = await prisma.financialAccount.findMany({
       where,
+      include: { bankInterestSetting: true },
       orderBy: { createdAt: "desc" },
     });
 
