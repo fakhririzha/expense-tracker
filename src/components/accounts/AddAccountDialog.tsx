@@ -28,21 +28,38 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { MoneyInput } from "@/components/ui/money-input";
+import { Switch } from "@/components/ui/switch";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus } from "lucide-react";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { ACCOUNT_TYPES, normalizeAccountBalanceForType } from "@/lib/account-types";
+import { BANK_INTEREST_FREQUENCIES } from "@/lib/bank-interest";
 
-const accountFormSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  type: z.enum(ACCOUNT_TYPES),
-  currency: z.string(),
-  balance: z.number(),
-  description: z.string().optional(),
-  isActive: z.boolean(),
-});
+const accountFormSchema = z
+  .object({
+    name: z.string().min(1, "Name is required"),
+    type: z.enum(ACCOUNT_TYPES),
+    currency: z.string(),
+    balance: z.number(),
+    description: z.string().optional(),
+    isActive: z.boolean(),
+    bankInterest: z.object({
+      enabled: z.boolean(),
+      annualRate: z.number().finite().min(0).max(100),
+      frequency: z.enum(BANK_INTEREST_FREQUENCIES),
+    }),
+  })
+  .superRefine((value, context) => {
+    if (value.bankInterest.enabled && value.bankInterest.annualRate <= 0) {
+      context.addIssue({
+        code: "custom",
+        path: ["bankInterest", "annualRate"],
+        message: "Annual interest rate must be greater than zero",
+      });
+    }
+  });
 
 type AccountFormValues = z.infer<typeof accountFormSchema>;
 
@@ -72,14 +89,21 @@ export function AddAccountDialog({ onSuccess }: AddAccountDialogProps) {
       balance: 0,
       description: "",
       isActive: true,
+      bankInterest: {
+        enabled: false,
+        annualRate: 0,
+        frequency: "MONTHLY",
+      },
     },
   });
 
   const onSubmit = async (data: AccountFormValues) => {
     try {
+      const { bankInterest, ...accountData } = data;
       const tempData = {
-        ...data,
+        ...accountData,
         balance: normalizeAccountBalanceForType(data.type, data.balance),
+        ...(data.type === "BANK" ? { bankInterest } : {}),
       };
       await createMutation.mutateAsync(tempData);
       setOpen(false);
@@ -92,6 +116,12 @@ export function AddAccountDialog({ onSuccess }: AddAccountDialogProps) {
     }
   };
 
+  const accountType = useWatch({ control: form.control, name: "type" });
+  const bankInterestEnabled = useWatch({
+    control: form.control,
+    name: "bankInterest.enabled",
+  });
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -100,7 +130,7 @@ export function AddAccountDialog({ onSuccess }: AddAccountDialogProps) {
           Add Account
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-125">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-125">
         <DialogHeader>
           <DialogTitle>Add Account</DialogTitle>
           <DialogDescription>
@@ -202,6 +232,83 @@ export function AddAccountDialog({ onSuccess }: AddAccountDialogProps) {
                 </FormItem>
               )}
             />
+
+            {accountType === "BANK" && (
+              <div className="space-y-4 rounded-lg border p-4">
+                <FormField
+                  control={form.control}
+                  name="bankInterest.enabled"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center justify-between gap-4">
+                      <div>
+                        <FormLabel>Automatically add bank interest</FormLabel>
+                        <p className="text-sm text-muted-foreground">
+                          Credit interest as categorized income on schedule.
+                        </p>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                {bankInterestEnabled && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="bankInterest.annualRate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Annual rate (% p.a.)</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              min="0.0001"
+                              max="100"
+                              step="0.0001"
+                              value={field.value}
+                              onChange={(event) =>
+                                field.onChange(Number(event.target.value))
+                              }
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="bankInterest.frequency"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Credit frequency</FormLabel>
+                          <Select
+                            value={field.value}
+                            onValueChange={field.onChange}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="DAILY">Daily</SelectItem>
+                              <SelectItem value="MONTHLY">Monthly</SelectItem>
+                              <SelectItem value="YEARLY">Yearly</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
 
             {form.formState.errors.root && (
               <p className="text-sm font-medium text-destructive">

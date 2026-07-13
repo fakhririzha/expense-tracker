@@ -23,6 +23,10 @@
         {
             "path": "/api/cron/weekly-ai-insights",
             "schedule": "15 18 * * 1"
+        },
+        {
+            "path": "/api/cron/bank-interest",
+            "schedule": "30 18 * * *"
         }
     ]
 }

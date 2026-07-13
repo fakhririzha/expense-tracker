@@ -52,6 +52,8 @@ model User {
   personalAssets    PersonalAsset[]
   personalAssetValuations PersonalAssetValuation[]
   depositoAccounts  DepositoAccount[]
+  bankInterestSettings BankInterestSetting[]
+  bankInterestPostings BankInterestPosting[]
   netWorthSnapshots NetWorthSnapshot[]
   debtPlans         DebtPlan[]
   debtPlanItems     DebtPlanItem[]
@@ -141,6 +143,12 @@ enum DepositoInterestFrequency {
   YEARLY
 }
 
+enum BankInterestFrequency {
+  DAILY
+  MONTHLY
+  YEARLY
+}
+
 enum DepositoTermMode {
   OPEN_ENDED
   FIXED_TERM
@@ -178,9 +186,56 @@ model FinancialAccount {
   subscriptions    Subscription[]
   goalLinks        SavingsGoalAccount[]
   depositoAccount  DepositoAccount?
+  bankInterestSetting  BankInterestSetting?
+  bankInterestPostings BankInterestPosting[]
   debtPlanItems    DebtPlanItem[]
 
   @@index([userId])
+}
+
+model BankInterestSetting {
+  id              String                @id @default(cuid())
+  enabled         Boolean               @default(false)
+  annualRate      Float
+  frequency       BankInterestFrequency
+  enabledAt       DateTime?
+  nextPostingDate DateTime?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  accountId String           @unique
+  account   FinancialAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([enabled, nextPostingDate])
+}
+
+model BankInterestPosting {
+  id             String   @id @default(cuid())
+  postingDate    DateTime
+  annualRate     Float
+  balanceBefore  Float
+  interestAmount Float
+  balanceAfter   Float
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  accountId String
+  account   FinancialAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  transactionId String      @unique
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([accountId, postingDate])
+  @@index([userId])
+  @@index([accountId, postingDate])
 }
 
 model DepositoAccount {
@@ -328,6 +383,7 @@ model Transaction {
   depositoOpening      DepositoAccount?        @relation("DepositoOpeningTransaction")
   depositoClosing      DepositoAccount?        @relation("DepositoClosingTransaction")
   depositoInterestPosting DepositoInterestPosting?
+  bankInterestPosting     BankInterestPosting?
 
   @@index([userId])
   @@unique([userId, clientMutationId])

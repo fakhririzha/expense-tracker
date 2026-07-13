@@ -1,5 +1,10 @@
 # FinHealth Changelog
 
+## v5.5.0
+
+- Added optional automatic interest for Bank accounts with daily, monthly, or yearly credit schedules and annual rate settings.
+- Bank interest is recorded automatically as protected income under the Bank Interest category and compounds from the current account balance.
+
 ## v5.4.2
 
 - Added a retirement timeline to Financial Targets so you can set your date of birth and target retirement age.
