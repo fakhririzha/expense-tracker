@@ -180,6 +180,7 @@ async function createDefaultCategories(userId: string) {
     { name: "Salary", icon: "💰", color: "#22c55e", type: "INCOME" as const },
     { name: "Freelance", icon: "💻", color: "#3b82f6", type: "INCOME" as const },
     { name: "Investment Returns", icon: "📈", color: "#8b5cf6", type: "INCOME" as const },
+    { name: "Bank Interest", icon: "💰", color: "#22c55e", type: "INCOME" as const },
     { name: "Other Income", icon: "💵", color: "#6b7280", type: "INCOME" as const },
     
     // Expense categories
