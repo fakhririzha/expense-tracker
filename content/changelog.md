@@ -1,5 +1,9 @@
 # FinHealth Changelog
 
+## v5.5.1
+
+- Fixed the Dashboard Money Plan on smaller screens so financial signals, upcoming charges, and long currency values stay within their cards.
+
 ## v5.5.0
 
 - Added optional automatic interest for Bank accounts with daily, monthly, or yearly credit schedules and annual rate settings.
