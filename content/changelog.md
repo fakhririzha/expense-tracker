@@ -1,5 +1,9 @@
 # FinHealth Changelog
 
+## v5.5.2
+
+- Updated the project and deployment documentation with the automatic bank-interest cron route and the current production cron schedules.
+
 ## v5.5.1
 
 - Fixed the Dashboard Money Plan on smaller screens so financial signals, upcoming charges, and long currency values stay within their cards.
