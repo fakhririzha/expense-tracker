@@ -1,5 +1,10 @@
 # FinHealth Changelog
 
+## v5.5.3
+
+- Bank interest entries can now be corrected or deleted like other transactions while future automatic interest continues on schedule.
+- Cleared scanned bill details and transaction fields after a successful transaction so the next entry starts fresh.
+
 ## v5.5.2
 
 - Updated the project and deployment documentation with the automatic bank-interest cron route and the current production cron schedules.

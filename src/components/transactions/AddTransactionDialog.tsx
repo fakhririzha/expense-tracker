@@ -97,6 +97,25 @@ const transactionFormSchema = z.object({
 type TransactionFormInput = z.input<typeof transactionFormSchema>;
 type TransactionFormValues = z.output<typeof transactionFormSchema>;
 
+function getTransactionDefaultValues(): TransactionFormInput {
+  return {
+    amount: 0,
+    type: "EXPENSE",
+    description: "",
+    location: "",
+    latitude: undefined,
+    longitude: undefined,
+    googleMapsLink: "",
+    date: new Date(),
+    accountId: "",
+    toAccountId: "",
+    categoryId: "",
+    currency: "IDR",
+    exchangeRate: 1,
+    splits: [],
+  };
+}
+
 interface Category {
   id: string;
   name: string;
@@ -450,22 +469,7 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
   );
   const form = useForm<TransactionFormInput, unknown, TransactionFormValues>({
     resolver: zodResolver(transactionFormSchema),
-    defaultValues: {
-      amount: 0,
-      type: "EXPENSE",
-      description: "",
-      location: "",
-      latitude: undefined,
-      longitude: undefined,
-      googleMapsLink: "",
-      date: new Date(),
-      accountId: "",
-      toAccountId: "",
-      categoryId: "",
-      currency: "IDR",
-      exchangeRate: 1,
-      splits: [],
-    },
+    defaultValues: getTransactionDefaultValues(),
   });
 
   const selectedType = useWatch({ control: form.control, name: "type" });
@@ -840,8 +844,9 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
             ? crypto.randomUUID()
             : undefined,
       });
+      form.reset(getTransactionDefaultValues());
+      resetOcrState();
       setOpen(false);
-      form.reset();
       onSuccess?.();
     } catch (error) {
       form.setError("root", {
@@ -1373,7 +1378,10 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={createMutation.isPending}>
+              <Button
+                type="submit"
+                disabled={createMutation.isPending || isScanningBill}
+              >
                 {createMutation.isPending ? "Creating..." : "Create Transaction"}
               </Button>
             </DialogFooter>
