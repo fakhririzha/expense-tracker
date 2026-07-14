@@ -53,17 +53,6 @@ function revalidateBankInterestPaths(): void {
   revalidatePath("/dashboard/calendar");
 }
 
-export async function isManagedBankInterestTransaction(
-  userId: string,
-  transactionId: string
-): Promise<boolean> {
-  const posting = await prisma.bankInterestPosting.findFirst({
-    where: { transactionId, userId },
-    select: { id: true },
-  });
-  return Boolean(posting);
-}
-
 export async function processBankInterest() {
   try {
     const currentBoundary = getCurrentJakartaBoundary();

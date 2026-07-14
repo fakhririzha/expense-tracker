@@ -61,7 +61,7 @@ import {
   Plus,
   ScanLine,
 } from "lucide-react";
-import { useEffect, useState, type ChangeEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 
@@ -96,6 +96,25 @@ const transactionFormSchema = z.object({
 
 type TransactionFormInput = z.input<typeof transactionFormSchema>;
 type TransactionFormValues = z.output<typeof transactionFormSchema>;
+
+function getTransactionDefaultValues(): TransactionFormInput {
+  return {
+    amount: 0,
+    type: "EXPENSE",
+    description: "",
+    location: "",
+    latitude: undefined,
+    longitude: undefined,
+    googleMapsLink: "",
+    date: new Date(),
+    accountId: "",
+    toAccountId: "",
+    categoryId: "",
+    currency: "IDR",
+    exchangeRate: 1,
+    splits: [],
+  };
+}
 
 interface Category {
   id: string;
@@ -431,6 +450,7 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
   const [ocrFileName, setOcrFileName] = useState<string | null>(null);
   const [ocrResult, setOcrResult] = useState<TransactionOcrResult | null>(null);
   const [selectedOcrFields, setSelectedOcrFields] = useState<OcrFieldKey[]>([]);
+  const ocrScanRequestIdRef = useRef(0);
 
   const { data: accountsData = [] } = useAccounts();
   const createMutation = useCreateTransaction();
@@ -450,22 +470,7 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
   );
   const form = useForm<TransactionFormInput, unknown, TransactionFormValues>({
     resolver: zodResolver(transactionFormSchema),
-    defaultValues: {
-      amount: 0,
-      type: "EXPENSE",
-      description: "",
-      location: "",
-      latitude: undefined,
-      longitude: undefined,
-      googleMapsLink: "",
-      date: new Date(),
-      accountId: "",
-      toAccountId: "",
-      categoryId: "",
-      currency: "IDR",
-      exchangeRate: 1,
-      splits: [],
-    },
+    defaultValues: getTransactionDefaultValues(),
   });
 
   const selectedType = useWatch({ control: form.control, name: "type" });
@@ -496,7 +501,7 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
   );
 
   const resetOcrState = () => {
-    setIsScanningBill(false);
+    ocrScanRequestIdRef.current += 1;
     setOcrError(null);
     setOcrFileName(null);
     setOcrResult(null);
@@ -556,16 +561,24 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
       return;
     }
 
+    const scanRequestId = ++ocrScanRequestIdRef.current;
     setIsScanningBill(true);
 
     try {
       const compressedFile = await compressOcrImage(file);
+      if (scanRequestId !== ocrScanRequestIdRef.current) {
+        return;
+      }
+
       const formData = new FormData();
       formData.append("image", compressedFile);
       setOcrFileName(
         `${file.name} (${formatFileSize(compressedFile.size)} upload)`
       );
       const result = await scanTransactionBill(formData);
+      if (scanRequestId !== ocrScanRequestIdRef.current) {
+        return;
+      }
 
       if (!result.success) {
         setOcrError(result.error ?? "Failed to scan bill photo.");
@@ -575,6 +588,10 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
       setOcrResult(result.data);
       setSelectedOcrFields(getDefaultSelectedOcrFields(result.data));
     } catch (error) {
+      if (scanRequestId !== ocrScanRequestIdRef.current) {
+        return;
+      }
+
       console.error("Bill scan error:", error);
       setOcrError(
         error instanceof Error ? error.message : "Failed to scan bill photo."
@@ -805,6 +822,13 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
   ]);
 
   const onSubmit = async (data: TransactionFormValues) => {
+    if (isScanningBill) {
+      form.setError("root", {
+        message: "Please wait for the bill scan to finish before creating the transaction.",
+      });
+      return;
+    }
+
     if (
       data.type === "EXPENSE" &&
       data.splits.length > 0 &&
@@ -840,8 +864,9 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
             ? crypto.randomUUID()
             : undefined,
       });
+      form.reset(getTransactionDefaultValues());
+      resetOcrState();
       setOpen(false);
-      form.reset();
       onSuccess?.();
     } catch (error) {
       form.setError("root", {
@@ -1373,7 +1398,10 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={createMutation.isPending}>
+              <Button
+                type="submit"
+                disabled={createMutation.isPending || isScanningBill}
+              >
                 {createMutation.isPending ? "Creating..." : "Create Transaction"}
               </Button>
             </DialogFooter>

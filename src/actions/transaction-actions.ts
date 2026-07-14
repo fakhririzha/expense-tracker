@@ -6,7 +6,6 @@ import {
   getManagedDepositoTransactionIds,
   isManagedDepositoTransaction,
 } from "@/actions/deposito-actions";
-import { isManagedBankInterestTransaction } from "@/actions/bank-interest-actions";
 import { decryptAccountName } from "@/lib/account-crypto";
 import prisma from "@/lib/db";
 import {
@@ -696,13 +695,6 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
       };
     }
 
-    if (await isManagedBankInterestTransaction(userId, id)) {
-      return {
-        success: false,
-        error: "Automatically generated bank interest cannot be edited.",
-      };
-    }
-
     const { amount, type, accountId, categoryId, recurringRuleId } = data;
     const nextAmount = amount ?? existingTransaction.amount;
     const nextType = (type ?? existingTransaction.type) as TransactionTypeValue;
@@ -962,6 +954,10 @@ export async function updateTransaction(id: string, data: Partial<TransactionInp
     );
 
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await tx.bankInterestPosting.deleteMany({
+        where: { transactionId: id, userId },
+      });
+
       if (requiresBalanceRecalculation) {
         await reverseBalanceEffect(tx, {
           amount: existingTransaction.amount,
@@ -1039,13 +1035,6 @@ export async function deleteTransaction(id: string) {
         success: false,
         error:
           "Deposito-managed transactions cannot be deleted here. Please use the Deposito Tracker page.",
-      };
-    }
-
-    if (await isManagedBankInterestTransaction(authResult.userId, id)) {
-      return {
-        success: false,
-        error: "Automatically generated bank interest cannot be deleted.",
       };
     }
 
