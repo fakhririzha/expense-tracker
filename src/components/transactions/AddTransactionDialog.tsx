@@ -61,7 +61,7 @@ import {
   Plus,
   ScanLine,
 } from "lucide-react";
-import { useEffect, useState, type ChangeEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 
@@ -450,6 +450,7 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
   const [ocrFileName, setOcrFileName] = useState<string | null>(null);
   const [ocrResult, setOcrResult] = useState<TransactionOcrResult | null>(null);
   const [selectedOcrFields, setSelectedOcrFields] = useState<OcrFieldKey[]>([]);
+  const ocrScanRequestIdRef = useRef(0);
 
   const { data: accountsData = [] } = useAccounts();
   const createMutation = useCreateTransaction();
@@ -500,7 +501,7 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
   );
 
   const resetOcrState = () => {
-    setIsScanningBill(false);
+    ocrScanRequestIdRef.current += 1;
     setOcrError(null);
     setOcrFileName(null);
     setOcrResult(null);
@@ -560,16 +561,24 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
       return;
     }
 
+    const scanRequestId = ++ocrScanRequestIdRef.current;
     setIsScanningBill(true);
 
     try {
       const compressedFile = await compressOcrImage(file);
+      if (scanRequestId !== ocrScanRequestIdRef.current) {
+        return;
+      }
+
       const formData = new FormData();
       formData.append("image", compressedFile);
       setOcrFileName(
         `${file.name} (${formatFileSize(compressedFile.size)} upload)`
       );
       const result = await scanTransactionBill(formData);
+      if (scanRequestId !== ocrScanRequestIdRef.current) {
+        return;
+      }
 
       if (!result.success) {
         setOcrError(result.error ?? "Failed to scan bill photo.");
@@ -579,6 +588,10 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
       setOcrResult(result.data);
       setSelectedOcrFields(getDefaultSelectedOcrFields(result.data));
     } catch (error) {
+      if (scanRequestId !== ocrScanRequestIdRef.current) {
+        return;
+      }
+
       console.error("Bill scan error:", error);
       setOcrError(
         error instanceof Error ? error.message : "Failed to scan bill photo."
@@ -809,6 +822,13 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
   ]);
 
   const onSubmit = async (data: TransactionFormValues) => {
+    if (isScanningBill) {
+      form.setError("root", {
+        message: "Please wait for the bill scan to finish before creating the transaction.",
+      });
+      return;
+    }
+
     if (
       data.type === "EXPENSE" &&
       data.splits.length > 0 &&
