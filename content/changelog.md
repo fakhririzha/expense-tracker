@@ -2,9 +2,9 @@
 
 ## v5.5.5
 
-- Updated the app framework and sign-in foundation with current security fixes.
-- Refreshed database and image-processing support to remove known production dependency risks.
-- Added clearer supported Node.js versions for reliable builds and deployments.
+- Improved application security by updating the framework and sign-in foundation.
+- Improved production reliability for database and image-processing workflows by addressing known risks.
+- Documented supported Node.js versions for more reliable builds and deployments.
 
 ## v5.5.4
 
