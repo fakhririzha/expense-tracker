@@ -1,5 +1,11 @@
 # FinHealth Changelog
 
+## v5.5.5
+
+- Improved application security by updating the framework and sign-in foundation.
+- Improved production reliability for database and image-processing workflows by addressing known risks.
+- Documented supported Node.js versions for more reliable builds and deployments.
+
 ## v5.5.4
 
 - Hardened account access, scheduled jobs, push notifications, CSV imports, and encrypted financial data against unauthorized or abusive requests.
