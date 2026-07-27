@@ -120,11 +120,14 @@ export default function RegisterPage() {
                 id="password"
                 name="password"
                 type="password"
+                minLength={12}
                 placeholder="••••••••"
                 required
-                minLength={6}
                 disabled={isLoading}
               />
+              <p className="text-xs text-muted-foreground">
+                Use at least 12 characters.
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="confirmPassword">Confirm Password</Label>
@@ -134,7 +137,7 @@ export default function RegisterPage() {
                 type="password"
                 placeholder="••••••••"
                 required
-                minLength={6}
+                minLength={12}
                 disabled={isLoading}
               />
             </div>

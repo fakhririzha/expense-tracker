@@ -27,6 +27,7 @@ import { Prisma, UnitType } from "@/generated/prisma/client/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { encryptUserField, decryptUserField } from "@/lib/user-encryption";
+import { rethrowEncryptionConfigurationError } from "@/lib/encryption";
 
 const investmentAssetSchema = z.object({
   symbol: z.string().min(1, "Symbol is required").toUpperCase(),
@@ -669,7 +670,8 @@ export async function getTradeHistory(assetId?: string) {
               "tradeHistory.notes",
               trade.notesEncrypted
             );
-          } catch {
+          } catch (error) {
+            rethrowEncryptionConfigurationError(error);
             // Fall back to plaintext
           }
         }

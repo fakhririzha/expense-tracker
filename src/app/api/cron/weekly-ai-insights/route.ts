@@ -1,21 +1,15 @@
 import { NextResponse } from "next/server";
 
 import { sendWeeklyAiInsightReadyNotification } from "@/lib/notification-service";
+import { isCronRequestAuthorized } from "@/lib/cron-auth";
 import { generateMissingWeeklyAiInsights } from "@/lib/weekly-ai-insight-service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function isCronAuthorized(request: Request): boolean {
-  const configuredSecret = process.env.CRON_SECRET;
-  return configuredSecret
-    ? request.headers.get("authorization") === `Bearer ${configuredSecret}`
-    : process.env.NODE_ENV !== "production";
-}
-
 export async function GET(request: Request) {
   try {
-    if (!isCronAuthorized(request)) {
+    if (!isCronRequestAuthorized(request)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

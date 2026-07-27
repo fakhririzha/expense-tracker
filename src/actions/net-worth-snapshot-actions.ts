@@ -3,7 +3,6 @@
 import { auth } from "@/auth";
 import prisma from "@/lib/db";
 import {
-  createMissingMonthlyNetWorthSnapshots as createMissingSnapshotsForPeriod,
   createNetWorthSnapshotIfMissing,
   getNetWorthSnapshotByPeriodForUser,
   getNetWorthSnapshotSummaryForUser,
@@ -12,7 +11,6 @@ import {
 } from "@/lib/net-worth-snapshot-service";
 import { isFuturePeriod } from "@/lib/net-worth-period";
 import type {
-  NetWorthPeriod,
   NetWorthSnapshotDetail,
   NetWorthSnapshotListItem,
   NetWorthSnapshotSummary,
@@ -228,18 +226,4 @@ export async function createNetWorthSnapshotForCurrentUser(input: {
     console.error("Create net worth snapshot error:", error);
     return { success: false, error: "Failed to create net worth snapshot" };
   }
-}
-
-export async function createMonthlyNetWorthSnapshotForUser(
-  userId: string,
-  period: NetWorthPeriod
-) {
-  return createNetWorthSnapshotIfMissing(userId, period, {
-    trigger: "cron",
-    calculationMode: "live_snapshot",
-  });
-}
-
-export async function createMissingMonthlyNetWorthSnapshots(period: NetWorthPeriod) {
-  return createMissingSnapshotsForPeriod(period);
 }

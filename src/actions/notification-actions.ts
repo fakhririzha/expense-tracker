@@ -11,20 +11,32 @@ import {
   syncPushSubscriptionForUser,
   updateNotificationPreferencesForUser,
 } from "@/lib/notification-service";
+import {
+  MAX_PUSH_ENDPOINT_LENGTH,
+  MAX_PUSH_USER_AGENT_LENGTH,
+  validatePushEndpoint,
+  validatePushKey,
+} from "@/lib/push-subscription-security";
 
 const pushSubscriptionSchema = z.object({
-  endpoint: z.string().url("Invalid push subscription endpoint"),
-  expirationTime: z.number().int().nullable().optional(),
+  endpoint: z.string().min(1).max(MAX_PUSH_ENDPOINT_LENGTH),
+  expirationTime: z.number().int().min(0).max(8.64e15).nullable().optional(),
   keys: z.object({
-    p256dh: z.string().min(1, "Missing browser push key"),
-    auth: z.string().min(1, "Missing browser auth key"),
+    p256dh: z.string().max(128).refine((value) => validatePushKey(value, 65, 128), "Invalid browser push key"),
+    auth: z.string().max(64).refine((value) => validatePushKey(value, 16, 64), "Invalid browser auth key"),
   }),
-  userAgent: z.string().trim().nullable().optional(),
+  userAgent: z.string().trim().max(MAX_PUSH_USER_AGENT_LENGTH).nullable().optional(),
+}).strict().superRefine((value, context) => {
+  try {
+    validatePushEndpoint(value.endpoint);
+  } catch (error) {
+    context.addIssue({ code: "custom", path: ["endpoint"], message: error instanceof Error ? error.message : "Invalid push subscription endpoint" });
+  }
 });
 
 const unsubscribeSchema = z.object({
-  endpoint: z.string().url("Invalid push subscription endpoint"),
-});
+  endpoint: z.string().url("Invalid push subscription endpoint").max(MAX_PUSH_ENDPOINT_LENGTH),
+}).strict();
 
 const notificationPreferencesSchema = z.object({
   pushEnabled: z.boolean().optional(),

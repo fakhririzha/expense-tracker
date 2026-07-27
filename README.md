@@ -55,6 +55,8 @@ AUTH_SECRET="replace-with-openssl-output"
 AUTH_URL="http://localhost:3000"
 CRON_SECRET="replace-for-production-cron"
 ENCRYPTION_MASTER_KEY="replace-with-openssl-output"
+# Set only when a trusted self-hosted reverse proxy overwrites X-Forwarded-For
+AUTH_TRUST_PROXY="false"
 NEXT_PUBLIC_VAPID_PUBLIC_KEY="replace-with-web-push-public-key"
 VAPID_PRIVATE_KEY="replace-with-web-push-private-key"
 VAPID_SUBJECT="mailto:you@example.com"
@@ -120,8 +122,9 @@ Notes:
 | `SHADOW_DATABASE_URL` | Shadow database for Prisma migrations | No |
 | `AUTH_SECRET` | Auth.js secret | Yes |
 | `AUTH_URL` | Base app URL and auth callback origin | Yes |
-| `CRON_SECRET` | Bearer secret for production cron endpoints | Yes in production |
-| `ENCRYPTION_MASTER_KEY` | Base64-encoded 32-byte master key for field encryption | Required for encrypted-field support |
+| `CRON_SECRET` | Bearer secret required by every cron endpoint | Yes |
+| `ENCRYPTION_MASTER_KEY` | Canonical Base64-encoded 32-byte master key; production startup fails closed without it | Yes outside development |
+| `AUTH_TRUST_PROXY` | Trust the first `X-Forwarded-For` address when a self-hosted reverse proxy overwrites incoming values | No |
 | `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Browser-facing VAPID key | Required for web push |
 | `VAPID_PRIVATE_KEY` | Server-side VAPID key | Required for web push |
 | `VAPID_SUBJECT` | VAPID contact subject | Required for web push |
@@ -234,6 +237,11 @@ git diff --check
 ```
 
 For functional changes, manually verify the touched flow and its balance/reporting side effects. This is especially important for transactions, transfers, liabilities, receivables, split expenses, investments, market-price fallbacks, Pegadaian reference prices, forecasts, notifications, and imports.
+
+Transaction CSV imports are limited to 512 KiB, 1,000 data rows, 32 columns,
+128 characters per header, and 2,048 characters per cell. Browser validation is
+only an early convenience check; the authenticated server action enforces the
+same limits before importing any rows.
 
 ## Deployment
 

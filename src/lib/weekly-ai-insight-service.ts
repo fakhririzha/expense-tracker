@@ -8,6 +8,7 @@ import {
 import prisma from "@/lib/db";
 import { flattenTransactionAllocationRows } from "@/lib/transaction-allocation-service";
 import { decryptUserField, encryptUserField } from "@/lib/user-encryption";
+import { rethrowEncryptionConfigurationError } from "@/lib/encryption";
 
 const JAKARTA_UTC_OFFSET_MS = 7 * 60 * 60 * 1000;
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -379,6 +380,7 @@ export async function getWeeklyAiInsightsForUser(
             ? toView({ ...record, content: content.data })
             : null;
         } catch (error) {
+          rethrowEncryptionConfigurationError(error);
           console.error(`Weekly AI insight read error for user ${userId}:`, error);
           return null;
         }

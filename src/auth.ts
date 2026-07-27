@@ -4,12 +4,14 @@ import NextAuth from "next-auth";
 import authConfig from "./auth.config";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
-import { z } from "zod";
+import { loginSchema } from "@/lib/auth-input";
+import {
+  clearLoginEmailRateLimit,
+  consumeLoginRateLimits,
+} from "@/lib/auth-rate-limit";
 
-const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(6),
-});
+const DUMMY_PASSWORD_HASH =
+  "$2b$10$7gh//9KVPnDLDEUK40hcM.XXtmiIodzdzEOIp4nL/NHLMNyynFL9C";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
@@ -22,7 +24,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
         const validatedFields = loginSchema.safeParse(credentials);
 
         if (!validatedFields.success) {
@@ -31,11 +33,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         const { email, password } = validatedFields.data;
 
+        if (!(await consumeLoginRateLimits(email, request))) {
+          return null;
+        }
+
         const user = await prisma.user.findUnique({
           where: { email },
         });
 
         if (!user || !user.password) {
+          await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
           return null;
         }
 
@@ -44,6 +51,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!passwordsMatch) {
           return null;
         }
+
+        await clearLoginEmailRateLimit(email);
 
         return {
           id: user.id,

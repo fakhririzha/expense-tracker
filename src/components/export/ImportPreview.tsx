@@ -1,6 +1,5 @@
 "use client";
 
-import { ParsedTransaction } from "@/actions/import-actions";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -11,6 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { AlertCircle, CheckCircle } from "lucide-react";
+import type { ParsedTransaction } from "@/lib/transaction-import";
 
 interface ImportPreviewProps {
   transactions: ParsedTransaction[];

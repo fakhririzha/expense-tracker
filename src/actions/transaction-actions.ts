@@ -5,9 +5,10 @@ import { Prisma, type AccountType } from "@/generated/prisma/client/client";
 import {
   getManagedDepositoTransactionIds,
   isManagedDepositoTransaction,
-} from "@/actions/deposito-actions";
+} from "@/lib/deposito-managed-transactions";
 import { decryptAccountName } from "@/lib/account-crypto";
 import prisma from "@/lib/db";
+import { isEncryptionConfigurationError } from "@/lib/encryption";
 import {
   isDepositoAccountType,
   isLoanReceivableAccountType,
@@ -280,7 +281,8 @@ async function decryptOptionalField(
 
   try {
     return await decryptUserField(userId, fieldName, encryptedValue);
-  } catch {
+  } catch (error) {
+    if (isEncryptionConfigurationError(error)) throw error;
     return fallbackValue;
   }
 }

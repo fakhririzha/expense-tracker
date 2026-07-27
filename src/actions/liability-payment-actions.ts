@@ -11,6 +11,7 @@ import {
   generatePaymentReference as generateRef,
 } from "@/lib/liability-payment-validation";
 import { encryptUserField, decryptUserField } from "@/lib/user-encryption";
+import { rethrowEncryptionConfigurationError } from "@/lib/encryption";
 
 // Schema for liability payment input
 const liabilityPaymentSchema = z.object({
@@ -329,7 +330,8 @@ export async function getLiabilityPaymentDetails(transactionId: string) {
           "transaction.description",
           transaction.descriptionEncrypted
         );
-      } catch {
+      } catch (error) {
+        rethrowEncryptionConfigurationError(error);
         // Fall back to plaintext
       }
     }
@@ -341,7 +343,8 @@ export async function getLiabilityPaymentDetails(transactionId: string) {
           "transaction.referenceNumber",
           transaction.referenceNumberEncrypted
         );
-      } catch {
+      } catch (error) {
+        rethrowEncryptionConfigurationError(error);
         // Fall back to plaintext
       }
     }
@@ -353,7 +356,8 @@ export async function getLiabilityPaymentDetails(transactionId: string) {
           "transaction.createdBy",
           transaction.createdByEncrypted
         );
-      } catch {
+      } catch (error) {
+        rethrowEncryptionConfigurationError(error);
         // Fall back to plaintext
       }
     }
@@ -590,7 +594,8 @@ export async function getLiabilityPaymentHistory(
               "transaction.description",
               payment.descriptionEncrypted
             );
-          } catch {
+          } catch (error) {
+            rethrowEncryptionConfigurationError(error);
             // Fall back to plaintext
           }
         }
@@ -602,7 +607,8 @@ export async function getLiabilityPaymentHistory(
               "transaction.referenceNumber",
               payment.referenceNumberEncrypted
             );
-          } catch {
+          } catch (error) {
+            rethrowEncryptionConfigurationError(error);
             // Fall back to plaintext
           }
         }
@@ -614,7 +620,8 @@ export async function getLiabilityPaymentHistory(
               "transaction.createdBy",
               payment.createdByEncrypted
             );
-          } catch {
+          } catch (error) {
+            rethrowEncryptionConfigurationError(error);
             // Fall back to plaintext
           }
         }

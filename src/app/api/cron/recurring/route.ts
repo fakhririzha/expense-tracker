@@ -1,4 +1,5 @@
-import { processRecurringTransactions } from "@/actions/recurring-actions";
+import { processRecurringTransactions } from "@/lib/recurring-processing-service";
+import { isCronRequestAuthorized } from "@/lib/cron-auth";
 import { NextResponse } from "next/server";
 
 // Vercel Cron configuration
@@ -16,12 +17,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
-    // Verify the request is from Vercel Cron (in production)
-    const authHeader = request.headers.get("authorization");
-    if (
-      process.env.NODE_ENV === "production" &&
-      authHeader !== `Bearer ${process.env.CRON_SECRET}`
-    ) {
+    if (!isCronRequestAuthorized(request)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

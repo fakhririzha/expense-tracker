@@ -1,5 +1,11 @@
 # FinHealth Changelog
 
+## v5.5.4
+
+- Hardened account access, scheduled jobs, push notifications, CSV imports, and encrypted financial data against unauthorized or abusive requests.
+- Added database-backed sign-in and registration protection while keeping existing account passwords compatible.
+- Limited transaction imports to 512 KB and 1,000 rows, with clearer validation before any financial data is changed.
+
 ## v5.5.3
 
 - Bank interest entries can now be corrected or deleted like other transactions while future automatic interest continues on schedule.

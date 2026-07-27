@@ -33,6 +33,23 @@ const SALT_LENGTH = 32;
 const PBKDF2_ITERATIONS = 100000;
 const PBKDF2_DIGEST = "sha512";
 
+export class EncryptionConfigurationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "EncryptionConfigurationError";
+  }
+}
+
+export function isEncryptionConfigurationError(
+  error: unknown
+): error is EncryptionConfigurationError {
+  return error instanceof EncryptionConfigurationError;
+}
+
+export function rethrowEncryptionConfigurationError(error: unknown): void {
+  if (isEncryptionConfigurationError(error)) throw error;
+}
+
 // ==================== Type Definitions ====================
 
 /**
@@ -136,17 +153,22 @@ export const FIELD_CLASSIFICATIONS: Record<string, FieldClassification> = {
 export function getMasterKey(): Buffer {
   const key = process.env.ENCRYPTION_MASTER_KEY;
   if (!key) {
-    throw new Error(
+    throw new EncryptionConfigurationError(
       "ENCRYPTION_MASTER_KEY environment variable is not set. " +
       "Generate with: openssl rand -base64 32"
     );
   }
-  
+
+  if (!/^[A-Za-z0-9+/]{43}=$/.test(key)) {
+    throw new EncryptionConfigurationError(
+      "ENCRYPTION_MASTER_KEY must be canonical Base64 without whitespace."
+    );
+  }
+
   const decoded = Buffer.from(key, "base64");
-  if (decoded.length !== KEY_LENGTH) {
-    throw new Error(
-      `ENCRYPTION_MASTER_KEY must be ${KEY_LENGTH} bytes (256 bits). ` +
-      `Current length: ${decoded.length}`
+  if (decoded.length !== KEY_LENGTH || decoded.toString("base64") !== key) {
+    throw new EncryptionConfigurationError(
+      `ENCRYPTION_MASTER_KEY must decode to exactly ${KEY_LENGTH} bytes.`
     );
   }
   
@@ -162,6 +184,12 @@ export function isEncryptionConfigured(): boolean {
     return true;
   } catch {
     return false;
+  }
+}
+
+export function assertProductionEncryptionConfigured(): void {
+  if (process.env.NODE_ENV === "production") {
+    getMasterKey();
   }
 }
 
@@ -432,12 +460,9 @@ export function hashBackupKey(backupKey: string): string {
  * Validate that a key is properly formatted
  */
 export function isValidKey(key: string): boolean {
-  try {
-    const decoded = Buffer.from(key, "base64");
-    return decoded.length === KEY_LENGTH;
-  } catch {
-    return false;
-  }
+  if (!/^[A-Za-z0-9+/]{43}=$/.test(key)) return false;
+  const decoded = Buffer.from(key, "base64");
+  return decoded.length === KEY_LENGTH && decoded.toString("base64") === key;
 }
 
 /**

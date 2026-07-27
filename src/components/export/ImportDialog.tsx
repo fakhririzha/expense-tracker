@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  parseCSVContent,
-  detectColumnMapping,
-  previewImport,
-  importTransactions,
-  ColumnMapping as ColumnMappingType,
-  ParsedTransaction,
-} from "@/actions/import-actions";
+import { importTransactions } from "@/actions/import-actions";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -20,6 +13,16 @@ import {
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import {
+  detectColumnMapping,
+  MAX_CSV_BYTES,
+  MAX_CSV_CELL_CHARS,
+  MAX_CSV_COLUMNS,
+  MAX_CSV_HEADER_CHARS,
+  MAX_CSV_ROWS,
+  parseCSVContent,
+  previewImport,
+} from "@/lib/transaction-import";
 import { cn } from "@/lib/utils";
 import {
   AlertCircle,
@@ -32,6 +35,10 @@ import {
 import { useState, useCallback } from "react";
 import { ColumnMapping } from "./ColumnMapping";
 import { ImportPreview } from "./ImportPreview";
+import type {
+  ColumnMapping as ColumnMappingType,
+  ParsedTransaction,
+} from "@/lib/transaction-import";
 
 interface ImportDialogProps {
   trigger?: React.ReactNode;
@@ -90,8 +97,13 @@ export function ImportDialog({ trigger, onSuccess }: ImportDialogProps) {
    */
   const processCSVFile = useCallback(async (selectedFile: File) => {
     // Validate file type
-    if (!selectedFile.name.endsWith(".csv")) {
+    if (!/\.csv$/i.test(selectedFile.name)) {
       setError("Please select a CSV file");
+      return;
+    }
+
+    if (selectedFile.size > MAX_CSV_BYTES) {
+      setError("CSV file must be 512 KB or smaller.");
       return;
     }
 
@@ -117,7 +129,7 @@ export function ImportDialog({ trigger, onSuccess }: ImportDialogProps) {
         setHeaders(parseResult.headers);
 
         // Auto-detect column mapping
-        const detectedMapping = await detectColumnMapping(parseResult.headers);
+        const detectedMapping = detectColumnMapping(parseResult.headers);
         setMapping(detectedMapping);
 
         // Move to mapping step
@@ -175,9 +187,13 @@ export function ImportDialog({ trigger, onSuccess }: ImportDialogProps) {
     setStep("importing");
 
     try {
-      const result = await importTransactions(csvContent, mapping, {
-        createMissingAccounts,
-        createMissingCategories,
+      const result = await importTransactions({
+        csvContent,
+        mapping,
+        options: {
+          createMissingAccounts,
+          createMissingCategories,
+        },
       });
 
       setImportResult({
@@ -320,6 +336,12 @@ export function ImportDialog({ trigger, onSuccess }: ImportDialogProps) {
                 <code className="text-xs bg-muted p-2 rounded block">
                   Date,Amount,Type,Category,Account,Description,Currency
                 </code>
+                <p className="mt-2 text-xs">
+                  Maximum 512 KB, {MAX_CSV_ROWS.toLocaleString()} transaction rows,
+                  and {MAX_CSV_COLUMNS} columns. Headers can contain up to{" "}
+                  {MAX_CSV_HEADER_CHARS} characters and cells up to{" "}
+                  {MAX_CSV_CELL_CHARS.toLocaleString()} characters.
+                </p>
               </div>
             </div>
           )}
