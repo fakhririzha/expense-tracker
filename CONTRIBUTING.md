@@ -104,8 +104,8 @@ pnpm dev              # Start Next.js dev server
 pnpm build            # prisma generate && next build
 pnpm start            # Start production server
 pnpm lint             # Run ESLint
-pnpm db:migrate:dev   # npx prisma@^7.4.1 migrate dev
-pnpm db:migrate:prod  # npx prisma@^7.4.1 migrate deploy
+pnpm db:migrate:dev   # npx prisma@7.9.0 migrate dev
+pnpm db:migrate:prod  # npx prisma@7.9.0 migrate deploy
 pnpm prisma generate  # Generate Prisma client
 pnpm prisma db push   # Push schema changes in development when appropriate
 ```

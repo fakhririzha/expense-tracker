@@ -19,13 +19,13 @@ FinHealth is a personal finance dashboard built with Next.js 16 and React 19. It
 
 | Layer | Technology | Version |
 |-------|------------|---------|
-| Framework | Next.js | 16.1.2 |
+| Framework | Next.js | 16.2.12 |
 | UI Library | React / React DOM | 19.2.3 |
 | Language | TypeScript | 5.x |
 | Styling | Tailwind CSS | 4.x |
 | Database | MySQL / MariaDB | 8.0+ |
-| ORM | Prisma | 7.4.1 |
-| Authentication | Auth.js v5 / NextAuth | 5.0.0-beta.30 |
+| ORM | Prisma | 7.9.0 |
+| Authentication | Auth.js v5 / NextAuth | 5.0.0-beta.32 |
 | Server State | TanStack Query | 5.90+ |
 | Forms | React Hook Form + Zod | 7.71+ / 4.3+ |
 | Charts | Recharts | 3.6+ |
@@ -35,7 +35,7 @@ FinHealth is a personal finance dashboard built with Next.js 16 and React 19. It
 
 ## Requirements
 
-- Node.js 20+
+- Node.js 20.19+, 22.12+, or 24+
 - pnpm 9+
 - MySQL or MariaDB 8+
 
