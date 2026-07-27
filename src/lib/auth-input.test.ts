@@ -10,6 +10,8 @@ test("normalizes authentication emails consistently", () => {
 
 test("requires stronger new passwords while preserving legacy login input", () => {
   assert.equal(loginSchema.safeParse({ email: "a@b.com", password: "123456" }).success, true);
+  assert.equal(loginSchema.safeParse({ email: "a@b.com", password: "a".repeat(72) }).success, true);
+  assert.equal(loginSchema.safeParse({ email: "a@b.com", password: "é".repeat(37) }).success, false);
   assert.equal(registerSchema.safeParse({ name: "Test", email: "a@b.com", password: "short", mainCurrency: "IDR" }).success, false);
   assert.equal(registerSchema.safeParse({ name: "Test", email: "a@b.com", password: "123456789012", mainCurrency: "idr" }).success, true);
   assert.equal(registerSchema.safeParse({ name: "Test", email: "a@b.com", password: "é".repeat(37), mainCurrency: "IDR" }).success, false);

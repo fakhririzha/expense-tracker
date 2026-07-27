@@ -198,4 +198,34 @@ describe("transaction CSV mapping", () => {
       preview.transactions[1].errors.includes("Currency must be a 3-letter code")
     );
   });
+
+  it("preserves formula-like inbound account and category names", () => {
+    const csv = "Date,Amount,Type,Account,Category,Currency\n2026-07-27,10,expense,-Cash,+Food,IDR";
+    const preview = previewImport(csv, {
+      date: "date",
+      amount: "amount",
+      type: "type",
+      account: "account",
+      category: "category",
+      currency: "currency",
+    });
+
+    assert.equal(preview.transactions[0].account, "-Cash");
+    assert.equal(preview.transactions[0].category, "+Food");
+  });
+
+  it("accepts exact ISO dates and rejects ambiguous or impossible dates", () => {
+    const csv = `${HEADER}\n2024-02-29,10,expense,Cash,IDR\n05/03/2024,10,expense,Cash,IDR\n2024-02-30,10,expense,Cash,IDR`;
+    const preview = previewImport(csv, {
+      date: "date",
+      amount: "amount",
+      type: "type",
+      account: "account",
+      currency: "currency",
+    });
+
+    assert.equal(preview.transactions[0].isValid, true);
+    assert.ok(preview.transactions[1].errors.includes("Invalid date format"));
+    assert.ok(preview.transactions[2].errors.includes("Invalid date format"));
+  });
 });

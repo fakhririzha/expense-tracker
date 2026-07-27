@@ -1,4 +1,5 @@
 import Papa from "papaparse";
+import { z } from "zod";
 
 export const MAX_CSV_BYTES = 512 * 1024;
 export const MAX_CSV_ROWS = 1000;
@@ -97,9 +98,9 @@ function normalizeHeader(header: string, index: number): string {
 }
 
 function sanitizeCsvCell(value: string | undefined): string | undefined {
-  const trimmed = value?.trim();
+  const trimmed = value?.trim().replace(/^\u200B+/, "");
   if (!trimmed) return undefined;
-  return /^[=+\-@]/.test(trimmed) ? `\u200B${trimmed}` : trimmed;
+  return trimmed;
 }
 
 function parseOptionalNumber(value: string | undefined): number | undefined {
@@ -218,56 +219,32 @@ export function validateColumnMapping(
 export function validateImportTransactionsInput(
   input: unknown
 ): ValidationResult<ImportTransactionsInput> {
-  if (!isRecord(input)) {
+  const inputResult = z
+    .strictObject({
+      csvContent: z.string(),
+      mapping: z.unknown(),
+      options: z
+        .strictObject({
+          createMissingCategories: z.boolean().optional(),
+          createMissingAccounts: z.boolean().optional(),
+        })
+        .optional(),
+    })
+    .safeParse(input);
+
+  if (!inputResult.success) {
     return { success: false, error: "Invalid import request." };
   }
 
-  const allowedInputKeys = new Set(["csvContent", "mapping", "options"]);
-  if (
-    Object.keys(input).some((key) => !allowedInputKeys.has(key)) ||
-    typeof input.csvContent !== "string"
-  ) {
-    return { success: false, error: "Invalid import request." };
-  }
-
-  const mappingResult = validateColumnMapping(input.mapping);
+  const mappingResult = validateColumnMapping(inputResult.data.mapping);
   if (!mappingResult.success) return mappingResult;
-
-  let options: ImportTransactionsInput["options"];
-  if (input.options !== undefined) {
-    if (!isRecord(input.options)) {
-      return { success: false, error: "Invalid import options." };
-    }
-
-    const allowedOptionKeys = new Set([
-      "createMissingCategories",
-      "createMissingAccounts",
-    ]);
-    if (
-      Object.entries(input.options).some(
-        ([key, value]) =>
-          !allowedOptionKeys.has(key) || typeof value !== "boolean"
-      )
-    ) {
-      return { success: false, error: "Invalid import options." };
-    }
-
-    options = {
-      createMissingCategories: input.options.createMissingCategories as
-        | boolean
-        | undefined,
-      createMissingAccounts: input.options.createMissingAccounts as
-        | boolean
-        | undefined,
-    };
-  }
 
   return {
     success: true,
     data: {
-      csvContent: input.csvContent,
+      csvContent: inputResult.data.csvContent,
       mapping: mappingResult.data,
-      ...(options ? { options } : {}),
+      ...(inputResult.data.options ? { options: inputResult.data.options } : {}),
     },
   };
 }
@@ -378,8 +355,18 @@ export function mapToTransactions(
       errors.push("Source and destination accounts must be different for TRANSFER");
     }
 
-    if (dateValue && Number.isNaN(new Date(dateValue).getTime())) {
-      errors.push("Invalid date format");
+    if (dateValue) {
+      const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateValue);
+      const parsedDate = match
+        ? new Date(`${match[1]}-${match[2]}-${match[3]}T00:00:00.000Z`)
+        : null;
+      if (
+        !parsedDate ||
+        Number.isNaN(parsedDate.getTime()) ||
+        parsedDate.toISOString().slice(0, 10) !== dateValue
+      ) {
+        errors.push("Invalid date format");
+      }
     }
 
     if (latitudeValue && parseOptionalNumber(latitudeValue) === undefined) {

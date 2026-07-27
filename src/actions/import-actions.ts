@@ -201,6 +201,27 @@ export async function importTransactions(
           categoryId = category.id;
         }
 
+        if (transaction.currency !== account.currency) {
+          result.failed++;
+          result.errors.push({
+            row: transaction.rowNumber,
+            error: `Currency "${transaction.currency}" does not match account currency "${account.currency}"`,
+          });
+          continue;
+        }
+
+        if (
+          transaction.type === "TRANSFER" &&
+          toAccount?.currency !== account.currency
+        ) {
+          result.failed++;
+          result.errors.push({
+            row: transaction.rowNumber,
+            error: "Source and destination accounts must use the same currency",
+          });
+          continue;
+        }
+
         const transactionResult = await createTransaction({
           amount: transaction.amount,
           currency: transaction.currency || account.currency,
