@@ -1,5 +1,3 @@
-"use server";
-
 import { Prisma, TransactionType } from "@/generated/prisma/client/client";
 import { decryptAccountName } from "@/lib/account-crypto";
 import {

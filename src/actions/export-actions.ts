@@ -13,6 +13,14 @@ import {
 import prisma from "@/lib/db";
 import { format } from "date-fns";
 import { decryptUserField } from "@/lib/user-encryption";
+import { rethrowEncryptionConfigurationError } from "@/lib/encryption";
+
+function fallbackAfterDecryptionError<T>(fallback: T) {
+  return (error: unknown): T => {
+    rethrowEncryptionConfigurationError(error);
+    return fallback;
+  };
+}
 
 /**
  * Sanitizes a CSV cell to prevent spreadsheet formula injection.
@@ -138,7 +146,7 @@ export async function exportTransactionsCSV(params?: {
     const rows = await Promise.all(
       transactions.map(async (t) => {
         const description = t.descriptionEncrypted
-          ? await decryptUserField(session.user.id, "transaction.description", t.descriptionEncrypted).catch(() => t.description || "")
+          ? await decryptUserField(session.user.id, "transaction.description", t.descriptionEncrypted).catch(fallbackAfterDecryptionError(t.description || ""))
           : (t.description || "");
         const splitAllocations = await Promise.all(
           t.splits.map(async (split) => {
@@ -147,7 +155,7 @@ export async function exportTransactionsCSV(params?: {
                   session.user.id,
                   "transactionSplit.description",
                   split.descriptionEncrypted
-                ).catch(() => split.description || "")
+                ).catch(fallbackAfterDecryptionError(split.description || ""))
               : (split.description || "");
             return `${split.category?.name || "Uncategorized"}:${split.amount}${splitDescription ? ` (${splitDescription})` : ""}`;
           })
@@ -351,14 +359,14 @@ export async function exportAllData() {
                   session.user.id,
                   "transaction.description",
                   t.descriptionEncrypted
-                ).catch(() => t.description)
+                ).catch(fallbackAfterDecryptionError(t.description))
               : t.description,
             referenceNumber: t.referenceNumberEncrypted
               ? await decryptUserField(
                   session.user.id,
                   "transaction.referenceNumber",
                   t.referenceNumberEncrypted
-                ).catch(() => t.referenceNumber)
+                ).catch(fallbackAfterDecryptionError(t.referenceNumber))
               : t.referenceNumber,
             accountName: await decryptAccountName(
               session.user.id,
@@ -375,7 +383,7 @@ export async function exportAllData() {
                       session.user.id,
                       "transactionSplit.description",
                       split.descriptionEncrypted
-                    ).catch(() => split.description)
+                    ).catch(fallbackAfterDecryptionError(split.description))
                   : split.description,
               }))
             ),
@@ -472,7 +480,7 @@ export async function exportAllData() {
                 session.user.id,
                 "tradeHistory.notes",
                 trade.notesEncrypted
-              ).catch(() => trade.notes)
+              ).catch(fallbackAfterDecryptionError(trade.notes))
             : trade.notes,
         }))
       ),

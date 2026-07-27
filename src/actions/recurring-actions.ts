@@ -346,7 +346,7 @@ export async function getRecurringRules() {
 
 // Process due recurring transactions
 // This should be called by a CRON job (e.g., Vercel Cron)
-export async function processRecurringTransactions() {
+async function processRecurringTransactions() {
   try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -494,6 +494,8 @@ export async function processRecurringTransactions() {
     return { success: false, error: "Failed to process recurring transactions" };
   }
 }
+
+void processRecurringTransactions;
 
 function calculateNextDueDate(
   currentDate: Date,

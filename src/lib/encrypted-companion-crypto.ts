@@ -1,4 +1,5 @@
 import { decryptUserField, encryptUserField } from "@/lib/user-encryption";
+import { isEncryptionConfigurationError } from "@/lib/encryption";
 
 export type EncryptedCompanionField =
   | "recurringRule.name"
@@ -44,7 +45,8 @@ export async function decryptRequiredCompanion(
   if (encrypted) {
     try {
       return await decryptUserField(userId, field, encrypted);
-    } catch {
+    } catch (error) {
+      if (isEncryptionConfigurationError(error)) throw error;
       // A legacy plaintext value may still be available during rollout.
     }
   }
@@ -66,7 +68,8 @@ export async function decryptOptionalCompanion(
   if (encrypted) {
     try {
       return await decryptUserField(userId, field, encrypted);
-    } catch {
+    } catch (error) {
+      if (isEncryptionConfigurationError(error)) throw error;
       // A legacy plaintext value may still be available during rollout.
     }
   }

@@ -1,11 +1,11 @@
 "use client";
 
-import { getImportTemplate } from "@/actions/import-actions";
 import { ExportDialog } from "@/components/export/ExportDialog";
 import { ImportDialog } from "@/components/export/ImportDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { getImportTemplate } from "@/lib/transaction-import";
 import {
   Download,
   FileDown,
@@ -77,7 +77,7 @@ const exportCards = [
 export default function DataManagementPage() {
   const handleDownloadTemplate = async () => {
     try {
-      const template = await getImportTemplate();
+      const template = getImportTemplate();
       
       // Create and trigger download
       const blob = new Blob([template], { type: "text/csv" });

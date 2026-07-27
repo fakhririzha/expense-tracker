@@ -83,6 +83,20 @@ model UserOnboardingState {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+model AuthRateLimitBucket {
+  id          String   @id @default(cuid())
+  scope       String   @db.VarChar(32)
+  keyHash     String   @db.Char(64)
+  windowStart DateTime
+  attempts    Int      @default(0)
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([scope, keyHash, windowStart])
+  @@index([expiresAt])
+}
+
 model AuthAccount {
   userId            String
   type              String

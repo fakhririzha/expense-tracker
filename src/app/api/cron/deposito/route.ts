@@ -1,27 +1,18 @@
 import { NextResponse } from "next/server";
 
 import { processDepositoInterest } from "@/actions/deposito-actions";
+import { isCronRequestAuthorized } from "@/lib/cron-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function isCronAuthorized(request: Request): boolean {
-  const configuredSecret = process.env.CRON_SECRET;
-
-  if (!configuredSecret) {
-    return process.env.NODE_ENV !== "production";
-  }
-
-  return request.headers.get("authorization") === `Bearer ${configuredSecret}`;
-}
-
 export async function GET(request: Request) {
   try {
-    if (!isCronAuthorized(request)) {
+    if (!isCronRequestAuthorized(request)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const result = await processDepositoInterest();
+    const result = await processDepositoInterest(process.env.CRON_SECRET!);
     if (!result.success) {
       return NextResponse.json(
         { error: result.error ?? "Failed to process deposito interest." },

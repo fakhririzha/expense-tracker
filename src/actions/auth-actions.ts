@@ -1,25 +1,20 @@
 "use server";
 
 import { signIn, signOut } from "@/auth";
+import { Prisma } from "@/generated/prisma/client/client";
+import { consumeRegistrationRateLimits } from "@/lib/auth-rate-limit";
+import {
+  loginSchema,
+  registerSchema,
+  type LoginInput,
+  type RegisterInput,
+} from "@/lib/auth-input";
 import prisma from "@/lib/db";
 import bcrypt from "bcryptjs";
+import { headers } from "next/headers";
 import { AuthError } from "next-auth";
-import { z } from "zod";
 
-const registerSchema = z.object({
-  name: z.string().min(2, "Name must be at least 2 characters"),
-  email: z.string().email("Invalid email address"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
-  mainCurrency: z.string().default("IDR"),
-});
-
-const loginSchema = z.object({
-  email: z.string().email("Invalid email address"),
-  password: z.string().min(1, "Password is required"),
-});
-
-export type RegisterInput = z.infer<typeof registerSchema>;
-export type LoginInput = z.infer<typeof loginSchema>;
+export type { LoginInput, RegisterInput } from "@/lib/auth-input";
 export type LoginResult =
   | {
       success: true;
@@ -43,39 +38,34 @@ export async function register(data: RegisterInput) {
 
     const { name, email, password, mainCurrency } = validatedFields.data;
 
-    // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
-    });
-
-    if (existingUser) {
+    const requestHeaders = await headers();
+    const request = new Request("http://localhost", { headers: requestHeaders });
+    if (!(await consumeRegistrationRateLimits(email, request))) {
       return {
         success: false,
-        error: "User with this email already exists",
+        error: "Too many registration attempts. Please try again later.",
       };
     }
 
-    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Create user
-    const user = await prisma.user.create({
-      data: {
-        name,
-        email,
-        password: hashedPassword,
-        mainCurrency,
-      },
+    await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: { name, email, password: hashedPassword, mainCurrency },
+      });
+      await createDefaultCategories(tx, user.id);
     });
-
-    // Create default categories for the user
-    await createDefaultCategories(user.id);
 
     return {
       success: true,
       message: "Account created successfully",
     };
   } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return { success: true, message: "Account created successfully" };
+    }
     console.error("Registration error:", error);
     return {
       success: false,
@@ -174,7 +164,10 @@ export async function logout() {
   await signOut({ redirectTo: "/login" });
 }
 
-async function createDefaultCategories(userId: string) {
+async function createDefaultCategories(
+  tx: Prisma.TransactionClient,
+  userId: string
+) {
   const defaultCategories = [
     // Income categories
     { name: "Salary", icon: "💰", color: "#22c55e", type: "INCOME" as const },
@@ -196,7 +189,7 @@ async function createDefaultCategories(userId: string) {
     { name: "Other Expenses", icon: "📦", color: "#6b7280", type: "EXPENSE" as const },
   ];
 
-  await prisma.category.createMany({
+  await tx.category.createMany({
     data: defaultCategories.map((cat) => ({
       ...cat,
       userId,

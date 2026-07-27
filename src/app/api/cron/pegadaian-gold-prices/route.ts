@@ -1,23 +1,14 @@
 import { NextResponse } from "next/server";
 
 import { saveLatestPegadaianGoldPriceSnapshot } from "@/lib/pegadaian-gold-service";
+import { isCronRequestAuthorized } from "@/lib/cron-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function isCronAuthorized(request: Request): boolean {
-  const configuredSecret = process.env.CRON_SECRET;
-
-  if (!configuredSecret) {
-    return process.env.NODE_ENV !== "production";
-  }
-
-  return request.headers.get("authorization") === `Bearer ${configuredSecret}`;
-}
-
 export async function GET(request: Request) {
   try {
-    if (!isCronAuthorized(request)) {
+    if (!isCronRequestAuthorized(request)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

@@ -17,15 +17,22 @@ import { getUpcomingBankPressureForUser } from "@/actions/schedule-pressure-acti
 import {
   NotificationDeliveryStatus,
   NotificationType,
+  Prisma,
   SubscriptionStatus,
   TransactionType,
   type NotificationPreference,
-  type Prisma,
 } from "@/generated/prisma/client/client";
 import prisma from "@/lib/db";
 import { computeGoalProgress } from "@/lib/goal-progress";
 import { flattenTransactionAllocationRows } from "@/lib/transaction-allocation-service";
 import { decryptUserField, encryptUserField } from "@/lib/user-encryption";
+import {
+  createSafePushAgent,
+  MAX_ACTIVE_PUSH_SUBSCRIPTIONS,
+  UnsafePushEndpointError,
+  validatePushEndpoint,
+  validatePushKey,
+} from "@/lib/push-subscription-security";
 
 const DEFAULT_SUBSCRIPTION_REMINDER_DAYS = 3;
 const DEFAULT_RECURRING_REMINDER_DAYS = 1;
@@ -510,10 +517,19 @@ async function sendToSubscriptions(
         userId,
         subscription
       );
+      validatePushEndpoint(webPushSubscription.endpoint);
+      if (
+        !validatePushKey(webPushSubscription.keys.p256dh, 65, 128) ||
+        !validatePushKey(webPushSubscription.keys.auth, 16, 64)
+      ) {
+        throw new UnsafePushEndpointError("Invalid stored push subscription");
+      }
 
       await webpush.sendNotification(webPushSubscription, payload, {
         TTL: 60,
         urgency: "normal",
+        timeout: 10_000,
+        agent: createSafePushAgent(),
       });
 
       successCount += 1;
@@ -529,7 +545,12 @@ async function sendToSubscriptions(
           ? error.statusCode
           : null;
 
-      if (statusCode === 404 || statusCode === 410) {
+      if (error instanceof UnsafePushEndpointError) {
+        await prisma.pushSubscription.update({
+          where: { id: subscription.id },
+          data: { disabledAt: new Date(), lastFailureAt: new Date(), failureCount: { increment: 1 } },
+        });
+      } else if (statusCode === 404 || statusCode === 410) {
         await prisma.pushSubscription.update({
           where: { id: subscription.id },
           data: {
@@ -596,12 +617,15 @@ export async function syncPushSubscriptionForUser(
   userId: string,
   input: PushSubscriptionInput
 ) {
-  const endpointHash = hashEndpoint(input.endpoint);
-  const existing = await prisma.pushSubscription.findUnique({
-    where: { endpointHash },
-    select: { id: true, userId: true },
-  });
+  validatePushEndpoint(input.endpoint);
+  if (
+    !validatePushKey(input.keys.p256dh, 65, 128) ||
+    !validatePushKey(input.keys.auth, 16, 64)
+  ) {
+    throw new UnsafePushEndpointError("Invalid browser push keys");
+  }
 
+  const endpointHash = hashEndpoint(input.endpoint);
   const [
     endpointEncrypted,
     p256dhEncrypted,
@@ -616,29 +640,56 @@ export async function syncPushSubscriptionForUser(
       : Promise.resolve(null),
   ]);
 
-  await prisma.pushSubscription.upsert({
-    where: { endpointHash },
-    create: {
-      userId,
-      endpointHash,
-      endpointEncrypted,
-      p256dhEncrypted,
-      authEncrypted,
-      userAgentEncrypted: userAgentEncrypted ?? null,
-      expirationTime: input.expirationTime ? new Date(input.expirationTime) : null,
+  const existing = await prisma.$transaction(
+    async (tx) => {
+      const current = await tx.pushSubscription.findUnique({
+        where: { endpointHash },
+        select: { id: true, userId: true },
+      });
+      if (!current || current.userId !== userId) {
+        const activeCount = await tx.pushSubscription.count({
+          where: {
+            userId,
+            disabledAt: null,
+            OR: [{ expirationTime: null }, { expirationTime: { gt: new Date() } }],
+          },
+        });
+        if (activeCount >= MAX_ACTIVE_PUSH_SUBSCRIPTIONS) {
+          throw new Error("Maximum number of push-enabled devices reached");
+        }
+      }
+
+      await tx.pushSubscription.upsert({
+        where: { endpointHash },
+        create: {
+          userId,
+          endpointHash,
+          endpointEncrypted,
+          p256dhEncrypted,
+          authEncrypted,
+          userAgentEncrypted: userAgentEncrypted ?? null,
+          expirationTime: input.expirationTime
+            ? new Date(input.expirationTime)
+            : null,
+        },
+        update: {
+          userId,
+          endpointEncrypted,
+          p256dhEncrypted,
+          authEncrypted,
+          userAgentEncrypted: userAgentEncrypted ?? null,
+          expirationTime: input.expirationTime
+            ? new Date(input.expirationTime)
+            : null,
+          disabledAt: null,
+          failureCount: 0,
+          lastSeenAt: new Date(),
+        },
+      });
+      return current;
     },
-    update: {
-      userId,
-      endpointEncrypted,
-      p256dhEncrypted,
-      authEncrypted,
-      userAgentEncrypted: userAgentEncrypted ?? null,
-      expirationTime: input.expirationTime ? new Date(input.expirationTime) : null,
-      disabledAt: null,
-      failureCount: 0,
-      lastSeenAt: new Date(),
-    },
-  });
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+  );
 
   await prisma.notificationPreference.upsert({
     where: { userId },

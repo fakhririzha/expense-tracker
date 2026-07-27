@@ -10,6 +10,7 @@ import {
 import prisma from "@/lib/db";
 import { getExchangeRate } from "@/lib/finance-service";
 import { decryptUserField, encryptUserField } from "@/lib/user-encryption";
+import { rethrowEncryptionConfigurationError } from "@/lib/encryption";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -303,7 +304,10 @@ export async function getLoansReceivableHistory(limit: number = 50) {
                 session.user.id,
                 "transaction.description",
                 transaction.descriptionEncrypted
-              ).catch(() => null)
+              ).catch((error) => {
+                rethrowEncryptionConfigurationError(error);
+                return null;
+              })
             : Promise.resolve(transaction.description),
         ]);
 

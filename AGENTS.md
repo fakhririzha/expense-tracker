@@ -158,8 +158,9 @@ pnpm db:backfill:account-encryption
 | `SHADOW_DATABASE_URL` | Optional shadow database URL for Prisma migrations | No |
 | `AUTH_SECRET` | Secret used by Auth.js JWT/session handling | Yes |
 | `AUTH_URL` | Base app URL used by auth callbacks and metadata | Yes |
-| `CRON_SECRET` | Bearer secret for production cron endpoints | Yes in production |
-| `ENCRYPTION_MASTER_KEY` | Base64-encoded 32-byte master key for field encryption | Required for encrypted-field support |
+| `CRON_SECRET` | Bearer secret required by every cron endpoint | Yes |
+| `ENCRYPTION_MASTER_KEY` | Canonical Base64-encoded 32-byte master key; production startup fails closed without it | Yes outside development |
+| `AUTH_TRUST_PROXY` | Set to `true` only when a self-hosted reverse proxy overwrites incoming `X-Forwarded-For` values | No |
 | `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Public VAPID key for browser push subscription | Required for web push |
 | `VAPID_PRIVATE_KEY` | Private VAPID key for server-side push delivery | Required for web push |
 | `VAPID_SUBJECT` | Contact subject for VAPID, usually `mailto:...` or the app URL | Required for web push |

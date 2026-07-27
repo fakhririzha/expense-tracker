@@ -1,4 +1,5 @@
-import { createMissingMonthlyNetWorthSnapshots } from "@/actions/net-worth-snapshot-actions";
+import { createMissingMonthlyNetWorthSnapshots } from "@/lib/net-worth-snapshot-service";
+import { isCronRequestAuthorized } from "@/lib/cron-auth";
 import {
   getPreviousMonthPeriod,
   shouldRunMonthlySnapshot,
@@ -9,19 +10,9 @@ import { NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function isCronAuthorized(request: Request): boolean {
-  const configuredSecret = process.env.CRON_SECRET;
-
-  if (!configuredSecret) {
-    return process.env.NODE_ENV !== "production";
-  }
-
-  return request.headers.get("authorization") === `Bearer ${configuredSecret}`;
-}
-
 export async function GET(request: Request) {
   try {
-    if (!isCronAuthorized(request)) {
+    if (!isCronRequestAuthorized(request)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

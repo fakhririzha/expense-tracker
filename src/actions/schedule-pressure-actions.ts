@@ -21,6 +21,7 @@ import prisma from "@/lib/db";
 import { decryptRequiredCompanion } from "@/lib/encrypted-companion-crypto";
 import { getExchangeRate } from "@/lib/finance-service";
 import { decryptUserField } from "@/lib/user-encryption";
+import { isEncryptionConfigurationError } from "@/lib/encryption";
 
 const DEFAULT_WINDOW_DAYS = 30;
 
@@ -111,7 +112,8 @@ async function decryptName(
 
   try {
     return await decryptUserField(userId, field, encrypted);
-  } catch {
+  } catch (error) {
+    if (isEncryptionConfigurationError(error)) throw error;
     return fallback ?? "";
   }
 }

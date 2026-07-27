@@ -16,7 +16,6 @@ import {
   decryptField,
   generateUserSalt,
   UserEncryptionContext,
-  isEncryptionConfigured,
 } from "./encryption";
 
 /**
@@ -33,6 +32,27 @@ let userKeyCacheGeneration = 0;
 
 // Cache TTL: 5 minutes
 const CACHE_TTL_MS = 5 * 60 * 1000;
+let warnedAboutDevelopmentFallback = false;
+
+function canUseDevelopmentPlaintextFallback(): boolean {
+  const key = process.env.ENCRYPTION_MASTER_KEY;
+  if (key) {
+    getMasterKey();
+    return false;
+  }
+
+  if (process.env.NODE_ENV !== "development") {
+    getMasterKey();
+  }
+
+  if (!warnedAboutDevelopmentFallback) {
+    console.warn(
+      "ENCRYPTION_MASTER_KEY is missing; development-only plaintext compatibility is active."
+    );
+    warnedAboutDevelopmentFallback = true;
+  }
+  return true;
+}
 
 /**
  * Get or create encryption context for a user
@@ -150,8 +170,7 @@ export async function encryptUserField(
     return "";
   }
   
-  if (!isEncryptionConfigured()) {
-    // Return plaintext if encryption is not configured (development mode)
+  if (canUseDevelopmentPlaintextFallback()) {
     return plaintext;
   }
   
@@ -176,8 +195,7 @@ export async function decryptUserField(
     return "";
   }
   
-  if (!isEncryptionConfigured()) {
-    // Return as-is if encryption is not configured (development mode)
+  if (canUseDevelopmentPlaintextFallback()) {
     return encryptedValue;
   }
   

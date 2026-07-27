@@ -1,6 +1,5 @@
 "use client";
 
-import { ColumnMapping as ColumnMappingType } from "@/actions/import-actions";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -10,6 +9,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import type { ColumnMapping as ColumnMappingType } from "@/lib/transaction-import";
 
 interface ColumnMappingProps {
   headers: string[];
