@@ -3,6 +3,10 @@
 import { auth } from "@/auth";
 import { signOut } from "@/auth";
 import {
+  clearAccountTotpPasswordRateLimit,
+  consumeAccountTotpPasswordRateLimit,
+} from "@/lib/auth-rate-limit";
+import {
   activateAccountMutationTotp,
   cancelAccountMutationTotpEnrollment,
   disableAccountMutationTotp,
@@ -101,6 +105,13 @@ const disableAccountMutationTotpSchema = passwordConfirmationSchema.extend({
 });
 
 async function requireCurrentPassword(userId: string, password: string) {
+  const allowed = await consumeAccountTotpPasswordRateLimit(userId);
+  if (!allowed) {
+    return {
+      success: false as const,
+      error: "Too many password attempts. Try again in five minutes.",
+    };
+  }
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { email: true, password: true },
@@ -111,6 +122,7 @@ async function requireCurrentPassword(userId: string, password: string) {
   if (!(await bcrypt.compare(password, user.password))) {
     return { success: false as const, error: "Current password is incorrect" };
   }
+  await clearAccountTotpPasswordRateLimit(userId);
   return { success: true as const, email: user.email };
 }
 
@@ -165,9 +177,15 @@ export async function activateAccountMutationProtection(data: { code: string }) 
     return { success: true, data: result };
   } catch (error) {
     console.error("Activate account mutation protection error:", error);
+    const message = error instanceof Error ? error.message : "";
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to enable account change protection",
+      error:
+        message === "Start TOTP setup before confirming it" ||
+        message === "Invalid confirmation code" ||
+        message === "Too many invalid codes. Try again in five minutes."
+          ? message
+          : "Failed to enable account change protection",
     };
   }
 }

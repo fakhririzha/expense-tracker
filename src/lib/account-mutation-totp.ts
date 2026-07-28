@@ -65,14 +65,15 @@ function getTotpTimeStep(delta: number): number {
   return Math.floor(Date.now() / 1000 / TOTP_PERIOD_SECONDS) + delta;
 }
 
-async function recordInvalidAttempt(userId: string): Promise<VerificationResult> {
+async function ensureAttemptAllowed(userId: string): Promise<VerificationResult | null> {
   const allowed = await consumeAccountTotpRateLimit(userId);
-  return {
-    success: false,
-    error: allowed
-      ? "Invalid confirmation code"
-      : "Too many invalid codes. Try again in five minutes.",
-  };
+  return allowed
+    ? null
+    : { success: false, error: "Too many invalid codes. Try again in five minutes." };
+}
+
+function recordInvalidAttempt(): VerificationResult {
+  return { success: false, error: "Invalid confirmation code" };
 }
 
 async function verifyTotpCode(
@@ -158,10 +159,11 @@ export async function activateAccountMutationTotp(
   }
 
   const token = normalizeCode(code);
+  const blocked = await ensureAttemptAllowed(userId);
+  if (blocked) throw new Error(blocked.error);
   const delta = await verifyTotpCode(userId, credential.secretEncrypted, token, email);
   if (delta === null) {
-    const result = await recordInvalidAttempt(userId);
-    throw new Error(result.error);
+    throw new Error(recordInvalidAttempt().error);
   }
 
   const recoveryCodes = Array.from(
@@ -196,11 +198,14 @@ export async function verifyAccountMutationConfirmation(
   if (!credential?.enabledAt) return { success: true };
 
   const code = normalizeCode(confirmation?.code ?? "");
-  if (!code) return { success: false, error: "TOTP_REQUIRED" };
+  if (!code) return { success: false, error: "Enter your confirmation code" };
+
+  const blocked = await ensureAttemptAllowed(userId);
+  if (blocked) return blocked;
 
   if (/^\d{6}$/.test(code)) {
     const delta = await verifyTotpCode(userId, credential.secretEncrypted, code, email);
-    if (delta === null) return recordInvalidAttempt(userId);
+    if (delta === null) return recordInvalidAttempt();
 
     const timeStep = getTotpTimeStep(delta);
     const updated = await prisma.accountMutationTotpCredential.updateMany({
@@ -222,7 +227,7 @@ export async function verifyAccountMutationConfirmation(
       where: { credentialId: credential.id, codeHash, usedAt: null },
       data: { usedAt: new Date() },
     });
-    if (used.count === 0) return recordInvalidAttempt(userId);
+    if (used.count === 0) return recordInvalidAttempt();
   }
 
   await clearAccountTotpRateLimit(userId);
@@ -236,19 +241,35 @@ export async function verifyLiveAccountMutationTotp(
 ): Promise<VerificationResult> {
   const credential = await prisma.accountMutationTotpCredential.findUnique({
     where: { userId },
-    select: { enabledAt: true, secretEncrypted: true },
+    select: { id: true, enabledAt: true, secretEncrypted: true },
   });
   if (!credential?.enabledAt) {
     return { success: false, error: "Account change protection is not enabled" };
   }
 
+  const blocked = await ensureAttemptAllowed(userId);
+  if (blocked) return blocked;
   const delta = await verifyTotpCode(
     userId,
     credential.secretEncrypted,
     normalizeCode(code),
     email
   );
-  if (delta === null) return recordInvalidAttempt(userId);
+  if (delta === null) return recordInvalidAttempt();
+  const timeStep = getTotpTimeStep(delta);
+  const updated = await prisma.accountMutationTotpCredential.updateMany({
+    where: {
+      id: credential.id,
+      OR: [
+        { lastUsedTimeStep: null },
+        { lastUsedTimeStep: { lt: timeStep } },
+      ],
+    },
+    data: { lastUsedTimeStep: timeStep },
+  });
+  if (updated.count === 0) {
+    return { success: false, error: "This confirmation code was already used" };
+  }
   await clearAccountTotpRateLimit(userId);
   return { success: true };
 }

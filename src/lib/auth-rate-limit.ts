@@ -8,7 +8,8 @@ type AuthRateLimitScope =
   | "LOGIN_IP"
   | "REGISTER_EMAIL"
   | "REGISTER_IP"
-  | "ACCOUNT_TOTP_USER";
+  | "ACCOUNT_TOTP_USER"
+  | "ACCOUNT_TOTP_PASSWORD_USER";
 
 const POLICIES: Record<AuthRateLimitScope, { limit: number; windowMs: number }> = {
   LOGIN_EMAIL: { limit: 5, windowMs: 15 * 60 * 1000 },
@@ -16,6 +17,7 @@ const POLICIES: Record<AuthRateLimitScope, { limit: number; windowMs: number }> 
   REGISTER_EMAIL: { limit: 3, windowMs: 60 * 60 * 1000 },
   REGISTER_IP: { limit: 10, windowMs: 60 * 60 * 1000 },
   ACCOUNT_TOTP_USER: { limit: 5, windowMs: 5 * 60 * 1000 },
+  ACCOUNT_TOTP_PASSWORD_USER: { limit: 5, windowMs: 5 * 60 * 1000 },
 };
 
 let lastCleanupAt = 0;
@@ -115,6 +117,23 @@ export async function clearAccountTotpRateLimit(userId: string): Promise<void> {
     where: {
       scope: "ACCOUNT_TOTP_USER",
       keyHash: hashAuthRateLimitKey("ACCOUNT_TOTP_USER", userId),
+    },
+  });
+}
+
+export async function consumeAccountTotpPasswordRateLimit(
+  userId: string
+): Promise<boolean> {
+  return consumeBucket("ACCOUNT_TOTP_PASSWORD_USER", userId, new Date());
+}
+
+export async function clearAccountTotpPasswordRateLimit(
+  userId: string
+): Promise<void> {
+  await prisma.authRateLimitBucket.deleteMany({
+    where: {
+      scope: "ACCOUNT_TOTP_PASSWORD_USER",
+      keyHash: hashAuthRateLimitKey("ACCOUNT_TOTP_PASSWORD_USER", userId),
     },
   });
 }

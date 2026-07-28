@@ -45,7 +45,7 @@ function getActionData<T>(result: unknown): T | null {
   return null;
 }
 
-function RecoveryCodes({ codes }: { codes: string[] }) {
+function RecoveryCodes({ codes, onDismiss }: { codes: string[]; onDismiss: () => void }) {
   const contents = `FinHealth account change recovery codes\n\n${codes.join("\n")}\n`;
 
   const copy = async () => {
@@ -76,6 +76,9 @@ function RecoveryCodes({ codes }: { codes: string[] }) {
         </Button>
         <Button type="button" size="sm" variant="outline" onClick={download}>
           <Download className="mr-2 h-4 w-4" /> Download codes
+        </Button>
+        <Button type="button" size="sm" onClick={onDismiss}>
+          I saved these codes
         </Button>
       </div>
     </div>
@@ -134,10 +137,19 @@ export function AccountMutationProtectionCard() {
   const cancelSetup = async () => {
     setIsPending(true);
     try {
-      await cancelAccountMutationProtectionSetup();
+      const result = await cancelAccountMutationProtectionSetup();
+      if (!result.success) {
+        throw new Error(getActionError(result, "Failed to cancel account change protection setup"));
+      }
       setEnrollment(null);
       setCode("");
       setError(null);
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Failed to cancel account change protection setup"
+      );
     } finally {
       setIsPending(false);
     }
@@ -192,14 +204,14 @@ export function AccountMutationProtectionCard() {
           Account Change Protection
         </CardTitle>
         <CardDescription>
-          Require an authenticator code before creating, editing, deleting, or importing new financial accounts. This does not change sign-in security.
+          Require an authenticator code before manual account changes or imports that create accounts. Deposito workflows and sign-in are unchanged.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Loading protection status…</p>
         ) : recoveryCodes ? (
-          <RecoveryCodes codes={recoveryCodes} />
+          <RecoveryCodes codes={recoveryCodes} onDismiss={() => setRecoveryCodes(null)} />
         ) : enrollment ? (
           <div className="space-y-4">
             <p className="text-sm font-medium">Scan this code with your authenticator app, then enter its six-digit code.</p>

@@ -216,7 +216,7 @@ export function ImportDialog({
           : {}),
       });
 
-      if (!result.success) {
+      if (!result.success && result.failed === 0) {
         setError(result.errors[0]?.error ?? "Failed to import transactions");
         setStep("preview");
         return;

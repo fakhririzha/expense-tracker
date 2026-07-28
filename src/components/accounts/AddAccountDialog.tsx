@@ -83,6 +83,10 @@ export function AddAccountDialog({ onSuccess }: AddAccountDialogProps) {
   const [confirmationCode, setConfirmationCode] = useState("");
   const createMutation = useCreateAccount();
   const { data: protection } = useAccountMutationProtection();
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (!nextOpen) setConfirmationCode("");
+  };
 
   const form = useForm<AccountFormValues>({
     resolver: zodResolver(accountFormSchema),
@@ -113,7 +117,7 @@ export function AddAccountDialog({ onSuccess }: AddAccountDialogProps) {
         data: tempData,
         ...(protection?.enabled ? { confirmation: { code: confirmationCode } } : {}),
       });
-      setOpen(false);
+      handleOpenChange(false);
       setConfirmationCode("");
       form.reset();
       onSuccess?.();
@@ -131,7 +135,7 @@ export function AddAccountDialog({ onSuccess }: AddAccountDialogProps) {
   });
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button>
           <Plus className="mr-2 h-4 w-4" />
@@ -335,7 +339,7 @@ export function AddAccountDialog({ onSuccess }: AddAccountDialogProps) {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setOpen(false)}
+                onClick={() => handleOpenChange(false)}
                 disabled={createMutation.isPending}
               >
                 Cancel
