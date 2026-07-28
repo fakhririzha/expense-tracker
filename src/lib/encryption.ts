@@ -96,6 +96,7 @@ export const FIELD_CLASSIFICATIONS: Record<string, FieldClassification> = {
   // User model
   "user.name": FieldClassification.MEDIUM,
   "user.email": FieldClassification.CRITICAL,
+  "user.accountMutationTotpSecret": FieldClassification.CRITICAL,
   
   // FinancialAccount model
   "account.name": FieldClassification.MEDIUM,

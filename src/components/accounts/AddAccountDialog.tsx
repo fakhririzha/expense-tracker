@@ -1,6 +1,8 @@
 "use client";
 
 import { useCreateAccount } from "@/hooks/useAccountQueries";
+import { useAccountMutationProtection } from "@/hooks/useAccountMutationProtection";
+import { AccountMutationConfirmationField } from "@/components/accounts/AccountMutationConfirmationField";
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -78,7 +80,9 @@ interface AddAccountDialogProps {
  */
 export function AddAccountDialog({ onSuccess }: AddAccountDialogProps) {
   const [open, setOpen] = useState(false);
+  const [confirmationCode, setConfirmationCode] = useState("");
   const createMutation = useCreateAccount();
+  const { data: protection } = useAccountMutationProtection();
 
   const form = useForm<AccountFormValues>({
     resolver: zodResolver(accountFormSchema),
@@ -105,8 +109,12 @@ export function AddAccountDialog({ onSuccess }: AddAccountDialogProps) {
         balance: normalizeAccountBalanceForType(data.type, data.balance),
         ...(data.type === "BANK" ? { bankInterest } : {}),
       };
-      await createMutation.mutateAsync(tempData);
+      await createMutation.mutateAsync({
+        data: tempData,
+        ...(protection?.enabled ? { confirmation: { code: confirmationCode } } : {}),
+      });
       setOpen(false);
+      setConfirmationCode("");
       form.reset();
       onSuccess?.();
     } catch (error) {
@@ -308,6 +316,13 @@ export function AddAccountDialog({ onSuccess }: AddAccountDialogProps) {
                   </div>
                 )}
               </div>
+            )}
+
+            {protection?.enabled && (
+              <AccountMutationConfirmationField
+                value={confirmationCode}
+                onChange={setConfirmationCode}
+              />
             )}
 
             {form.formState.errors.root && (

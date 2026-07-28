@@ -2,6 +2,16 @@
 
 import { auth } from "@/auth";
 import { signOut } from "@/auth";
+import {
+  activateAccountMutationTotp,
+  cancelAccountMutationTotpEnrollment,
+  disableAccountMutationTotp,
+  getAccountMutationTotpStatus,
+  regenerateAccountMutationRecoveryCodes,
+  startAccountMutationTotpEnrollment,
+  verifyAccountMutationConfirmation,
+  verifyLiveAccountMutationTotp,
+} from "@/lib/account-mutation-totp";
 import prisma from "@/lib/db";
 import { getRetirementDate } from "@/lib/retirement-projection";
 import { invalidateUserKey } from "@/lib/user-encryption";
@@ -76,6 +86,159 @@ const deleteCurrentUserSchema = z.object({
 });
 
 export type DeleteCurrentUserInput = z.infer<typeof deleteCurrentUserSchema>;
+
+const passwordConfirmationSchema = z.object({
+  password: z.string().min(1, "Current password is required"),
+});
+const totpCodeSchema = z.object({
+  code: z.string().min(1, "Enter your confirmation code"),
+});
+const regenerateRecoveryCodesSchema = passwordConfirmationSchema.extend({
+  code: z.string().min(1, "Enter your authenticator code"),
+});
+const disableAccountMutationTotpSchema = passwordConfirmationSchema.extend({
+  code: z.string().min(1, "Enter your confirmation code"),
+});
+
+async function requireCurrentPassword(userId: string, password: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true, password: true },
+  });
+  if (!user?.password) {
+    return { success: false as const, error: "This account cannot confirm with a password" };
+  }
+  if (!(await bcrypt.compare(password, user.password))) {
+    return { success: false as const, error: "Current password is incorrect" };
+  }
+  return { success: true as const, email: user.email };
+}
+
+export async function getAccountMutationProtectionStatus() {
+  const session = await auth();
+  if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+
+  try {
+    return { success: true, data: await getAccountMutationTotpStatus(session.user.id) };
+  } catch (error) {
+    console.error("Get account mutation protection status error:", error);
+    return { success: false, error: "Failed to load account change protection" };
+  }
+}
+
+export async function startAccountMutationProtection(data: { password: string }) {
+  const session = await auth();
+  if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+  const parsed = passwordConfirmationSchema.safeParse(data);
+  if (!parsed.success) return { success: false, error: parsed.error.issues[0].message };
+
+  try {
+    const passwordResult = await requireCurrentPassword(session.user.id, parsed.data.password);
+    if (!passwordResult.success) return passwordResult;
+    return {
+      success: true,
+      data: await startAccountMutationTotpEnrollment(
+        session.user.id,
+        passwordResult.email
+      ),
+    };
+  } catch (error) {
+    console.error("Start account mutation protection error:", error);
+    return { success: false, error: "Failed to start account change protection" };
+  }
+}
+
+export async function activateAccountMutationProtection(data: { code: string }) {
+  const session = await auth();
+  if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+  const parsed = totpCodeSchema.safeParse(data);
+  if (!parsed.success) return { success: false, error: parsed.error.issues[0].message };
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { email: true },
+    });
+    if (!user) return { success: false, error: "User not found" };
+    const result = await activateAccountMutationTotp(session.user.id, user.email, parsed.data.code);
+    revalidatePath("/dashboard/profile");
+    return { success: true, data: result };
+  } catch (error) {
+    console.error("Activate account mutation protection error:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to enable account change protection",
+    };
+  }
+}
+
+export async function cancelAccountMutationProtectionSetup() {
+  const session = await auth();
+  if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+
+  try {
+    await cancelAccountMutationTotpEnrollment(session.user.id);
+    return { success: true };
+  } catch (error) {
+    console.error("Cancel account mutation protection setup error:", error);
+    return { success: false, error: "Failed to cancel account change protection setup" };
+  }
+}
+
+export async function regenerateAccountMutationProtectionRecoveryCodes(data: {
+  password: string;
+  code: string;
+}) {
+  const session = await auth();
+  if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+  const parsed = regenerateRecoveryCodesSchema.safeParse(data);
+  if (!parsed.success) return { success: false, error: parsed.error.issues[0].message };
+
+  try {
+    const passwordResult = await requireCurrentPassword(session.user.id, parsed.data.password);
+    if (!passwordResult.success) return passwordResult;
+    const verification = await verifyLiveAccountMutationTotp(
+      session.user.id,
+      passwordResult.email,
+      parsed.data.code
+    );
+    if (!verification.success) return verification;
+    return {
+      success: true,
+      data: await regenerateAccountMutationRecoveryCodes(session.user.id),
+    };
+  } catch (error) {
+    console.error("Regenerate account mutation recovery codes error:", error);
+    return { success: false, error: "Failed to regenerate recovery codes" };
+  }
+}
+
+export async function disableAccountMutationProtection(data: {
+  password: string;
+  code: string;
+}) {
+  const session = await auth();
+  if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+  const parsed = disableAccountMutationTotpSchema.safeParse(data);
+  if (!parsed.success) return { success: false, error: parsed.error.issues[0].message };
+
+  try {
+    const passwordResult = await requireCurrentPassword(session.user.id, parsed.data.password);
+    if (!passwordResult.success) return passwordResult;
+    const verification = await verifyAccountMutationConfirmation(
+      session.user.id,
+      passwordResult.email,
+      { code: parsed.data.code }
+    );
+    if (!verification.success) return verification;
+    await disableAccountMutationTotp(session.user.id);
+    revalidatePath("/dashboard/profile");
+    return { success: true };
+  } catch (error) {
+    console.error("Disable account mutation protection error:", error);
+    return { success: false, error: "Failed to disable account change protection" };
+  }
+}
 
 /**
  * Update the authenticated user's optional financial targets and retirement timeline.

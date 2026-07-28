@@ -10,6 +10,7 @@ import {
 import { forecastKeys } from "@/hooks/useCashFlowForecast";
 import { upcomingBankPressureKeys } from "@/hooks/useUpcomingBankPressure";
 import { type AccountTypeValue } from "@/lib/account-types";
+import { type AccountMutationConfirmation } from "@/lib/account-mutation-totp";
 
 // ---------------------------------------------------------------------------
 // Query Key Factory
@@ -56,8 +57,14 @@ export function useAccountsSummary() {
 export function useCreateAccount() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (data: AccountInput) => {
-      const result = await createAccount(data);
+    mutationFn: async ({
+      data,
+      confirmation,
+    }: {
+      data: AccountInput;
+      confirmation?: AccountMutationConfirmation;
+    }) => {
+      const result = await createAccount(data, confirmation);
       if (!result.success) throw new Error(result.error);
       return result.data;
     },
@@ -72,8 +79,16 @@ export function useCreateAccount() {
 export function useUpdateAccount() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: Partial<AccountInput> }) => {
-      const result = await updateAccount(id, data);
+    mutationFn: async ({
+      id,
+      data,
+      confirmation,
+    }: {
+      id: string;
+      data: Partial<AccountInput>;
+      confirmation?: AccountMutationConfirmation;
+    }) => {
+      const result = await updateAccount(id, data, confirmation);
       if (!result.success) throw new Error(result.error);
       return result.data;
     },
@@ -88,8 +103,14 @@ export function useUpdateAccount() {
 export function useDeleteAccount() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
-      const result = await deleteAccount(id);
+    mutationFn: async ({
+      id,
+      confirmation,
+    }: {
+      id: string;
+      confirmation?: AccountMutationConfirmation;
+    }) => {
+      const result = await deleteAccount(id, confirmation);
       if (!result.success) throw new Error(result.error);
     },
     onSuccess: () => {
