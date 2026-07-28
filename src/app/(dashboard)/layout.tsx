@@ -17,6 +17,7 @@ import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 import { MobileSidebar, Sidebar } from "@/components/dashboard/Sidebar";
 import { GuidedDashboardTourProvider } from "@/components/onboarding/GuidedDashboardTour";
 import { OnboardingBootstrap } from "@/components/onboarding/OnboardingBootstrap";
+import { QueryProvider } from "@/components/providers/QueryProvider";
 import { LogOut, UserRound } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -52,9 +53,10 @@ export default async function DashboardLayout({
   const mainCurrency = user?.mainCurrency || "IDR";
 
   return (
-    <CurrencyProvider mainCurrency={mainCurrency}>
-      <GuidedDashboardTourProvider>
-        <div className="min-h-screen bg-background flex font-sans">
+    <QueryProvider>
+      <CurrencyProvider mainCurrency={mainCurrency}>
+        <GuidedDashboardTourProvider>
+          <div className="min-h-screen bg-background flex font-sans">
 
           {/* Sidebar Component */}
           <Sidebar />
@@ -138,8 +140,9 @@ export default async function DashboardLayout({
             </main>
             <OnboardingBootstrap />
           </div>
-        </div>
-      </GuidedDashboardTourProvider>
-    </CurrencyProvider>
+          </div>
+        </GuidedDashboardTourProvider>
+      </CurrencyProvider>
+    </QueryProvider>
   );
 }

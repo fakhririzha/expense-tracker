@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 
 import { BudgetVsActualItem, BudgetWithProgress } from "@/actions/budget-actions";
 import { AddBudgetDialog } from "@/components/budgets/AddBudgetDialog";
 import { BudgetCard } from "@/components/budgets/BudgetCard";
 import { BudgetProgress } from "@/components/budgets/BudgetProgress";
 import { EditBudgetDialog } from "@/components/budgets/EditBudgetDialog";
-import { BudgetVsActualChart } from "@/components/budgets/BudgetVsActualChart";
 import { ContextualEmptyState } from "@/components/onboarding/ContextualEmptyState";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,17 @@ import { formatCurrency } from "@/lib/utils";
 import { AlertTriangle, Layers3, Loader2, TrendingDown, Wallet } from "lucide-react";
 import { useState } from "react";
 import { useBudgetsSummary, useBudgetVsActual } from "@/hooks/useBudgetQueries";
+
+const BudgetVsActualChart = dynamic(
+  () =>
+    import("@/components/budgets/BudgetVsActualChart").then(
+      (module) => module.BudgetVsActualChart
+    ),
+  {
+    ssr: false,
+    loading: () => <div className="h-72 animate-pulse bg-muted/40" aria-label="Loading chart" />,
+  }
+);
 
 /**
  * Render the Budgets dashboard page with summaries, filters, and budget management UI.

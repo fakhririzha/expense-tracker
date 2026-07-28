@@ -16,6 +16,7 @@ import type {
 import { convertPrice, isPreciousMetal } from "@/lib/unit-conversion";
 
 export const NET_WORTH_SNAPSHOT_CALCULATION_VERSION = 1;
+const EXCHANGE_RATE_FRESHNESS_MS = 5 * 60 * 1000;
 
 interface CalculationUser {
   id: string;
@@ -85,6 +86,34 @@ async function resolveExchangeRate(
 ): Promise<NetWorthExchangeRateMetadata> {
   const toCurrency = context.targetCurrency;
   const key = `${fromCurrency}:${toCurrency}`;
+  const exchangeRateRecord = await prisma.exchangeRate.findUnique({
+    where: {
+      fromCurrency_toCurrency: {
+        fromCurrency,
+        toCurrency,
+      },
+    },
+    select: {
+      rate: true,
+      fetchedAt: true,
+    },
+  });
+
+  if (
+    exchangeRateRecord &&
+    isFinitePositiveNumber(exchangeRateRecord.rate) &&
+    Date.now() - exchangeRateRecord.fetchedAt.getTime() <= EXCHANGE_RATE_FRESHNESS_MS
+  ) {
+    return {
+      pair: key,
+      fromCurrency,
+      toCurrency,
+      rate: exchangeRateRecord.rate,
+      source: "cache",
+      fetchedAt: exchangeRateRecord.fetchedAt.toISOString(),
+    };
+  }
+
   const liveRate = await getExchangeRate(fromCurrency, toCurrency);
 
   if (isFinitePositiveNumber(liveRate)) {
@@ -117,19 +146,6 @@ async function resolveExchangeRate(
       fetchedAt: fetchedAt.toISOString(),
     };
   }
-
-  const exchangeRateRecord = await prisma.exchangeRate.findUnique({
-    where: {
-      fromCurrency_toCurrency: {
-        fromCurrency,
-        toCurrency,
-      },
-    },
-    select: {
-      rate: true,
-      fetchedAt: true,
-    },
-  });
 
   if (exchangeRateRecord && isFinitePositiveNumber(exchangeRateRecord.rate)) {
     return {

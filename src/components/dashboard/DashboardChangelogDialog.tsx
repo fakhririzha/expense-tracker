@@ -1,8 +1,8 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState } from "react";
 import { History } from "lucide-react";
-import ReactMarkdown from "react-markdown";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -17,6 +17,11 @@ import {
 interface DashboardChangelogDialogProps {
   markdown: string;
 }
+
+const ReactMarkdown = dynamic(() => import("react-markdown"), {
+  ssr: false,
+  loading: () => <p className="text-sm text-muted-foreground">Loading updates…</p>,
+});
 
 export function DashboardChangelogDialog({
   markdown,

@@ -6,6 +6,7 @@ const PEGADAIAN_GOLD_PRICE_URL = "https://pegadaian.co.id/gold/prices";
 const PEGADAIAN_PROVIDER = "PEGADAIAN";
 const PEGADAIAN_SOURCE = "TABUNGAN_EMAS";
 const PEGADAIAN_SUCCESS_CODE = "2000000100";
+const PEGADAIAN_REQUEST_TIMEOUT_MS = 30_000;
 
 const pegadaianGoldPriceResponseSchema = z.object({
   responseCode: z.string(),
@@ -125,6 +126,7 @@ function mapPegadaianResponse(
 export async function fetchPegadaianGoldPrice(): Promise<NormalizedPegadaianGoldPrice> {
   const response = await fetch(PEGADAIAN_GOLD_PRICE_URL, {
     cache: "no-store",
+    signal: AbortSignal.timeout(PEGADAIAN_REQUEST_TIMEOUT_MS),
     headers: {
       accept: "application/json",
     },

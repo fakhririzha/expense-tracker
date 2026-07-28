@@ -199,23 +199,44 @@ export async function searchSymbols(query: string): Promise<SearchResult[]> {
 }
 
 // Get exchange rate between currencies
+const exchangeRateInFlight = new Map<string, Promise<number | null>>();
+
+const getExchangeRateCached = unstable_cache(
+  async (fromCurrency: string, toCurrency: string): Promise<number | null> => {
+    try {
+      const symbol = `${fromCurrency}${toCurrency}=X`;
+      const quote = await yahooFinance.quote(symbol);
+      return quote?.regularMarketPrice ?? null;
+    } catch (error) {
+      console.error(
+        `Error fetching exchange rate ${fromCurrency}/${toCurrency}:`,
+        error
+      );
+      return null;
+    }
+  },
+  ["exchange-rate"],
+  { revalidate: 300 }
+);
+
 export async function getExchangeRate(
   fromCurrency: string,
   toCurrency: string
 ): Promise<number | null> {
   if (fromCurrency === toCurrency) return 1;
 
-  try {
-    const symbol = `${fromCurrency}${toCurrency}=X`;
-    const quote = await yahooFinance.quote(symbol);
-    return quote?.regularMarketPrice ?? null;
-  } catch (error) {
-    console.error(
-      `Error fetching exchange rate ${fromCurrency}/${toCurrency}:`,
-      error
-    );
-    return null;
+  const cacheKey = `${fromCurrency}/${toCurrency}`;
+  const inFlight = exchangeRateInFlight.get(cacheKey);
+  if (inFlight) {
+    return inFlight;
   }
+
+  const request = getExchangeRateCached(fromCurrency, toCurrency).finally(() => {
+    exchangeRateInFlight.delete(cacheKey);
+  });
+  exchangeRateInFlight.set(cacheKey, request);
+
+  return request;
 }
 
 // Calculate investment metrics

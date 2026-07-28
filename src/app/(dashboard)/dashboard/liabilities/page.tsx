@@ -1,6 +1,6 @@
 import { Metadata } from "next";
+import dynamic from "next/dynamic";
 import Link from "next/link";
-import { DebtPayoffPlanner } from "@/components/liability/DebtPayoffPlanner";
 import { LiabilityPaymentDialog } from "@/components/liability/LiabilityPaymentDialog";
 import { LiabilityPaymentHistory } from "@/components/liability/LiabilityPaymentHistory";
 import { ContextualEmptyState } from "@/components/onboarding/ContextualEmptyState";
@@ -8,6 +8,16 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getAccountsSummary } from "@/actions/account-actions";
 import { CreditCard, Landmark } from "lucide-react";
+
+const DebtPayoffPlanner = dynamic(
+  () =>
+    import("@/components/liability/DebtPayoffPlanner").then(
+      (module) => module.DebtPayoffPlanner
+    ),
+  {
+    loading: () => <div className="h-64 animate-pulse rounded-lg bg-muted/40" />,
+  }
+);
 
 export const metadata: Metadata = {
   title: "Liabilities | Expense Tracker",

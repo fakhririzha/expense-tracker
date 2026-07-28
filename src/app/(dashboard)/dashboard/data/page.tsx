@@ -1,7 +1,6 @@
 "use client";
 
-import { ExportDialog } from "@/components/export/ExportDialog";
-import { ImportDialog } from "@/components/export/ImportDialog";
+import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -20,6 +19,15 @@ import {
   Layers,
   Boxes,
 } from "lucide-react";
+
+const ExportDialog = dynamic(
+  () => import("@/components/export/ExportDialog").then((module) => module.ExportDialog),
+  { ssr: false }
+);
+const ImportDialog = dynamic(
+  () => import("@/components/export/ImportDialog").then((module) => module.ImportDialog),
+  { ssr: false }
+);
 
 const exportCards = [
   {

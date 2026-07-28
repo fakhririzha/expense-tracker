@@ -287,6 +287,7 @@ export async function scanTransactionBill(
 
     const response = await fetch(config.endpoint, {
       method: "POST",
+      signal: AbortSignal.timeout(30_000),
       headers: {
         Authorization: `Bearer ${config.apiKey}`,
         "Content-Type": "application/json",

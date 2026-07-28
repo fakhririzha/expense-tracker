@@ -1,18 +1,40 @@
 import prisma from "@/lib/db";
 
 export async function getManagedDepositoTransactionIds(
-  userId: string
+  userId: string,
+  transactionIds?: readonly string[]
 ): Promise<Set<string>> {
+  const scopedTransactionIds = transactionIds ? [...transactionIds] : null;
+
+  if (scopedTransactionIds?.length === 0) {
+    return new Set<string>();
+  }
+
   const [depositos, postings] = await Promise.all([
     prisma.depositoAccount.findMany({
-      where: { userId },
+      where: {
+        userId,
+        ...(scopedTransactionIds
+          ? {
+              OR: [
+                { openingTransactionId: { in: scopedTransactionIds } },
+                { closingTransactionId: { in: scopedTransactionIds } },
+              ],
+            }
+          : {}),
+      },
       select: {
         openingTransactionId: true,
         closingTransactionId: true,
       },
     }),
     prisma.depositoInterestPosting.findMany({
-      where: { depositoAccount: { userId } },
+      where: {
+        depositoAccount: { userId },
+        ...(scopedTransactionIds
+          ? { transactionId: { in: scopedTransactionIds } }
+          : {}),
+      },
       select: { transactionId: true },
     }),
   ]);

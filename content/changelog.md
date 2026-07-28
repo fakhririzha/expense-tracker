@@ -1,5 +1,11 @@
 # FinHealth Changelog
 
+## v5.5.6
+
+- Improved dashboard and report loading by avoiding redundant refreshes and deferring hidden report data.
+- Reduced repeated market-data requests and added safer time limits for external data services.
+- Improved transaction history loading and trimmed duplicate browser and service-worker asset work.
+
 ## v5.5.5
 
 - Improved application security by updating the framework and sign-in foundation.

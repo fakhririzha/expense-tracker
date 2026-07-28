@@ -1,6 +1,5 @@
 const CACHE_PREFIX = "finhealth-pwa";
 const STATIC_CACHE = `${CACHE_PREFIX}-static-v1`;
-const ASSET_CACHE = `${CACHE_PREFIX}-assets-v1`;
 const PRECACHE_URLS = [
   "/offline.html",
   "/icons/favicon-16x16.png",
@@ -38,8 +37,7 @@ self.addEventListener("activate", (event) => {
           .filter(
             (key) =>
               key.startsWith(CACHE_PREFIX) &&
-              key !== STATIC_CACHE &&
-              key !== ASSET_CACHE
+              key !== STATIC_CACHE
           )
           .map((key) => caches.delete(key))
       )
@@ -49,11 +47,13 @@ self.addEventListener("activate", (event) => {
 
 function isStaticAsset(pathname) {
   return (
-    pathname.startsWith("/_next/static/") ||
     pathname.startsWith("/icons/") ||
+    (pathname.startsWith("/fonts/") &&
+      /\.(?:woff2?|otf|ttf)$/i.test(pathname)) ||
     pathname === "/favicon.ico" ||
     pathname === "/manifest.webmanifest" ||
-    /\.(?:css|js|mjs|png|svg|jpg|jpeg|gif|webp|woff2?|ttf)$/i.test(pathname)
+    (pathname.startsWith("/_next/static/media/") &&
+      /\.(?:woff2?|otf|ttf)$/i.test(pathname))
   );
 }
 
@@ -80,7 +80,7 @@ function canCacheResponse(response) {
 }
 
 async function cacheFirst(request) {
-  const cache = await caches.open(ASSET_CACHE);
+  const cache = await caches.open(STATIC_CACHE);
   const cached = await cache.match(request);
 
   if (cached) {

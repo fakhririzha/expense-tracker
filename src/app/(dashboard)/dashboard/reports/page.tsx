@@ -1,14 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 
 import { ContextualEmptyState } from "@/components/onboarding/ContextualEmptyState";
 import { DateRangePicker } from "@/components/reports/DateRangePicker";
-import { SpendingTrendsChart } from "@/components/reports/SpendingTrendsChart";
-import { CategoryBreakdownChart } from "@/components/reports/CategoryBreakdownChart";
-import { IncomeVsExpenseChart } from "@/components/reports/IncomeVsExpenseChart";
-import { NetWorthHistoryChart } from "@/components/reports/NetWorthHistoryChart";
 import { NetWorthSnapshotEmptyState } from "@/components/reports/NetWorthSnapshotEmptyState";
 import { NetWorthSnapshotSummaryCard } from "@/components/reports/NetWorthSnapshotSummaryCard";
 import { MonthlySummaryCard } from "@/components/reports/MonthlySummaryCard";
@@ -37,6 +34,39 @@ import {
 import { useSubscriptions, useSubscriptionSummary } from "@/hooks/useSubscriptionQueries";
 import { useCurrency } from "@/contexts/CurrencyContext";
 
+const chartLoading = () => (
+  <div className="h-72 animate-pulse bg-muted/40" aria-label="Loading chart" />
+);
+
+const SpendingTrendsChart = dynamic(
+  () =>
+    import("@/components/reports/SpendingTrendsChart").then(
+      (module) => module.SpendingTrendsChart
+    ),
+  { ssr: false, loading: chartLoading }
+);
+const CategoryBreakdownChart = dynamic(
+  () =>
+    import("@/components/reports/CategoryBreakdownChart").then(
+      (module) => module.CategoryBreakdownChart
+    ),
+  { ssr: false, loading: chartLoading }
+);
+const IncomeVsExpenseChart = dynamic(
+  () =>
+    import("@/components/reports/IncomeVsExpenseChart").then(
+      (module) => module.IncomeVsExpenseChart
+    ),
+  { ssr: false, loading: chartLoading }
+);
+const NetWorthHistoryChart = dynamic(
+  () =>
+    import("@/components/reports/NetWorthHistoryChart").then(
+      (module) => module.NetWorthHistoryChart
+    ),
+  { ssr: false, loading: chartLoading }
+);
+
 /**
  * Renders the Reports & Analytics dashboard page with controls, KPI cards, and interactive charts.
  *
@@ -64,43 +94,63 @@ export default function ReportsPage() {
   const currentMonth = new Date().getMonth() + 1;
   const currentYear = new Date().getFullYear();
 
-  // Queries — all enabled only when date range is selected
+  const isOverviewTab = activeTab === "overview";
+  const isSpendingTab = activeTab === "spending";
+  const isCategoriesTab = activeTab === "categories";
+  const isIncomeExpenseTab = activeTab === "income-expense";
+  const isNetWorthTab = activeTab === "net-worth";
+  const isSubscriptionsTab = activeTab === "subscriptions";
+
+  // Keep report queries scoped to the active surface. This page hosts several
+  // expensive aggregations, so hidden tabs should not fetch until selected.
   const { data: spendingTrends = [], isLoading: trendsLoading } = useSpendingTrends({
     startDate,
     endDate,
     groupBy,
-    enabled: hasDateRange,
+    enabled: hasDateRange && (isOverviewTab || isSpendingTab),
   });
 
   const { data: expenseCategories = [], isLoading: expCatLoading } = useCategoryBreakdown({
     startDate,
     endDate,
     type: "EXPENSE",
-    enabled: hasDateRange,
+    enabled: hasDateRange && (isOverviewTab || isCategoriesTab),
   });
 
   const { data: incomeCategories = [] } = useCategoryBreakdown({
     startDate,
     endDate,
     type: "INCOME",
-    enabled: hasDateRange,
+    enabled: hasDateRange && (isOverviewTab || isCategoriesTab),
   });
 
   const { data: incomeVsExpense = [] } = useIncomeVsExpense(
     Math.min(monthsDiff, 12),
-    hasDateRange
+    hasDateRange && isIncomeExpenseTab
   );
 
-  const { data: netWorthSummary } = useNetWorthSnapshotSummary(12);
-  const { data: netWorthHistory = [] } = useNetWorthTrend(12, mainCurrency);
+  const { data: netWorthSummary } = useNetWorthSnapshotSummary(
+    12,
+    isOverviewTab || isNetWorthTab
+  );
+  const { data: netWorthHistory = [] } = useNetWorthTrend(
+    12,
+    mainCurrency,
+    isNetWorthTab
+  );
 
   const { data: monthlySummary } = useReportMonthlySummary(
     currentYear,
     currentMonth,
-    hasDateRange
+    hasDateRange && isOverviewTab
   );
-  const { data: subscriptionSummary } = useSubscriptionSummary();
-  const { data: activeSubscriptions = [] } = useSubscriptions({ status: "ACTIVE" });
+  const { data: subscriptionSummary } = useSubscriptionSummary({
+    enabled: isSubscriptionsTab,
+  });
+  const { data: activeSubscriptions = [] } = useSubscriptions(
+    { status: "ACTIVE" },
+    { enabled: isSubscriptionsTab }
+  );
 
   const isLoading = trendsLoading || expCatLoading;
 

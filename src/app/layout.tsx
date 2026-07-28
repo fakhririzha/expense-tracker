@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Fredoka, Nunito } from "next/font/google";
 import "./globals.css";
-import { QueryProvider } from "@/components/providers/QueryProvider";
 import { ServiceWorkerRegistrar } from "@/components/pwa/ServiceWorkerRegistrar";
 
 const fredoka = Fredoka({
@@ -58,8 +57,8 @@ export const viewport: Viewport = {
 /**
  * Provides the application's root HTML layout and global providers.
  *
- * Wraps the page content with global font classes and a QueryProvider so all
- * descendants share the same query context.
+ * Wraps the page content with global font classes and the service-worker
+ * registrar. Dashboard-only query state is provided by the dashboard layout.
  *
  * @param children - The page content to render inside the root layout.
  * @returns The root HTML element containing the application body and providers.
@@ -74,10 +73,8 @@ export default function RootLayout({
       <body
         className={`${fredoka.variable} ${nunito.variable} antialiased`}
       >
-        <QueryProvider>
-          {children}
-          <ServiceWorkerRegistrar />
-        </QueryProvider>
+        {children}
+        <ServiceWorkerRegistrar />
       </body>
     </html>
   );
