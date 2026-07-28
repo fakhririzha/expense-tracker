@@ -2,6 +2,7 @@
 
 import { createTransaction } from "@/actions/transaction-actions";
 import { auth } from "@/auth";
+import { verifyAccountMutationConfirmation } from "@/lib/account-mutation-totp";
 import {
   decryptAccountRecords,
   encryptAccountName,
@@ -47,12 +48,21 @@ export async function importTransactions(
     const inputResult = validateImportTransactionsInput(input);
     if (!inputResult.success) return failedImport(inputResult.error);
 
-    const { csvContent, mapping, options } = inputResult.data;
+    const { csvContent, mapping, options, confirmation } = inputResult.data;
     const preview = previewImport(csvContent, mapping);
     if (!preview.success) {
       return failedImport(preview.error || "Failed to parse CSV");
     }
-
+    if (options?.createMissingAccounts) {
+      const confirmationResult = await verifyAccountMutationConfirmation(
+        session.user.id,
+        session.user.email ?? "",
+        confirmation
+      );
+      if (!confirmationResult.success) {
+        return failedImport(confirmationResult.error ?? "Confirmation failed");
+      }
+    }
     const result: ImportResult = {
       success: true,
       imported: 0,

@@ -2,6 +2,10 @@
 
 import { auth } from "@/auth";
 import {
+  type AccountMutationConfirmation,
+  verifyAccountMutationConfirmation,
+} from "@/lib/account-mutation-totp";
+import {
   decryptAccountRecords,
   encryptAccountDescription,
   encryptAccountName,
@@ -63,7 +67,10 @@ function revalidateAccountPaths(): void {
   revalidatePath("/dashboard/calendar");
 }
 
-export async function createAccount(data: AccountInput) {
+export async function createAccount(
+  data: AccountInput,
+  confirmation?: AccountMutationConfirmation
+) {
   try {
     const session = await auth();
     if (!session?.user?.id) {
@@ -93,6 +100,15 @@ export async function createAccount(data: AccountInput) {
         success: false,
         error: "Automatic bank interest is only available for Bank accounts.",
       };
+    }
+
+    const confirmationResult = await verifyAccountMutationConfirmation(
+      session.user.id,
+      session.user.email ?? "",
+      confirmation
+    );
+    if (!confirmationResult.success) {
+      return { success: false, error: confirmationResult.error };
     }
 
     // Encrypt sensitive fields
@@ -153,7 +169,11 @@ export async function createAccount(data: AccountInput) {
   }
 }
 
-export async function updateAccount(id: string, data: Partial<AccountInput>) {
+export async function updateAccount(
+  id: string,
+  data: Partial<AccountInput>,
+  confirmation?: AccountMutationConfirmation
+) {
   try {
     const session = await auth();
     if (!session?.user?.id) {
@@ -198,6 +218,15 @@ export async function updateAccount(id: string, data: Partial<AccountInput>) {
         success: false,
         error: "Automatic bank interest is only available for Bank accounts.",
       };
+    }
+
+    const confirmationResult = await verifyAccountMutationConfirmation(
+      session.user.id,
+      session.user.email ?? "",
+      confirmation
+    );
+    if (!confirmationResult.success) {
+      return { success: false, error: confirmationResult.error };
     }
 
     if (validatedData.type !== undefined) {
@@ -311,7 +340,10 @@ export async function updateAccount(id: string, data: Partial<AccountInput>) {
   }
 }
 
-export async function deleteAccount(id: string) {
+export async function deleteAccount(
+  id: string,
+  confirmation?: AccountMutationConfirmation
+) {
   try {
     const session = await auth();
     if (!session?.user?.id) {
@@ -348,6 +380,15 @@ export async function deleteAccount(id: string) {
         success: false,
         error: "Cannot delete account with existing transactions",
       };
+    }
+
+    const confirmationResult = await verifyAccountMutationConfirmation(
+      session.user.id,
+      session.user.email ?? "",
+      confirmation
+    );
+    if (!confirmationResult.success) {
+      return { success: false, error: confirmationResult.error };
     }
 
     await prisma.financialAccount.delete({ where: { id } });

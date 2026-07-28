@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { useAccountMutationProtection } from "@/hooks/useAccountMutationProtection";
 import {
   detectColumnMapping,
   MAX_CSV_BYTES,
@@ -74,6 +76,8 @@ export function ImportDialog({
   // Import options
   const [createMissingAccounts, setCreateMissingAccounts] = useState(false);
   const [createMissingCategories, setCreateMissingCategories] = useState(false);
+  const [confirmationCode, setConfirmationCode] = useState("");
+  const { data: protection } = useAccountMutationProtection();
 
   // Result
   const [importResult, setImportResult] = useState<{
@@ -93,6 +97,7 @@ export function ImportDialog({
     setError(null);
     setCreateMissingAccounts(false);
     setCreateMissingCategories(false);
+    setConfirmationCode("");
     setImportResult(null);
   };
 
@@ -206,7 +211,16 @@ export function ImportDialog({
           createMissingAccounts,
           createMissingCategories,
         },
+        ...(protection?.enabled && createMissingAccounts
+          ? { confirmation: { code: confirmationCode } }
+          : {}),
       });
+
+      if (!result.success && result.failed === 0) {
+        setError(result.errors[0]?.error ?? "Failed to import transactions");
+        setStep("preview");
+        return;
+      }
 
       setImportResult({
         imported: result.imported,
@@ -389,6 +403,23 @@ export function ImportDialog({
                     Create missing accounts automatically
                   </Label>
                 </div>
+                {protection?.enabled && createMissingAccounts && (
+                  <div className="space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-3">
+                    <Label htmlFor="import-account-confirmation">
+                      Confirmation code
+                    </Label>
+                    <Input
+                      id="import-account-confirmation"
+                      value={confirmationCode}
+                      onChange={(event) => setConfirmationCode(event.target.value)}
+                      placeholder="Authenticator or recovery code"
+                      autoComplete="one-time-code"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Required once before this import can create missing accounts.
+                    </p>
+                  </div>
+                )}
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="createCategories"

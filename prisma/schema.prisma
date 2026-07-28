@@ -63,6 +63,32 @@ model User {
   ocrUsageEvents    OcrUsageEvent[]
   weeklyAiInsights  WeeklyAiInsight[]
   onboardingState   UserOnboardingState?
+  accountMutationTotpCredential AccountMutationTotpCredential?
+}
+
+model AccountMutationTotpCredential {
+  id                     String   @id @default(cuid())
+  userId                 String   @unique
+  secretEncrypted        String   @db.Text
+  enabledAt              DateTime?
+  lastUsedTimeStep       Int?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  user          User                           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recoveryCodes AccountMutationRecoveryCode[]
+}
+
+model AccountMutationRecoveryCode {
+  id           String   @id @default(cuid())
+  credentialId String
+  codeHash     String   @unique @db.Char(64)
+  usedAt       DateTime?
+  createdAt    DateTime @default(now())
+
+  credential AccountMutationTotpCredential @relation(fields: [credentialId], references: [id], onDelete: Cascade)
+
+  @@index([credentialId, usedAt])
 }
 
 model UserOnboardingState {

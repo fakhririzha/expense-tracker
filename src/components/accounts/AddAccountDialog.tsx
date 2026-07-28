@@ -1,6 +1,8 @@
 "use client";
 
 import { useCreateAccount } from "@/hooks/useAccountQueries";
+import { useAccountMutationProtection } from "@/hooks/useAccountMutationProtection";
+import { AccountMutationConfirmationField } from "@/components/accounts/AccountMutationConfirmationField";
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -78,7 +80,13 @@ interface AddAccountDialogProps {
  */
 export function AddAccountDialog({ onSuccess }: AddAccountDialogProps) {
   const [open, setOpen] = useState(false);
+  const [confirmationCode, setConfirmationCode] = useState("");
   const createMutation = useCreateAccount();
+  const { data: protection } = useAccountMutationProtection();
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (!nextOpen) setConfirmationCode("");
+  };
 
   const form = useForm<AccountFormValues>({
     resolver: zodResolver(accountFormSchema),
@@ -105,8 +113,12 @@ export function AddAccountDialog({ onSuccess }: AddAccountDialogProps) {
         balance: normalizeAccountBalanceForType(data.type, data.balance),
         ...(data.type === "BANK" ? { bankInterest } : {}),
       };
-      await createMutation.mutateAsync(tempData);
-      setOpen(false);
+      await createMutation.mutateAsync({
+        data: tempData,
+        ...(protection?.enabled ? { confirmation: { code: confirmationCode } } : {}),
+      });
+      handleOpenChange(false);
+      setConfirmationCode("");
       form.reset();
       onSuccess?.();
     } catch (error) {
@@ -123,7 +135,7 @@ export function AddAccountDialog({ onSuccess }: AddAccountDialogProps) {
   });
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button>
           <Plus className="mr-2 h-4 w-4" />
@@ -310,6 +322,13 @@ export function AddAccountDialog({ onSuccess }: AddAccountDialogProps) {
               </div>
             )}
 
+            {protection?.enabled && (
+              <AccountMutationConfirmationField
+                value={confirmationCode}
+                onChange={setConfirmationCode}
+              />
+            )}
+
             {form.formState.errors.root && (
               <p className="text-sm font-medium text-destructive">
                 {form.formState.errors.root.message}
@@ -320,7 +339,7 @@ export function AddAccountDialog({ onSuccess }: AddAccountDialogProps) {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setOpen(false)}
+                onClick={() => handleOpenChange(false)}
                 disabled={createMutation.isPending}
               >
                 Cancel

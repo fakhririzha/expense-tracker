@@ -3,6 +3,7 @@
 import Link from "next/link";
 
 import { AddAccountDialog } from "@/components/accounts/AddAccountDialog";
+import { DeleteAccountDialog } from "@/components/accounts/DeleteAccountDialog";
 import { EditAccountDialog } from "@/components/accounts/EditAccountDialog";
 import { ContextualEmptyState } from "@/components/onboarding/ContextualEmptyState";
 import { Button } from "@/components/ui/button";
@@ -24,7 +25,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ACCOUNT_TYPE_LABELS, isDepositoAccountType } from "@/lib/account-types";
-import { useAccounts, useAccountsSummary, useDeleteAccount } from "@/hooks/useAccountQueries";
+import { useAccounts, useAccountsSummary } from "@/hooks/useAccountQueries";
 import { formatCurrency } from "@/lib/utils";
 import { Pencil, Trash2, Wallet } from "lucide-react";
 import {
@@ -321,10 +322,10 @@ function AccountTableSection({
 export default function AccountsPage() {
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState<{ id: string; name: string } | null>(null);
 
   const { data: accounts = [], isLoading } = useAccounts();
   const { data: summary } = useAccountsSummary();
-  const deleteMutation = useDeleteAccount();
   const accountList = accounts as Account[];
 
   const activeAccounts = useMemo(
@@ -337,15 +338,7 @@ export default function AccountsPage() {
   );
 
   const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`Are you sure you want to delete "${name}"?`)) {
-      return;
-    }
-
-    try {
-      await deleteMutation.mutateAsync(id);
-    } catch (error) {
-      alert(error instanceof Error ? error.message : "Failed to delete account");
-    }
+    setDeletingAccount({ id, name });
   };
 
   const handleEdit = (account: Account) => {
@@ -469,6 +462,13 @@ export default function AccountsPage() {
         open={isEditDialogOpen}
         onOpenChange={setIsEditDialogOpen}
         onSuccess={() => {}}
+      />
+      <DeleteAccountDialog
+        account={deletingAccount}
+        open={Boolean(deletingAccount)}
+        onOpenChange={(open) => {
+          if (!open) setDeletingAccount(null);
+        }}
       />
     </div>
   );

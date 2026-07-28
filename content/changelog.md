@@ -1,5 +1,10 @@
 # FinHealth Changelog
 
+## v5.6.0
+
+- Added optional authenticator-app protection for creating, editing, deleting, and importing new financial accounts.
+- Set up account change protection from Profile, with one-time recovery codes if your authenticator is unavailable.
+
 ## v5.5.6
 
 - Improved dashboard and report loading by avoiding redundant refreshes and deferring hidden report data.

@@ -1,6 +1,8 @@
 "use client";
 
 import { useUpdateAccount } from "@/hooks/useAccountQueries";
+import { useAccountMutationProtection } from "@/hooks/useAccountMutationProtection";
+import { AccountMutationConfirmationField } from "@/components/accounts/AccountMutationConfirmationField";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -29,7 +31,7 @@ import {
 import { MoneyInput } from "@/components/ui/money-input";
 import { Switch } from "@/components/ui/switch";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { ACCOUNT_TYPES, normalizeAccountBalanceForType } from "@/lib/account-types";
@@ -104,6 +106,8 @@ export function EditAccountDialog({
   onSuccess,
 }: EditAccountDialogProps) {
   const updateMutation = useUpdateAccount();
+  const [confirmationCode, setConfirmationCode] = useState("");
+  const { data: protection } = useAccountMutationProtection();
 
   const form = useForm<EditAccountFormValues>({
     resolver: zodResolver(editAccountFormSchema),
@@ -125,6 +129,7 @@ export function EditAccountDialog({
   // Reset form with account data when account changes
   useEffect(() => {
     if (account && open) {
+      setConfirmationCode("");
       // For liability accounts (LOAN, CREDIT_CARD), convert balance to positive for display
       const displayBalance =
         account.type === "LOAN" ||
@@ -160,8 +165,13 @@ export function EditAccountDialog({
         ...(data.type === "BANK" ? { bankInterest } : {}),
       };
 
-      await updateMutation.mutateAsync({ id: account.id, data: submitData });
+      await updateMutation.mutateAsync({
+        id: account.id,
+        data: submitData,
+        ...(protection?.enabled ? { confirmation: { code: confirmationCode } } : {}),
+      });
       onOpenChange(false);
+      setConfirmationCode("");
       onSuccess?.();
     } catch (error) {
       form.setError("root", {
@@ -386,6 +396,13 @@ export function EditAccountDialog({
               )}
             />
 
+            {protection?.enabled && (
+              <AccountMutationConfirmationField
+                value={confirmationCode}
+                onChange={setConfirmationCode}
+              />
+            )}
+
             {form.formState.errors.root && (
               <p className="text-sm font-medium text-destructive">
                 {form.formState.errors.root.message}
@@ -396,7 +413,10 @@ export function EditAccountDialog({
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => onOpenChange(false)}
+                onClick={() => {
+                  setConfirmationCode("");
+                  onOpenChange(false);
+                }}
                 disabled={updateMutation.isPending}
               >
                 Cancel

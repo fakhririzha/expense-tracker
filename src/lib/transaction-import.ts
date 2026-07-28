@@ -60,6 +60,9 @@ export interface ImportTransactionsInput {
     createMissingCategories?: boolean;
     createMissingAccounts?: boolean;
   };
+  confirmation?: {
+    code: string;
+  };
 }
 
 interface ParseCSVResult {
@@ -229,6 +232,11 @@ export function validateImportTransactionsInput(
           createMissingAccounts: z.boolean().optional(),
         })
         .optional(),
+      confirmation: z
+        .strictObject({
+          code: z.string().min(1),
+        })
+        .optional(),
     })
     .safeParse(input);
 
@@ -245,6 +253,9 @@ export function validateImportTransactionsInput(
       csvContent: inputResult.data.csvContent,
       mapping: mappingResult.data,
       ...(inputResult.data.options ? { options: inputResult.data.options } : {}),
+      ...(inputResult.data.confirmation
+        ? { confirmation: inputResult.data.confirmation }
+        : {}),
     },
   };
 }
