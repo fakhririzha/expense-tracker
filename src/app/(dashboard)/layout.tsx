@@ -1,5 +1,14 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { LogOut, UserRound } from "lucide-react";
+
 import { logout } from "@/actions/auth-actions";
 import { auth } from "@/auth";
+import { MobileSidebar, Sidebar } from "@/components/dashboard/Sidebar";
+import { GuidedDashboardTourProvider } from "@/components/onboarding/GuidedDashboardTour";
+import { OnboardingBootstrap } from "@/components/onboarding/OnboardingBootstrap";
+import { InstallPrompt } from "@/components/pwa/InstallPrompt";
+import { QueryProvider } from "@/components/providers/QueryProvider";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,14 +22,6 @@ import { CurrencyProvider } from "@/contexts/CurrencyContext";
 import prisma from "@/lib/db";
 import { ONBOARDING_TOUR_TARGETS } from "@/lib/onboarding/constants";
 import { getInitials } from "@/lib/utils";
-import { InstallPrompt } from "@/components/pwa/InstallPrompt";
-import { MobileSidebar, Sidebar } from "@/components/dashboard/Sidebar";
-import { GuidedDashboardTourProvider } from "@/components/onboarding/GuidedDashboardTour";
-import { OnboardingBootstrap } from "@/components/onboarding/OnboardingBootstrap";
-import { QueryProvider } from "@/components/providers/QueryProvider";
-import { LogOut, UserRound } from "lucide-react";
-import Link from "next/link";
-import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 

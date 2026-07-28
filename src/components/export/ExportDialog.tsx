@@ -64,6 +64,8 @@ interface Account {
 interface ExportDialogProps {
   trigger?: React.ReactNode;
   defaultType?: ExportType;
+  initialOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 const exportOptions: {
@@ -129,8 +131,13 @@ const exportOptions: {
  * @param defaultType - Optional initial export type selection; defaults to `"transactions"` when not provided.
  * @returns The rendered export dialog element.
  */
-export function ExportDialog({ trigger, defaultType }: ExportDialogProps) {
-  const [open, setOpen] = useState(false);
+export function ExportDialog({
+  trigger,
+  defaultType,
+  initialOpen = false,
+  onOpenChange,
+}: ExportDialogProps) {
+  const [open, setOpen] = useState(initialOpen);
   const [isExporting, setIsExporting] = useState(false);
   const [exportType, setExportType] = useState<ExportType>(defaultType ?? "transactions");
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -208,7 +215,7 @@ export function ExportDialog({ trigger, defaultType }: ExportDialogProps) {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
 
-        setOpen(false);
+        handleOpenChange(false);
         resetForm();
       } else {
         console.error("Export failed:", result?.error);
@@ -218,6 +225,11 @@ export function ExportDialog({ trigger, defaultType }: ExportDialogProps) {
     } finally {
       setIsExporting(false);
     }
+  };
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    onOpenChange?.(nextOpen);
   };
 
   const resetForm = () => {
@@ -231,7 +243,7 @@ export function ExportDialog({ trigger, defaultType }: ExportDialogProps) {
   const showFilters = exportType === "transactions";
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         {trigger || (
           <Button variant="outline">
@@ -375,7 +387,7 @@ export function ExportDialog({ trigger, defaultType }: ExportDialogProps) {
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>
+          <Button variant="outline" onClick={() => handleOpenChange(false)}>
             Cancel
           </Button>
           <Button onClick={handleExport} disabled={isExporting}>

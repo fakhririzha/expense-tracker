@@ -1,6 +1,9 @@
 import { Prisma } from "@/generated/prisma/client/client";
 import prisma from "@/lib/db";
-import { getExchangeRate, getMultipleAssetPrices } from "@/lib/finance-service";
+import {
+  getExchangeRateQuote,
+  getMultipleAssetPrices,
+} from "@/lib/finance-service";
 import { getLastDayOfMonthUtc } from "@/lib/net-worth-period";
 import type {
   NetWorthAccountBreakdownItem,
@@ -114,35 +117,41 @@ async function resolveExchangeRate(
     };
   }
 
-  const liveRate = await getExchangeRate(fromCurrency, toCurrency);
+  const liveQuote = await getExchangeRateQuote(fromCurrency, toCurrency);
 
-  if (isFinitePositiveNumber(liveRate)) {
-    const fetchedAt = new Date();
-    await prisma.exchangeRate.upsert({
-      where: {
-        fromCurrency_toCurrency: {
+  if (liveQuote && isFinitePositiveNumber(liveQuote.rate)) {
+    const fetchedAt = new Date(liveQuote.fetchedAt);
+    const quoteIsFresh =
+      !Number.isNaN(fetchedAt.getTime()) &&
+      Date.now() - fetchedAt.getTime() <= EXCHANGE_RATE_FRESHNESS_MS;
+
+    if (quoteIsFresh) {
+      await prisma.exchangeRate.upsert({
+        where: {
+          fromCurrency_toCurrency: {
+            fromCurrency,
+            toCurrency,
+          },
+        },
+        create: {
           fromCurrency,
           toCurrency,
+          rate: liveQuote.rate,
+          fetchedAt,
         },
-      },
-      create: {
-        fromCurrency,
-        toCurrency,
-        rate: liveRate,
-        fetchedAt,
-      },
-      update: {
-        rate: liveRate,
-        fetchedAt,
-      },
-    });
+        update: {
+          rate: liveQuote.rate,
+          fetchedAt,
+        },
+      });
+    }
 
     return {
       pair: key,
       fromCurrency,
       toCurrency,
-      rate: liveRate,
-      source: "live",
+      rate: liveQuote.rate,
+      source: quoteIsFresh ? "live" : "cache",
       fetchedAt: fetchedAt.toISOString(),
     };
   }

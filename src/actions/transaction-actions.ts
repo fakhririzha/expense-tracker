@@ -1193,18 +1193,13 @@ export async function getTransactions(options?: TransactionListQueryParams) {
         skip,
       });
 
-    const requestedSkip = (requestedPage - 1) * pageSize;
-    const [total, requestedTransactions] = await prisma.$transaction([
-      prisma.transaction.count({ where }),
-      fetchPage(requestedSkip),
-    ]);
-
+    // Count before deriving the offset so callers cannot turn a very large page
+    // number into an expensive database scan. This still performs only one count
+    // for the common path.
+    const total = await prisma.transaction.count({ where });
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
     const page = Math.min(requestedPage, totalPages);
-    const transactions =
-      page === requestedPage
-        ? requestedTransactions
-        : await fetchPage((page - 1) * pageSize);
+    const transactions = await fetchPage((page - 1) * pageSize);
 
     const accountNameCache = new Map<string, Promise<string>>();
     const decryptAccountNameCached = (account: {

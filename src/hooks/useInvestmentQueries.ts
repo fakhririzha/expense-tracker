@@ -65,7 +65,7 @@ export function useSellableInvestments() {
 }
 
 export function useSearchSymbols(query: string) {
-  const [debouncedQuery, setDebouncedQuery] = useState(query);
+  const [debouncedQuery, setDebouncedQuery] = useState("");
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {

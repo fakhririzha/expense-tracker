@@ -555,7 +555,7 @@ model RecurringRule {
 
   @@index([userId])
   @@index([nextDueDate])
-  @@index([isActive, nextDueDate])
+  @@index([userId, isActive, nextDueDate])
 }
 
 enum SubscriptionBillingCycle {
