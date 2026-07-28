@@ -43,6 +43,8 @@ import type {
 interface ImportDialogProps {
   trigger?: React.ReactNode;
   onSuccess?: () => void;
+  initialOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 type ImportStep = "upload" | "mapping" | "preview" | "importing" | "result";
@@ -53,8 +55,13 @@ type ImportStep = "upload" | "mapping" | "preview" | "importing" | "result";
  * @param trigger - Optional React node used as the dialog trigger; when omitted a default "Import Data" button is rendered.
  * @param onSuccess - Optional callback invoked after a successful import when one or more transactions were imported.
  */
-export function ImportDialog({ trigger, onSuccess }: ImportDialogProps) {
-  const [open, setOpen] = useState(false);
+export function ImportDialog({
+  trigger,
+  onSuccess,
+  initialOpen = false,
+  onOpenChange,
+}: ImportDialogProps) {
+  const [open, setOpen] = useState(initialOpen);
   const [step, setStep] = useState<ImportStep>("upload");
   const [file, setFile] = useState<File | null>(null);
   const [csvContent, setCSVContent] = useState<string>("");
@@ -87,6 +94,11 @@ export function ImportDialog({ trigger, onSuccess }: ImportDialogProps) {
     setCreateMissingAccounts(false);
     setCreateMissingCategories(false);
     setImportResult(null);
+  };
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    onOpenChange?.(nextOpen);
   };
 
   /**
@@ -216,7 +228,7 @@ export function ImportDialog({ trigger, onSuccess }: ImportDialogProps) {
   };
 
   const handleClose = () => {
-    setOpen(false);
+    handleOpenChange(false);
     resetState();
   };
 
@@ -241,7 +253,7 @@ export function ImportDialog({ trigger, onSuccess }: ImportDialogProps) {
   const validCount = transactions.filter((t) => t.isValid).length;
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         {trigger || (
           <Button variant="outline">

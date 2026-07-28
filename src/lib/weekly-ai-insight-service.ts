@@ -15,6 +15,7 @@ const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const TOP_TRANSACTION_LIMIT = 5;
 const RETENTION_WEEKS = 52;
 const PROMPT_VERSION = "weekly-balanced-coach-v1";
+const WEEKLY_INSIGHTS_REQUEST_TIMEOUT_MS = 30_000;
 
 const observationSchema = z.object({
   title: z.string().trim().min(1).max(120),
@@ -273,6 +274,7 @@ async function generateContent(input: {
 
   const response = await fetch(config.endpoint, {
     method: "POST",
+    signal: AbortSignal.timeout(WEEKLY_INSIGHTS_REQUEST_TIMEOUT_MS),
     headers: {
       Authorization: `Bearer ${config.apiKey}`,
       "Content-Type": "application/json",

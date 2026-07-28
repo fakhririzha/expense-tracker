@@ -1,13 +1,14 @@
-import { Metadata } from "next";
+import type { Metadata } from "next";
 import Link from "next/link";
-import { DebtPayoffPlanner } from "@/components/liability/DebtPayoffPlanner";
+import { CreditCard, Landmark } from "lucide-react";
+
+import { getAccountsSummary } from "@/actions/account-actions";
+import { DebtPayoffPlannerSection } from "@/components/liability/DebtPayoffPlannerSection";
 import { LiabilityPaymentDialog } from "@/components/liability/LiabilityPaymentDialog";
 import { LiabilityPaymentHistory } from "@/components/liability/LiabilityPaymentHistory";
 import { ContextualEmptyState } from "@/components/onboarding/ContextualEmptyState";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { getAccountsSummary } from "@/actions/account-actions";
-import { CreditCard, Landmark } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Liabilities | Expense Tracker",
@@ -110,7 +111,7 @@ export default async function LiabilitiesPage() {
       )}
 
       {/* Debt payoff planner */}
-      <DebtPayoffPlanner />
+      <DebtPayoffPlannerSection />
 
       {/* Payment History */}
       <Card>

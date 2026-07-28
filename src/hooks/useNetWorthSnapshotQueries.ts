@@ -46,7 +46,7 @@ export function useNetWorthSnapshots(params: {
   });
 }
 
-export function useNetWorthSnapshotSummary(months: number = 12) {
+export function useNetWorthSnapshotSummary(months: number = 12, enabled = true) {
   return useQuery({
     queryKey: netWorthSnapshotKeys.summary({ months }),
     queryFn: async () => {
@@ -54,10 +54,15 @@ export function useNetWorthSnapshotSummary(months: number = 12) {
       if (!result.success) throw new Error(result.error);
       return result.data!;
     },
+    enabled,
   });
 }
 
-export function useNetWorthTrend(months: number = 12, currency?: string) {
+export function useNetWorthTrend(
+  months: number = 12,
+  currency?: string,
+  enabled = true
+) {
   return useQuery({
     queryKey: netWorthSnapshotKeys.trend(months, currency),
     queryFn: async () => {
@@ -65,6 +70,7 @@ export function useNetWorthTrend(months: number = 12, currency?: string) {
       if (!result.success) throw new Error(result.error);
       return result.data ?? [];
     },
+    enabled,
   });
 }
 

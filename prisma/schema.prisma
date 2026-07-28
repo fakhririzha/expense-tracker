@@ -555,6 +555,7 @@ model RecurringRule {
 
   @@index([userId])
   @@index([nextDueDate])
+  @@index([userId, isActive, nextDueDate])
 }
 
 enum SubscriptionBillingCycle {
@@ -1016,6 +1017,7 @@ model WeeklyAiInsight {
   @@unique([userId, periodStart])
   @@index([userId, periodStart])
   @@index([userId, status, periodStart])
+  @@index([status, periodStart])
 }
 
 model NotificationEvent {

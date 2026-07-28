@@ -1,41 +1,80 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
+import { ArrowDownRight, ArrowUpRight, Download, Loader2, TrendingDown, TrendingUp, Wallet } from "lucide-react";
+import { useMemo, useState } from "react";
+import type { DateRange } from "react-day-picker";
 
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { ContextualEmptyState } from "@/components/onboarding/ContextualEmptyState";
+import { CashFlowForecastSection } from "@/components/forecast/CashFlowForecastSection";
 import { DateRangePicker } from "@/components/reports/DateRangePicker";
-import { SpendingTrendsChart } from "@/components/reports/SpendingTrendsChart";
-import { CategoryBreakdownChart } from "@/components/reports/CategoryBreakdownChart";
-import { IncomeVsExpenseChart } from "@/components/reports/IncomeVsExpenseChart";
-import { NetWorthHistoryChart } from "@/components/reports/NetWorthHistoryChart";
 import { NetWorthSnapshotEmptyState } from "@/components/reports/NetWorthSnapshotEmptyState";
 import { NetWorthSnapshotSummaryCard } from "@/components/reports/NetWorthSnapshotSummaryCard";
 import { MonthlySummaryCard } from "@/components/reports/MonthlySummaryCard";
-import { CashFlowForecastSection } from "@/components/forecast/CashFlowForecastSection";
+import { useOnboardingProgress } from "@/hooks/useOnboardingQueries";
+import {
+  useNetWorthSnapshotSummary,
+  useNetWorthTrend,
+} from "@/hooks/useNetWorthSnapshotQueries";
+import {
+  useCategoryBreakdown,
+  useIncomeVsExpense,
+  useReportMonthlySummary,
+  useSpendingTrends,
+} from "@/hooks/useReportQueries";
+import { useSubscriptions, useSubscriptionSummary } from "@/hooks/useSubscriptionQueries";
+import { formatCurrency } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SubscriptionSummaryCards } from "@/components/subscriptions/SubscriptionSummaryCards";
 import { TrialEndingSoonCard } from "@/components/subscriptions/TrialEndingSoonCard";
 import { UpcomingRenewalsCard } from "@/components/subscriptions/UpcomingRenewalsCard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { formatCurrency } from "@/lib/utils";
-import { Download, Loader2, TrendingUp, TrendingDown, Wallet, ArrowUpRight, ArrowDownRight } from "lucide-react";
-import { useState, useMemo } from "react";
-import { DateRange } from "react-day-picker";
-import {
-  useSpendingTrends,
-  useCategoryBreakdown,
-  useIncomeVsExpense,
-  useReportMonthlySummary,
-} from "@/hooks/useReportQueries";
-import { useOnboardingProgress } from "@/hooks/useOnboardingQueries";
-import {
-  useNetWorthSnapshotSummary,
-  useNetWorthTrend,
-} from "@/hooks/useNetWorthSnapshotQueries";
-import { useSubscriptions, useSubscriptionSummary } from "@/hooks/useSubscriptionQueries";
-import { useCurrency } from "@/contexts/CurrencyContext";
+
+const chartLoading = () => (
+  <div className="h-72 animate-pulse bg-muted/40" aria-label="Loading chart" />
+);
+
+function DeferredTabLoading() {
+  return (
+    <div className="flex items-center justify-center py-12" role="status">
+      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <span className="sr-only">Loading report</span>
+    </div>
+  );
+}
+
+const SpendingTrendsChart = dynamic(
+  () =>
+    import("@/components/reports/SpendingTrendsChart").then(
+      (module) => module.SpendingTrendsChart
+    ),
+  { ssr: false, loading: chartLoading }
+);
+const CategoryBreakdownChart = dynamic(
+  () =>
+    import("@/components/reports/CategoryBreakdownChart").then(
+      (module) => module.CategoryBreakdownChart
+    ),
+  { ssr: false, loading: chartLoading }
+);
+const IncomeVsExpenseChart = dynamic(
+  () =>
+    import("@/components/reports/IncomeVsExpenseChart").then(
+      (module) => module.IncomeVsExpenseChart
+    ),
+  { ssr: false, loading: chartLoading }
+);
+const NetWorthHistoryChart = dynamic(
+  () =>
+    import("@/components/reports/NetWorthHistoryChart").then(
+      (module) => module.NetWorthHistoryChart
+    ),
+  { ssr: false, loading: chartLoading }
+);
 
 /**
  * Renders the Reports & Analytics dashboard page with controls, KPI cards, and interactive charts.
@@ -64,45 +103,71 @@ export default function ReportsPage() {
   const currentMonth = new Date().getMonth() + 1;
   const currentYear = new Date().getFullYear();
 
-  // Queries — all enabled only when date range is selected
+  const isOverviewTab = activeTab === "overview";
+  const isSpendingTab = activeTab === "spending";
+  const isCategoriesTab = activeTab === "categories";
+  const isIncomeExpenseTab = activeTab === "income-expense";
+  const isNetWorthTab = activeTab === "net-worth";
+  const isSubscriptionsTab = activeTab === "subscriptions";
+
+  // Keep report queries scoped to the active surface. This page hosts several
+  // expensive aggregations, so hidden tabs should not fetch until selected.
   const { data: spendingTrends = [], isLoading: trendsLoading } = useSpendingTrends({
     startDate,
     endDate,
     groupBy,
-    enabled: hasDateRange,
+    enabled: hasDateRange && (isOverviewTab || isSpendingTab),
   });
 
   const { data: expenseCategories = [], isLoading: expCatLoading } = useCategoryBreakdown({
     startDate,
     endDate,
     type: "EXPENSE",
-    enabled: hasDateRange,
+    enabled: hasDateRange && (isOverviewTab || isCategoriesTab),
   });
 
   const { data: incomeCategories = [] } = useCategoryBreakdown({
     startDate,
     endDate,
     type: "INCOME",
-    enabled: hasDateRange,
+    enabled: hasDateRange && (isOverviewTab || isCategoriesTab),
   });
 
-  const { data: incomeVsExpense = [] } = useIncomeVsExpense(
+  const { data: incomeVsExpense = [], isLoading: incomeVsExpenseLoading } = useIncomeVsExpense(
     Math.min(monthsDiff, 12),
-    hasDateRange
+    hasDateRange && isIncomeExpenseTab
   );
 
-  const { data: netWorthSummary } = useNetWorthSnapshotSummary(12);
-  const { data: netWorthHistory = [] } = useNetWorthTrend(12, mainCurrency);
+  const { data: netWorthSummary, isLoading: netWorthSummaryLoading } = useNetWorthSnapshotSummary(
+    12,
+    isOverviewTab || isNetWorthTab
+  );
+  const { data: netWorthHistory = [], isLoading: netWorthHistoryLoading } = useNetWorthTrend(
+    12,
+    mainCurrency,
+    isNetWorthTab
+  );
 
   const { data: monthlySummary } = useReportMonthlySummary(
     currentYear,
     currentMonth,
-    hasDateRange
+    hasDateRange && isOverviewTab
   );
-  const { data: subscriptionSummary } = useSubscriptionSummary();
-  const { data: activeSubscriptions = [] } = useSubscriptions({ status: "ACTIVE" });
+  const {
+    data: subscriptionSummary,
+    isLoading: subscriptionSummaryLoading,
+  } = useSubscriptionSummary({ enabled: isSubscriptionsTab });
+  const {
+    data: activeSubscriptions = [],
+    isLoading: activeSubscriptionsLoading,
+  } = useSubscriptions(
+    { status: "ACTIVE" },
+    { enabled: isSubscriptionsTab }
+  );
 
   const isLoading = trendsLoading || expCatLoading;
+  const isNetWorthLoading = netWorthSummaryLoading || netWorthHistoryLoading;
+  const isSubscriptionsLoading = subscriptionSummaryLoading || activeSubscriptionsLoading;
 
   // Calculate overview stats
   const totalExpenses = expenseCategories.reduce((sum, c) => sum + c.amount, 0);
@@ -341,79 +406,95 @@ export default function ReportsPage() {
 
           {/* Income vs Expense Tab */}
           <TabsContent value="income-expense" className="space-y-6">
-            <IncomeVsExpenseChart
-              data={incomeVsExpense}
-              title="Income vs Expense"
-              description="Compare your income and expenses over time"
-              mainCurrency={mainCurrency}
-            />
-          </TabsContent>
-
-          {/* Net Worth Tab */}
-          <TabsContent value="net-worth" className="space-y-6">
-            {netWorthSummary?.latestSnapshot ? (
-              <NetWorthSnapshotSummaryCard summary={netWorthSummary} />
-            ) : null}
-            {netWorthHistory.length > 0 ? (
-              <NetWorthHistoryChart
-                data={netWorthHistory}
-                title="Net Worth History"
-                description="Stable month-end snapshots of your assets, liabilities, and net worth"
-                mainCurrency={mainCurrency}
-              />
+            {incomeVsExpenseLoading ? (
+              <DeferredTabLoading />
             ) : (
-              <NetWorthSnapshotEmptyState
-                hasCurrencyMismatch={netWorthSummary?.hasCurrencyMismatch}
+              <IncomeVsExpenseChart
+                data={incomeVsExpense}
+                title="Income vs Expense"
+                description="Compare your income and expenses over time"
+                mainCurrency={mainCurrency}
               />
             )}
           </TabsContent>
 
-          <TabsContent value="subscriptions" className="space-y-6">
-            <SubscriptionSummaryCards summary={subscriptionSummary} />
-
-            <div className="grid gap-6 lg:grid-cols-2">
-              <UpcomingRenewalsCard items={subscriptionSummary?.upcomingRenewals ?? []} />
-              <TrialEndingSoonCard items={subscriptionSummary?.trialEndingSoon ?? []} />
-            </div>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Top Active Subscriptions</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {activeSubscriptions.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No active subscriptions tracked yet.
-                  </p>
+          {/* Net Worth Tab */}
+          <TabsContent value="net-worth" className="space-y-6">
+            {isNetWorthLoading ? (
+              <DeferredTabLoading />
+            ) : (
+              <>
+                {netWorthSummary?.latestSnapshot ? (
+                  <NetWorthSnapshotSummaryCard summary={netWorthSummary} />
+                ) : null}
+                {netWorthHistory.length > 0 ? (
+                  <NetWorthHistoryChart
+                    data={netWorthHistory}
+                    title="Net Worth History"
+                    description="Stable month-end snapshots of your assets, liabilities, and net worth"
+                    mainCurrency={mainCurrency}
+                  />
                 ) : (
-                  <div className="space-y-3">
-                    {activeSubscriptions
-                      .slice()
-                      .sort((left, right) => right.monthlyEquivalent - left.monthlyEquivalent)
-                      .slice(0, 8)
-                      .map((subscription) => (
-                        <div
-                          key={subscription.id}
-                          className="flex items-center justify-between gap-4 rounded-lg border p-3"
-                        >
-                          <div className="min-w-0">
-                            <p className="truncate font-medium">{subscription.name}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {subscription.provider || "No provider"}
-                            </p>
-                          </div>
-                          <div className="shrink-0 text-right">
-                            <p className="font-semibold">
-                              {formatCurrency(subscription.monthlyEquivalent, subscription.currency)}
-                            </p>
-                            <p className="text-xs text-muted-foreground">monthly equivalent</p>
-                          </div>
-                        </div>
-                      ))}
-                  </div>
+                  <NetWorthSnapshotEmptyState
+                    hasCurrencyMismatch={netWorthSummary?.hasCurrencyMismatch}
+                  />
                 )}
-              </CardContent>
-            </Card>
+              </>
+            )}
+          </TabsContent>
+
+          <TabsContent value="subscriptions" className="space-y-6">
+            {isSubscriptionsLoading ? (
+              <DeferredTabLoading />
+            ) : (
+              <>
+                <SubscriptionSummaryCards summary={subscriptionSummary} />
+
+                <div className="grid gap-6 lg:grid-cols-2">
+                  <UpcomingRenewalsCard items={subscriptionSummary?.upcomingRenewals ?? []} />
+                  <TrialEndingSoonCard items={subscriptionSummary?.trialEndingSoon ?? []} />
+                </div>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Top Active Subscriptions</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {activeSubscriptions.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        No active subscriptions tracked yet.
+                      </p>
+                    ) : (
+                      <div className="space-y-3">
+                        {activeSubscriptions
+                          .slice()
+                          .sort((left, right) => right.monthlyEquivalent - left.monthlyEquivalent)
+                          .slice(0, 8)
+                          .map((subscription) => (
+                            <div
+                              key={subscription.id}
+                              className="flex items-center justify-between gap-4 rounded-lg border p-3"
+                            >
+                              <div className="min-w-0">
+                                <p className="truncate font-medium">{subscription.name}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  {subscription.provider || "No provider"}
+                                </p>
+                              </div>
+                              <div className="shrink-0 text-right">
+                                <p className="font-semibold">
+                                  {formatCurrency(subscription.monthlyEquivalent, subscription.currency)}
+                                </p>
+                                <p className="text-xs text-muted-foreground">monthly equivalent</p>
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </>
+            )}
           </TabsContent>
 
           <TabsContent value="forecast" className="space-y-6">

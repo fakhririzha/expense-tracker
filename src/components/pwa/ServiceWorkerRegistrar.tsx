@@ -27,18 +27,12 @@ export function ServiceWorkerRegistrar() {
       return;
     }
 
-    let isCancelled = false;
-
     const registerServiceWorker = async () => {
       try {
-        const registration = await navigator.serviceWorker.register("/sw.js", {
+        await navigator.serviceWorker.register("/sw.js", {
           scope: "/",
           updateViaCache: "none",
         });
-
-        if (!isCancelled) {
-          void registration.update();
-        }
       } catch (error) {
         console.error("Failed to register service worker:", error);
       }
@@ -56,7 +50,6 @@ export function ServiceWorkerRegistrar() {
     window.addEventListener("load", handleLoad, { once: true });
 
     return () => {
-      isCancelled = true;
       window.removeEventListener("load", handleLoad);
     };
   }, []);

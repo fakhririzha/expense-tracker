@@ -199,23 +199,76 @@ export async function searchSymbols(query: string): Promise<SearchResult[]> {
 }
 
 // Get exchange rate between currencies
+const EXCHANGE_RATE_CACHE_SECONDS = 5 * 60;
+const EXCHANGE_RATE_TIMEOUT_MS = 8_000;
+
+export interface ExchangeRateQuote {
+  rate: number;
+  fetchedAt: string;
+}
+
+const exchangeRateInFlight = new Map<string, Promise<ExchangeRateQuote | null>>();
+
+const getExchangeRateCached = unstable_cache(
+  async (fromCurrency: string, toCurrency: string): Promise<ExchangeRateQuote> => {
+    try {
+      const symbol = `${fromCurrency}${toCurrency}=X`;
+      const quote = await yahooFinance.quote(symbol, undefined, {
+        fetchOptions: { signal: AbortSignal.timeout(EXCHANGE_RATE_TIMEOUT_MS) },
+      });
+      const rate = quote?.regularMarketPrice;
+
+      if (typeof rate !== "number" || !Number.isFinite(rate) || rate <= 0) {
+        throw new Error(`Yahoo Finance returned no usable rate for ${symbol}`);
+      }
+
+      // Keep the provider-fetch timestamp in the cached value. Consumers that
+      // persist this quote must not turn an old cache entry into a fresh rate.
+      return { rate, fetchedAt: new Date().toISOString() };
+    } catch (error) {
+      console.error(
+        `Error fetching exchange rate ${fromCurrency}/${toCurrency}:`,
+        error
+      );
+      // Throw rather than returning null so failed and empty responses are not
+      // stored by unstable_cache.
+      throw error;
+    }
+  },
+  ["exchange-rate"],
+  { revalidate: EXCHANGE_RATE_CACHE_SECONDS }
+);
+
+export async function getExchangeRateQuote(
+  fromCurrency: string,
+  toCurrency: string
+): Promise<ExchangeRateQuote | null> {
+  if (fromCurrency === toCurrency) {
+    return { rate: 1, fetchedAt: new Date().toISOString() };
+  }
+
+  const cacheKey = `${fromCurrency}/${toCurrency}`;
+  const inFlight = exchangeRateInFlight.get(cacheKey);
+  if (inFlight) {
+    return inFlight;
+  }
+
+  const request = getExchangeRateCached(fromCurrency, toCurrency)
+    .catch(() => null)
+    .finally(() => {
+      exchangeRateInFlight.delete(cacheKey);
+    });
+  exchangeRateInFlight.set(cacheKey, request);
+
+  return request;
+}
+
 export async function getExchangeRate(
   fromCurrency: string,
   toCurrency: string
 ): Promise<number | null> {
-  if (fromCurrency === toCurrency) return 1;
-
-  try {
-    const symbol = `${fromCurrency}${toCurrency}=X`;
-    const quote = await yahooFinance.quote(symbol);
-    return quote?.regularMarketPrice ?? null;
-  } catch (error) {
-    console.error(
-      `Error fetching exchange rate ${fromCurrency}/${toCurrency}:`,
-      error
-    );
-    return null;
-  }
+  const quote = await getExchangeRateQuote(fromCurrency, toCurrency);
+  return quote?.rate ?? null;
 }
 
 // Calculate investment metrics

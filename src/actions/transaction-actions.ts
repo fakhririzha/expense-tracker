@@ -1119,50 +1119,58 @@ export async function getTransactions(options?: TransactionListQueryParams) {
     const sortBy = options?.sortBy === "amount" ? "amount" : "date";
     const sortOrder = options?.sortOrder === "asc" ? "asc" : "desc";
 
-    const initialTotal = await prisma.transaction.count({ where });
-    const totalPages = Math.max(1, Math.ceil(initialTotal / pageSize));
-    const page = Math.min(requestedPage, totalPages);
-    const skip = (page - 1) * pageSize;
     const orderBy: Prisma.TransactionOrderByWithRelationInput =
       sortBy === "amount" ? { amount: sortOrder } : { date: sortOrder };
 
-    const [total, transactions] = await prisma.$transaction([
-      prisma.transaction.count({ where }),
-      prisma.transaction.findMany({
-        where,
+    const transactionSelect = {
+      id: true,
+      amount: true,
+      currency: true,
+      exchangeRate: true,
+      type: true,
+      description: true,
+      descriptionEncrypted: true,
+      location: true,
+      latitude: true,
+      longitude: true,
+      googleMapsLink: true,
+      date: true,
+      isRecurring: true,
+      toAccountId: true,
+      referenceNumber: true,
+      referenceNumberEncrypted: true,
+      createdBy: true,
+      createdByEncrypted: true,
+      account: {
+        select: {
+          id: true,
+          nameEncrypted: true,
+          type: true,
+        },
+      },
+      toAccount: {
+        select: {
+          id: true,
+          nameEncrypted: true,
+          type: true,
+        },
+      },
+      category: {
+        select: {
+          id: true,
+          name: true,
+          icon: true,
+          color: true,
+        },
+      },
+      splits: {
         select: {
           id: true,
           amount: true,
-          currency: true,
-          exchangeRate: true,
-          type: true,
           description: true,
           descriptionEncrypted: true,
-          location: true,
-          latitude: true,
-          longitude: true,
-          googleMapsLink: true,
-          date: true,
-          isRecurring: true,
-          toAccountId: true,
-          referenceNumber: true,
-          referenceNumberEncrypted: true,
-          createdBy: true,
-          createdByEncrypted: true,
-          account: {
-            select: {
-              id: true,
-              nameEncrypted: true,
-              type: true,
-            },
-          },
-          toAccount: {
-            select: {
-              id: true,
-              nameEncrypted: true,
-              type: true,
-            },
-          },
+          sortOrder: true,
+          categoryId: true,
           category: {
             select: {
               id: true,
@@ -1171,31 +1179,27 @@ export async function getTransactions(options?: TransactionListQueryParams) {
               color: true,
             },
           },
-          splits: {
-            select: {
-              id: true,
-              amount: true,
-              description: true,
-              descriptionEncrypted: true,
-              sortOrder: true,
-              categoryId: true,
-              category: {
-                select: {
-                  id: true,
-                  name: true,
-                  icon: true,
-                  color: true,
-                },
-              },
-            },
-            orderBy: { sortOrder: "asc" },
-          },
         },
+        orderBy: { sortOrder: "asc" },
+      },
+    } satisfies Prisma.TransactionSelect;
+
+    const fetchPage = (skip: number) =>
+      prisma.transaction.findMany({
+        where,
+        select: transactionSelect,
         orderBy,
         take: pageSize,
         skip,
-      }),
-    ]);
+      });
+
+    // Count before deriving the offset so callers cannot turn a very large page
+    // number into an expensive database scan. This still performs only one count
+    // for the common path.
+    const total = await prisma.transaction.count({ where });
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const page = Math.min(requestedPage, totalPages);
+    const transactions = await fetchPage((page - 1) * pageSize);
 
     const accountNameCache = new Map<string, Promise<string>>();
     const decryptAccountNameCached = (account: {
@@ -1223,7 +1227,10 @@ export async function getTransactions(options?: TransactionListQueryParams) {
       return decryptAccountNameCached(account);
     };
 
-    const managedTransactionIds = await getManagedDepositoTransactionIds(userId);
+    const managedTransactionIds = await getManagedDepositoTransactionIds(
+      userId,
+      transactions.map((transaction) => transaction.id)
+    );
 
     const decryptedTransactions = await Promise.all(
       transactions.map(async (transaction) => {

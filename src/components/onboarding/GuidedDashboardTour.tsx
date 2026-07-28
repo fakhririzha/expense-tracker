@@ -13,9 +13,6 @@ import {
   type ReactNode,
 } from "react";
 import {
-  ACTIONS,
-  EVENTS,
-  STATUS,
   type EventData,
   type Props as JoyrideProps,
   type Step,
@@ -176,10 +173,10 @@ export function GuidedDashboardTourProvider({
 
   const handleJoyrideEvent = useCallback(
     (data: EventData) => {
-      const isFinished = data.status === STATUS.FINISHED;
-      const isSkipped = data.status === STATUS.SKIPPED;
+      const isFinished = data.status === "finished";
+      const isSkipped = data.status === "skipped";
 
-      if (data.type === EVENTS.TOUR_END || isFinished || isSkipped) {
+      if (data.type === "tour:end" || isFinished || isSkipped) {
         if (isFinished) {
           void finishTour();
         } else {
@@ -189,9 +186,9 @@ export function GuidedDashboardTourProvider({
         return;
       }
 
-      if (data.type === EVENTS.TARGET_NOT_FOUND) {
+      if (data.type === "error:target_not_found") {
         const nextIndex =
-          data.action === ACTIONS.PREV ? data.index - 1 : data.index + 1;
+          data.action === "prev" ? data.index - 1 : data.index + 1;
 
         if (nextIndex >= 0 && nextIndex < steps.length) {
           setStepIndex(nextIndex);
@@ -202,11 +199,11 @@ export function GuidedDashboardTourProvider({
         return;
       }
 
-      if (data.type === EVENTS.STEP_AFTER) {
+      if (data.type === "step:after") {
         const nextIndex =
-          data.action === ACTIONS.PREV ? data.index - 1 : data.index + 1;
+          data.action === "prev" ? data.index - 1 : data.index + 1;
 
-        if (data.action === ACTIONS.NEXT && nextIndex >= steps.length) {
+        if (data.action === "next" && nextIndex >= steps.length) {
           void finishTour();
           return;
         }

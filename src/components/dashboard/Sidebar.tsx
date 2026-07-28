@@ -178,6 +178,7 @@ function NavItems({
           <Link
             key={item.href}
             href={item.href}
+            prefetch={false}
             data-tour-id={tourId}
             className={cn(
               "flex items-center gap-3 px-4 py-3 text-sm font-bold uppercase tracking-wider transition-all neo-border",

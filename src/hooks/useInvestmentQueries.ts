@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import {
   getPortfolio,
   getInvestmentAccountsAction,
@@ -64,14 +65,24 @@ export function useSellableInvestments() {
 }
 
 export function useSearchSymbols(query: string) {
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setDebouncedQuery(query.trim());
+    }, 300);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [query]);
+
   return useQuery({
-    queryKey: investmentKeys.symbols(query),
+    queryKey: investmentKeys.symbols(debouncedQuery),
     queryFn: async () => {
-      const result = await searchSymbolsAction(query);
+      const result = await searchSymbolsAction(debouncedQuery);
       if (!result.success) throw new Error(result.error);
       return result.data;
     },
-    enabled: query.length >= 2,
+    enabled: debouncedQuery.length >= 2,
   });
 }
 

@@ -27,7 +27,14 @@ export const subscriptionKeys = {
   summary: () => [...subscriptionKeys.all, "summary"] as const,
 };
 
-export function useSubscriptions(filters?: { status?: SubscriptionStatusFilter }) {
+interface SubscriptionQueryOptions {
+  enabled?: boolean;
+}
+
+export function useSubscriptions(
+  filters?: { status?: SubscriptionStatusFilter },
+  options: SubscriptionQueryOptions = {}
+) {
   return useQuery({
     queryKey: subscriptionKeys.list(filters),
     queryFn: async () => {
@@ -37,6 +44,7 @@ export function useSubscriptions(filters?: { status?: SubscriptionStatusFilter }
       }
       return result.data;
     },
+    enabled: options.enabled ?? true,
   });
 }
 
@@ -58,7 +66,7 @@ export function useSubscription(id?: string) {
   });
 }
 
-export function useSubscriptionSummary() {
+export function useSubscriptionSummary(options: SubscriptionQueryOptions = {}) {
   return useQuery({
     queryKey: subscriptionKeys.summary(),
     queryFn: async () => {
@@ -68,6 +76,7 @@ export function useSubscriptionSummary() {
       }
       return result.data!;
     },
+    enabled: options.enabled ?? true,
   });
 }
 

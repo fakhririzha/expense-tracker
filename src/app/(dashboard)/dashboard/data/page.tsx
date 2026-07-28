@@ -1,11 +1,5 @@
 "use client";
 
-import { ExportDialog } from "@/components/export/ExportDialog";
-import { ImportDialog } from "@/components/export/ImportDialog";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { getImportTemplate } from "@/lib/transaction-import";
 import {
   Download,
   FileDown,
@@ -20,6 +14,15 @@ import {
   Layers,
   Boxes,
 } from "lucide-react";
+
+import {
+  DeferredExportDialog,
+  DeferredImportDialog,
+} from "@/components/export/DeferredDataDialogs";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { getImportTemplate } from "@/lib/transaction-import";
 
 const exportCards = [
   {
@@ -124,14 +127,19 @@ export default function DataManagementPage() {
                 <p className="text-xs text-muted-foreground mb-3">
                   {card.description}
                 </p>
-                <ExportDialog
+                <DeferredExportDialog
                   defaultType={card.type}
-                  trigger={
-                    <Button variant="outline" size="sm" className="w-full">
+                  renderTrigger={(onActivate) => (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={onActivate}
+                    >
                       <FileDown className="mr-2 h-4 w-4" />
                       Export
                     </Button>
-                  }
+                  )}
                 />
               </CardContent>
             </Card>
@@ -154,14 +162,14 @@ export default function DataManagementPage() {
               This includes your financial records and history in a readable JSON
               archive. It is not currently restorable in FinHealth.
             </p>
-            <ExportDialog
+            <DeferredExportDialog
               defaultType="all"
-              trigger={
-                <Button>
+              renderTrigger={(onActivate) => (
+                <Button onClick={onActivate}>
                   <Package className="mr-2 h-4 w-4" />
                   Download Archive
                 </Button>
-              }
+              )}
             />
           </CardContent>
         </Card>
@@ -196,13 +204,13 @@ export default function DataManagementPage() {
                 The system will automatically detect column mappings and validate
                 your data before importing.
               </p>
-              <ImportDialog
-                trigger={
-                  <Button className="w-full">
+              <DeferredImportDialog
+                renderTrigger={(onActivate) => (
+                  <Button className="w-full" onClick={onActivate}>
                     <FileUp className="mr-2 h-4 w-4" />
                     Import from CSV
                   </Button>
-                }
+                )}
               />
             </CardContent>
           </Card>

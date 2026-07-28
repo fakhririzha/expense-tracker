@@ -1,7 +1,14 @@
+import path from "node:path";
 import type { NextConfig } from "next";
+
+const workspaceRoot = path.resolve(process.cwd());
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
+  turbopack: {
+    root: workspaceRoot,
+  },
+  outputFileTracingRoot: workspaceRoot,
   async headers() {
     return [
       {

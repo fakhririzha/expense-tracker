@@ -8,8 +8,8 @@ import { ReactNode } from 'react'
  * Create a QueryClient preconfigured with sensible defaults tuned for financial data.
  *
  * Default behavior:
- * - Queries: staleTime = 5 minutes; gcTime = 10 minutes; retry = 3; refetchOnWindowFocus = true; refetchOnReconnect = true
- * - Mutations: retry = 1
+ * - Queries: staleTime = 5 minutes; gcTime = 10 minutes; retry once; no implicit focus/reconnect refetch
+ * - Mutations: no automatic retry (callers can opt in for an individual mutation)
  *
  * @returns A newly constructed QueryClient configured with the above defaults
  */
@@ -21,15 +21,17 @@ function makeQueryClient() {
         staleTime: 5 * 60 * 1000,
         // Keep data in cache for 10 minutes after becoming inactive
         gcTime: 10 * 60 * 1000,
-        // Retry failed requests 3 times with exponential backoff
-        retry: 3,
-        // Refetch on window focus for live data
-        refetchOnWindowFocus: true,
-        // Refetch on reconnect
-        refetchOnReconnect: true,
+        // A single retry covers transient connection failures without amplifying
+        // expensive authenticated reads across every dashboard route.
+        retry: 1,
+        // Most dashboard data is deliberately cached; live queries can opt into
+        // their own polling or focus behavior when that is part of their UX.
+        refetchOnWindowFocus: false,
+        refetchOnReconnect: false,
       },
       mutations: {
-        retry: 1,
+        // Retrying a balance-changing action can duplicate a financial write.
+        retry: 0,
       },
     },
   })
