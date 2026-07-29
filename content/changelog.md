@@ -1,5 +1,9 @@
 # FinHealth Changelog
 
+## v5.6.1
+
+- Maintenance: added repository security scanning tooling for maintainers and aligned local development on Node.js 22.13+ or 24+; this does not change FinHealth behavior for users.
+
 ## v5.6.0
 
 - Added optional authenticator-app protection for creating, editing, deleting, and importing new financial accounts.

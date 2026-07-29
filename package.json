@@ -5,7 +5,7 @@
   "license": "Apache-2.0",
   "type": "module",
   "engines": {
-    "node": "^20.19 || ^22.12 || >=24.0"
+    "node": "^22.13 || >=24.0"
   },
   "scripts": {
     "dev": "next dev",
@@ -66,6 +66,7 @@
     "zod": "^4.3.5"
   },
   "devDependencies": {
+    "@openai/codex-security": "^0.1.1",
     "@tailwindcss/postcss": "^4",
     "@types/bcryptjs": "^3.0.0",
     "@types/node": "^20",
