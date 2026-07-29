@@ -58,7 +58,7 @@ export function MarketingHeader() {
           </summary>
           <nav
             aria-label="Mobile navigation"
-            className="absolute left-0 top-12 z-10 grid w-52 border-2 border-black bg-[#fcfcf8] p-2 shadow-[4px_4px_0_#000]"
+            className="absolute left-0 top-14 z-10 grid w-52 border-2 border-black bg-[#fcfcf8] p-2 shadow-[4px_4px_0_#000]"
           >
             {[...overviewLinks, ...utilityLinks, { href: "/login", label: "Login" }].map(
               (link) => (
