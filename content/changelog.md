@@ -1,5 +1,9 @@
 # FinHealth Changelog
 
+## v5.6.1
+
+- Maintenance: added repository security scanning tooling for maintainers; this does not change FinHealth behavior for users.
+
 ## v5.6.0
 
 - Added optional authenticator-app protection for creating, editing, deleting, and importing new financial accounts.
