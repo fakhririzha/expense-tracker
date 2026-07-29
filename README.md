@@ -35,7 +35,7 @@ FinHealth is a personal finance dashboard built with Next.js 16 and React 19. It
 
 ## Requirements
 
-- Node.js 20.19+, 22.12+, or 24+
+- Node.js 22.13+ or 24+
 - pnpm 9+
 - MySQL or MariaDB 8+
 

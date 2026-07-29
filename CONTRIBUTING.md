@@ -29,7 +29,7 @@ This project and everyone participating in it is governed by a commitment to:
 
 ### Prerequisites
 
-- Node.js 20.x or higher
+- Node.js 22.13 or higher
 - pnpm 9.x or higher
 - MySQL or MariaDB 8.0+
 - Git
