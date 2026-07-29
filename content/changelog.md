@@ -1,5 +1,9 @@
 # FinHealth Changelog
 
+## v5.7.1
+
+- Added clearer spacing between the mobile menu button and its opened navigation panel.
+
 ## v5.7.0
 
 - Rebuilt the public FinHealth homepage with a clearer money-picture preview, richer feature guidance, privacy principles, and a responsive design for smaller screens.
