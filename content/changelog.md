@@ -1,5 +1,10 @@
 # FinHealth Changelog
 
+## v5.7.0
+
+- Rebuilt the public FinHealth homepage with a clearer money-picture preview, richer feature guidance, privacy principles, and a responsive design for smaller screens.
+- Added public pages for releases, guides, help, roadmap, company information, privacy, security, data handling, terms, and product disclosures.
+
 ## v5.6.1
 
 - Maintenance: added repository security scanning tooling for maintainers and aligned local development on Node.js 22.13+ or 24+; this does not change FinHealth behavior for users.
