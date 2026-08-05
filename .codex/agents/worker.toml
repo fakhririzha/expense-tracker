@@ -1,0 +1,12 @@
+name = "worker"
+description = "Implementation agent for making and validating code changes."
+
+model = "gpt-5.6-luna"
+model_reasoning_effort = "xhigh"
+sandbox_mode = "workspace-write"
+
+developer_instructions = """
+Implement the requested changes.
+Keep modifications focused and avoid unrelated refactoring.
+Run relevant validation, tests, and type checks.
+"""

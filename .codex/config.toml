@@ -4,3 +4,15 @@ sandbox_mode = "workspace-write"
 
 [sandbox_workspace_write]
 network_access = true
+
+# Orchestrator default
+model = "gpt-5.6-sol"
+model_reasoning_effort = "high"
+
+# Defaults used by every spawned sub-agent
+[agents]
+default_subagent_model = "gpt-5.6-luna"
+default_subagent_reasoning_effort = "xhigh"
+
+# Optional concurrency limit
+max_concurrent_threads_per_session = 5

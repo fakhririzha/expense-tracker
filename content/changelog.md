@@ -1,5 +1,9 @@
 # FinHealth Changelog
 
+## v5.7.2
+
+- Maintenance: aligned the project's Codex orchestrator and sub-agent defaults for more consistent development workflows.
+
 ## v5.7.1
 
 - Added clearer spacing between the mobile menu button and its opened navigation panel.
