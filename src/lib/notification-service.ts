@@ -1,4 +1,4 @@
-import { createHash } from "crypto";
+import { createHash, randomUUID } from "crypto";
 import {
   addDays,
   endOfDay,
@@ -23,6 +23,8 @@ import {
   type NotificationPreference,
 } from "@/generated/prisma/client/client";
 import prisma from "@/lib/db";
+import { vapidKeysMatch } from "@/lib/vapid-key-validation";
+import { pushDiagnostics, pushProvider, type PushTestResult } from "@/lib/push-diagnostics";
 import { computeGoalProgress } from "@/lib/goal-progress";
 import { flattenTransactionAllocationRows } from "@/lib/transaction-allocation-service";
 import { decryptUserField, encryptUserField } from "@/lib/user-encryption";
@@ -96,6 +98,7 @@ export interface NotificationDispatchResult {
   successCount: number;
   failureCount: number;
   skippedReason?: string;
+  diagnostics?: PushTestResult[];
 }
 
 interface NotificationDispatchInput {
@@ -107,6 +110,8 @@ interface NotificationDispatchInput {
   dedupeKey: string;
   metadata?: Prisma.InputJsonValue;
   respectPreferences?: boolean;
+  urgency?: "normal" | "high";
+  ttlSeconds?: number;
 }
 
 interface NotificationPreferenceRow extends NotificationPreferenceSnapshot {
@@ -236,6 +241,9 @@ function ensureWebPushConfigured() {
   }
 
   if (!vapidConfigured) {
+    if (!vapidKeysMatch(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!, process.env.VAPID_PRIVATE_KEY!)) {
+      throw new Error("Invalid VAPID key pair");
+    }
     webpush.setVapidDetails(
       process.env.VAPID_SUBJECT!,
       process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
@@ -506,18 +514,23 @@ async function sendToSubscriptions(
     expirationTime: Date | null;
     failureCount: number;
   }>,
-  payload: string
+  payload: string,
+  eventId: string,
+  options: Pick<NotificationDispatchInput, "urgency" | "ttlSeconds">
 ) {
   let successCount = 0;
   let failureCount = 0;
+  const diagnostics: PushTestResult[] = [];
 
   for (const subscription of subscriptions) {
+    let provider: PushTestResult["provider"] = "Unknown";
     try {
       const webPushSubscription = await decryptWebPushSubscription(
         userId,
         subscription
       );
       validatePushEndpoint(webPushSubscription.endpoint);
+      provider = pushProvider(webPushSubscription.endpoint);
       if (
         !validatePushKey(webPushSubscription.keys.p256dh, 65, 128) ||
         !validatePushKey(webPushSubscription.keys.auth, 16, 64)
@@ -525,32 +538,30 @@ async function sendToSubscriptions(
         throw new UnsafePushEndpointError("Invalid stored push subscription");
       }
 
-      await webpush.sendNotification(webPushSubscription, payload, {
-        TTL: 60,
-        urgency: "normal",
+      const response = await webpush.sendNotification(webPushSubscription, payload, {
+        TTL: options.ttlSeconds ?? 86400,
+        urgency: options.urgency ?? "normal",
         timeout: 10_000,
         agent: createSafePushAgent(),
       });
 
+      const safe = pushDiagnostics(response);
+      console.info("push_dispatch", { eventId, subscriptionId: subscription.id, provider, providerAccepted: true, statusCode: safe.statusCode, appleReason: safe.appleReason, apnsId: safe.apnsId });
+      diagnostics.push({ provider, providerAccepted: true, statusCode: safe.statusCode });
       successCount += 1;
-      await markSubscriptionSuccess(subscription.id);
     } catch (error) {
       failureCount += 1;
 
-      const statusCode =
-        typeof error === "object" &&
-        error !== null &&
-        "statusCode" in error &&
-        typeof error.statusCode === "number"
-          ? error.statusCode
-          : null;
+      const safe = pushDiagnostics(error);
+      console.info("push_dispatch", { eventId, subscriptionId: subscription.id, provider, providerAccepted: false, statusCode: safe.statusCode, appleReason: safe.appleReason, apnsId: safe.apnsId });
+      diagnostics.push({ provider, providerAccepted: false, statusCode: safe.statusCode, failureReason: safe.failureReason });
 
       if (error instanceof UnsafePushEndpointError) {
         await prisma.pushSubscription.update({
           where: { id: subscription.id },
           data: { disabledAt: new Date(), lastFailureAt: new Date(), failureCount: { increment: 1 } },
         });
-      } else if (statusCode === 404 || statusCode === 410) {
+      } else if (safe.permanent) {
         await prisma.pushSubscription.update({
           where: { id: subscription.id },
           data: {
@@ -563,13 +574,15 @@ async function sendToSubscriptions(
         await markSubscriptionFailure(
           subscription.id,
           subscription.failureCount,
-          subscription.failureCount + 1 >= DISABLE_AFTER_FAILURES
+          !safe.temporary && subscription.failureCount + 1 >= DISABLE_AFTER_FAILURES
         );
       }
+      continue;
     }
+    await markSubscriptionSuccess(subscription.id);
   }
 
-  return { successCount, failureCount };
+  return { successCount, failureCount, diagnostics };
 }
 
 async function updateNotificationEventStatus(
@@ -821,7 +834,7 @@ export async function sendUserNotification(
   }
 
   const payload = buildPushPayload(input);
-  const result = await sendToSubscriptions(input.userId, subscriptions, payload);
+  const result = await sendToSubscriptions(input.userId, subscriptions, payload, event.id, input);
 
   const status =
     result.successCount > 0 && result.failureCount === 0
@@ -837,6 +850,7 @@ export async function sendUserNotification(
   });
 
   return {
+    diagnostics: result.diagnostics,
     success: result.successCount > 0,
     status,
     successCount: result.successCount,
@@ -844,16 +858,26 @@ export async function sendUserNotification(
   };
 }
 
-export async function sendTestNotificationToUser(userId: string) {
-  return sendUserNotification({
+export async function sendTestNotificationToUser(userId: string, endpoint: string): Promise<PushTestResult> {
+  validatePushEndpoint(endpoint);
+  const subscription = await prisma.pushSubscription.findFirst({
+    where: { userId, endpointHash: hashEndpoint(endpoint), disabledAt: null,
+      OR: [{ expirationTime: null }, { expirationTime: { gt: new Date() } }] },
+    select: activePushSubscriptionSelect,
+  });
+  if (!subscription) return { provider: pushProvider(endpoint), providerAccepted: false, statusCode: null, failureReason: "No active subscription for this browser. Enable it again." };
+  const result = await sendUserNotification({
     userId,
     type: NotificationType.TEST,
     title: "FinHealth test notification",
     body: "Push notifications are working for this browser.",
     targetPath: "/dashboard/profile",
-    dedupeKey: `test:${Date.now()}`,
+    dedupeKey: `test:${randomUUID()}`,
+    urgency: "high",
+    ttlSeconds: 300,
     respectPreferences: false,
-  });
+  }, { preference: getDefaultPreferenceSnapshot(), subscriptions: [subscription] });
+  return result.diagnostics?.[0] ?? { provider: pushProvider(endpoint), providerAccepted: false, statusCode: null, failureReason: "Test could not be dispatched. Try again." };
 }
 
 function getBudgetWindow(period: "MONTHLY" | "QUARTERLY" | "YEARLY", now: Date) {

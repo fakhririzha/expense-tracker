@@ -85,8 +85,8 @@ export function useUpdateNotificationPreferences() {
 
 export function useSendTestNotification() {
   return useMutation({
-    mutationFn: async () => {
-      const result = await sendTestNotification();
+    mutationFn: async (endpoint: string) => {
+      const result = await sendTestNotification({ endpoint });
       if (!result.success) {
         throw new Error(result.error);
       }

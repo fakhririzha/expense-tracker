@@ -164,27 +164,20 @@ export async function updateNotificationPreferences(
   }
 }
 
-export async function sendTestNotification() {
+export async function sendTestNotification(input: { endpoint: string }) {
   try {
     const authResult = await requireUserId();
     if ("error" in authResult) {
       return { success: false, error: authResult.error };
     }
 
-    const result = await sendTestNotificationToUser(authResult.userId);
-    if (!result.success) {
-      return {
-        success: false,
-        error:
-          result.skippedReason === "no_active_subscriptions"
-            ? "No active browser subscriptions found"
-            : "Failed to send test notification",
-      };
-    }
-
+    const validated = unsubscribeSchema.safeParse(input);
+    if (!validated.success) return { success: false, error: "Invalid push subscription endpoint" };
+    validatePushEndpoint(validated.data.endpoint);
+    const result = await sendTestNotificationToUser(authResult.userId, validated.data.endpoint);
     return { success: true, data: result };
   } catch (error) {
-    console.error("Send test notification error:", error);
+    console.error("Send test notification failed", { name: error instanceof Error ? error.name : "Unknown" });
     return { success: false, error: "Failed to send test notification" };
   }
 }
