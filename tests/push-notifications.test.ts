@@ -38,3 +38,14 @@ test("endpoint allowlist and browser guidance", () => {
   assert.equal(pushProvider(validatePushEndpoint("https://web.push.apple.com/test").href), "Apple");
   assert.match(pushRegistrationError(new Error("Registration failed - push service error")), /VPN or firewall/);
 });
+
+test("local networking errors are distinct from provider downtime and sanitized", () => {
+  const result = pushDiagnostics(Object.assign(new TypeError("secret endpoint"), { code: "ERR_INVALID_IP_ADDRESS" }));
+  assert.equal(result.errorCode, "ERR_INVALID_IP_ADDRESS");
+  assert.equal(result.temporary, false);
+  assert.match(result.failureReason, /server could not complete/);
+  assert.equal(result.permanent, false);
+  assert.equal(JSON.stringify(result).includes("secret"), false);
+  assert.equal(pushDiagnostics({ code: "secret" }).errorCode, undefined);
+  assert.match(pushDiagnostics({ statusCode: 503 }).failureReason, /temporarily unavailable/);
+});

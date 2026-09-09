@@ -546,14 +546,14 @@ async function sendToSubscriptions(
       });
 
       const safe = pushDiagnostics(response);
-      console.info("push_dispatch", { eventId, subscriptionId: subscription.id, provider, providerAccepted: true, statusCode: safe.statusCode, appleReason: safe.appleReason, apnsId: safe.apnsId });
+      console.info("push_dispatch", { eventId, subscriptionId: subscription.id, provider, providerAccepted: true, statusCode: safe.statusCode, appleReason: safe.appleReason, apnsId: safe.apnsId, errorCode: safe.errorCode });
       diagnostics.push({ provider, providerAccepted: true, statusCode: safe.statusCode });
       successCount += 1;
     } catch (error) {
       failureCount += 1;
 
       const safe = pushDiagnostics(error);
-      console.info("push_dispatch", { eventId, subscriptionId: subscription.id, provider, providerAccepted: false, statusCode: safe.statusCode, appleReason: safe.appleReason, apnsId: safe.apnsId });
+      console.info("push_dispatch", { eventId, subscriptionId: subscription.id, provider, providerAccepted: false, statusCode: safe.statusCode, appleReason: safe.appleReason, apnsId: safe.apnsId, errorCode: safe.errorCode });
       diagnostics.push({ provider, providerAccepted: false, statusCode: safe.statusCode, failureReason: safe.failureReason });
 
       if (error instanceof UnsafePushEndpointError) {
@@ -574,7 +574,7 @@ async function sendToSubscriptions(
         await markSubscriptionFailure(
           subscription.id,
           subscription.failureCount,
-          !safe.temporary && subscription.failureCount + 1 >= DISABLE_AFTER_FAILURES
+          safe.statusCode !== null && !safe.temporary && subscription.failureCount + 1 >= DISABLE_AFTER_FAILURES
         );
       }
       continue;
