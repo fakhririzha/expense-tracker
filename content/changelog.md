@@ -1,5 +1,11 @@
 # FinHealth Changelog
 
+## v5.7.3
+
+- Repair browser notifications after notification key changes, with clearer Chrome and iPhone setup guidance.
+- Improved push delivery timing and added a local display check for device notification settings.
+- Test notifications now target this browser and clearly report push-service acceptance instead of claiming delivery.
+
 ## v5.7.2
 
 - Maintenance: aligned the project's Codex orchestrator and sub-agent defaults for more consistent development workflows.

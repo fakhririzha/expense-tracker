@@ -23,6 +23,8 @@ import {
   useUpdateNotificationPreferences,
 } from "@/hooks/useNotificationQueries";
 
+import { applicationServerKeyMatches, pushRegistrationError, urlBase64ToUint8Array } from "@/lib/push-browser";
+
 interface PreferenceDraft {
   pushEnabled: boolean;
   subscriptionRenewalEnabled: boolean;
@@ -51,17 +53,12 @@ function isPushSupported() {
   );
 }
 
-function urlBase64ToUint8Array(base64String: string) {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const normalized = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const rawData = window.atob(normalized);
-  const outputArray = new Uint8Array(rawData.length);
-
-  for (let index = 0; index < rawData.length; index += 1) {
-    outputArray[index] = rawData.charCodeAt(index);
-  }
-
-  return outputArray;
+function needsIosInstallation() {
+  if (typeof window === "undefined") return false;
+  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  return ios && !window.matchMedia("(display-mode: standalone)").matches &&
+    !(navigator as Navigator & { standalone?: boolean }).standalone;
 }
 
 export function NotificationSettingsPanel() {
@@ -74,12 +71,15 @@ export function NotificationSettingsPanel() {
   const [permission, setPermission] = useState<NotificationPermission>("default");
   const [currentEndpoint, setCurrentEndpoint] = useState<string | null>(null);
   const [currentBrowserEnabled, setCurrentBrowserEnabled] = useState(false);
+  const [stale, setStale] = useState(false);
+  const [browserBusy, setBrowserBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<PreferenceDraft | null>(null);
 
   const settings = settingsQuery.data;
-  const supported = isPushSupported();
+  const needsInstallation = needsIosInstallation();
+  const supported = isPushSupported() && !needsInstallation;
 
   useEffect(() => {
     if (typeof window === "undefined" || !("Notification" in window)) {
@@ -115,7 +115,9 @@ export function NotificationSettingsPanel() {
           return;
         }
 
-        setCurrentBrowserEnabled(!!subscription);
+        const matches = !!subscription && applicationServerKeyMatches(subscription.options.applicationServerKey, settings?.vapidPublicKey);
+        setStale(!!subscription && !!settings?.vapidPublicKey && !matches);
+        setCurrentBrowserEnabled(matches && Notification.permission === "granted");
         setCurrentEndpoint(subscription?.endpoint ?? null);
       } catch (loadError) {
         if (!cancelled) {
@@ -129,9 +131,10 @@ export function NotificationSettingsPanel() {
     return () => {
       cancelled = true;
     };
-  }, [supported, settingsQuery.dataUpdatedAt]);
+  }, [supported, settings?.vapidPublicKey, settingsQuery.dataUpdatedAt]);
 
   const isBusy =
+    browserBusy ||
     subscribeMutation.isPending ||
     unsubscribeMutation.isPending ||
     updatePreferencesMutation.isPending ||
@@ -151,6 +154,7 @@ export function NotificationSettingsPanel() {
       return;
     }
 
+    setBrowserBusy(true);
     try {
       const permissionResult = await Notification.requestPermission();
       setPermission(permissionResult);
@@ -161,7 +165,15 @@ export function NotificationSettingsPanel() {
       }
 
       const registration = await navigator.serviceWorker.ready;
-      const existingSubscription = await registration.pushManager.getSubscription();
+      let existingSubscription = await registration.pushManager.getSubscription();
+      if (existingSubscription && !applicationServerKeyMatches(existingSubscription.options.applicationServerKey, settings.vapidPublicKey)) {
+        const oldEndpoint = existingSubscription.endpoint;
+        await unsubscribeMutation.mutateAsync(oldEndpoint);
+        if (!await existingSubscription.unsubscribe()) throw new Error("Could not remove the old subscription. Retry repair.");
+        existingSubscription = null;
+        setCurrentBrowserEnabled(false);
+        setCurrentEndpoint(null);
+      }
       const browserSubscription =
         existingSubscription ??
         (await registration.pushManager.subscribe({
@@ -184,15 +196,14 @@ export function NotificationSettingsPanel() {
         userAgent: navigator.userAgent,
       });
 
+      setStale(false);
       setCurrentBrowserEnabled(true);
       setCurrentEndpoint(serialized.endpoint);
       setMessage("Push notifications are enabled for this browser.");
     } catch (enableError) {
-      setError(
-        enableError instanceof Error
-          ? enableError.message
-          : "Failed to enable push notifications."
-      );
+      setError(pushRegistrationError(enableError));
+    } finally {
+      setBrowserBusy(false);
     }
   };
 
@@ -200,6 +211,7 @@ export function NotificationSettingsPanel() {
     setError(null);
     setMessage(null);
 
+    setBrowserBusy(true);
     try {
       const registration = await navigator.serviceWorker.ready;
       const browserSubscription = await registration.pushManager.getSubscription();
@@ -215,6 +227,7 @@ export function NotificationSettingsPanel() {
 
       setCurrentBrowserEnabled(false);
       setCurrentEndpoint(null);
+      setStale(false);
       setMessage("Push notifications are disabled for this browser.");
     } catch (disableError) {
       setError(
@@ -222,6 +235,8 @@ export function NotificationSettingsPanel() {
           ? disableError.message
           : "Failed to disable push notifications."
       );
+    } finally {
+      setBrowserBusy(false);
     }
   };
 
@@ -250,14 +265,35 @@ export function NotificationSettingsPanel() {
     setMessage(null);
 
     try {
-      await sendTestMutation.mutateAsync();
-      setMessage("Test notification sent.");
+      if (!currentEndpoint) throw new Error("Enable this browser first.");
+      const result = await sendTestMutation.mutateAsync(currentEndpoint);
+      if (!result.providerAccepted) throw new Error(result.failureReason ?? "Push service did not accept the notification.");
+      setMessage(`Accepted by ${result.provider} push service (HTTP ${result.statusCode}). This does not confirm display on your device. Try the local display check if nothing appears.`);
     } catch (sendError) {
       setError(
         sendError instanceof Error
           ? sendError.message
           : "Failed to send test notification."
       );
+    }
+  };
+
+  const handleLocalDisplay = async () => {
+    setError(null);
+    setMessage(null);
+    setBrowserBusy(true);
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      await registration.showNotification("FinHealth display check", {
+        body: "This notification was created on this device.",
+        tag: "finhealth-local-display-check",
+        data: { url: "/dashboard/profile" },
+      });
+      setMessage("Local display requested. If nothing appears, check iOS Settings → Notifications → FinHealth, Focus, and Scheduled Summary, or your device's notification settings.");
+    } catch {
+      setError("Could not display a local notification. Check this app's notification permission in device settings.");
+    } finally {
+      setBrowserBusy(false);
     }
   };
 
@@ -279,8 +315,9 @@ export function NotificationSettingsPanel() {
         {!supported && (
           <Alert variant="destructive" className="neo-border rounded-none">
             <AlertDescription>
-              This browser or connection does not support web push notifications. Use a
-              secure browser session over HTTPS or localhost.
+              {needsInstallation
+                ? "On iPhone or iPad, add FinHealth to your Home Screen, open the installed app, and enable notifications there."
+                : "This browser or connection does not support web push notifications. Use a secure browser session over HTTPS or localhost."}
             </AlertDescription>
           </Alert>
         )}
@@ -318,7 +355,7 @@ export function NotificationSettingsPanel() {
                     Current Browser
                   </p>
                   <p className="font-black">
-                    {currentBrowserEnabled ? "Enabled" : "Disabled"}
+                    {stale ? "Repair required — notification key changed" : currentBrowserEnabled ? "Enabled" : "Disabled"}
                   </p>
                   <p className="text-sm text-muted-foreground">
                     Permission: <span className="font-bold">{permission}</span>
@@ -337,13 +374,13 @@ export function NotificationSettingsPanel() {
                     <Loader2 className="h-4 w-4 animate-spin" />
                   )}
                   <Bell className="h-4 w-4" />
-                  Enable This Browser
+                  {stale ? "Repair This Browser" : "Enable This Browser"}
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => void handleDisableForBrowser()}
-                  disabled={!supported || !currentBrowserEnabled || isBusy}
+                  disabled={!supported || !currentEndpoint || isBusy}
                 >
                   {unsubscribeMutation.isPending && (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -373,7 +410,7 @@ export function NotificationSettingsPanel() {
               Test Flow
             </p>
             <p className="mt-1 font-bold">
-              Send a generic test notification to the currently active subscriptions.
+              Send a generic test notification only to this browser.
             </p>
             <Button
               type="button"
@@ -386,6 +423,10 @@ export function NotificationSettingsPanel() {
               )}
               <Send className="h-4 w-4" />
               Send Test Notification
+            </Button>
+            <Button type="button" variant="outline" className="mt-3" onClick={() => void handleLocalDisplay()}
+              disabled={isBusy || !supported || permission !== "granted"}>
+              Check Local Display
             </Button>
           </div>
         </div>
