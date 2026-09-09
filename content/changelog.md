@@ -1,5 +1,10 @@
 # FinHealth Changelog
 
+## v5.7.4
+
+- Fixed a server connection issue that prevented remote push notifications from reaching Apple and other push services.
+- Server connection failures now show distinct guidance instead of incorrectly reporting push-service downtime.
+
 ## v5.7.3
 
 - Repair browser notifications after notification key changes, with clearer Chrome and iPhone setup guidance.

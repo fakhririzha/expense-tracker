@@ -101,8 +101,8 @@ export function isPublicIpAddress(address: string): boolean {
 export function createSafePushAgent(): Agent {
   return new Agent({
     keepAlive: false,
-    lookup(hostname, _options, callback) {
-      lookup(hostname, { all: true, verbatim: true }, (error, addresses) => {
+    lookup(hostname, options, callback) {
+      lookup(hostname, { ...options, all: true, verbatim: true }, (error, addresses) => {
         if (error) return callback(error, "", 0);
         if (
           addresses.length === 0 ||
@@ -110,6 +110,8 @@ export function createSafePushAgent(): Agent {
         ) {
           return callback(new UnsafePushEndpointError(), "", 0);
         }
+        // Node requests all addresses when automatic family selection is enabled.
+        if (options.all) return callback(null, addresses);
         const selected = addresses[0];
         return callback(null, selected.address, selected.family);
       });

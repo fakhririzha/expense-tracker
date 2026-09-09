@@ -21,6 +21,12 @@ const appleReasons = new Set([
   "InternalServerError", "ServiceUnavailable", "BadTtl", "BadUrgency",
 ]);
 
+const safeErrorCodes = new Set([
+  "ERR_INVALID_IP_ADDRESS", "ENOTFOUND", "EAI_AGAIN", "ECONNREFUSED",
+  "ECONNRESET", "ETIMEDOUT", "ENETUNREACH", "EHOSTUNREACH",
+  "CERT_HAS_EXPIRED", "UNABLE_TO_VERIFY_LEAF_SIGNATURE", "ERR_TLS_CERT_ALTNAME_INVALID",
+]);
+
 export function pushDiagnostics(value: unknown) {
   const response = value && typeof value === "object" ? value as Record<string, unknown> : {};
   const statusCode = typeof response.statusCode === "number" && Number.isInteger(response.statusCode)
@@ -40,10 +46,14 @@ export function pushDiagnostics(value: unknown) {
     (statusCode === 403 && typeof response.body === "string" &&
       response.body.includes("the VAPID public key in the authorization header does not correspond"));
   const permanent = statusCode === 404 || statusCode === 410 || mismatch;
-  const temporary = statusCode === null || statusCode === 429 || statusCode >= 500;
+  const errorCode = typeof response.code === "string" && safeErrorCodes.has(response.code) ? response.code : undefined;
+  const localFailure = statusCode === null;
+  const temporary = statusCode === 429 || (statusCode !== null && statusCode >= 500) ||
+    (localFailure && errorCode !== "ERR_INVALID_IP_ADDRESS");
   const failureReason = mismatch ? "Notification key changed. Repair this browser's subscription."
     : permanent ? "Subscription expired. Enable notifications again."
+    : localFailure ? "The server could not complete the push request. Check server diagnostics before retrying."
     : temporary ? "Push service temporarily unavailable. Try again later."
     : "Push service rejected the request. Check server push configuration.";
-  return { statusCode, appleReason, apnsId, permanent, temporary, failureReason };
+  return { statusCode, appleReason, apnsId, errorCode, permanent, temporary, failureReason };
 }
