@@ -17,6 +17,7 @@ import {
   getTransactionUpdateBalanceDeltas,
   type TransactionBalanceEffect,
 } from "@/server/transactions/transaction-balance-effects";
+import { getBankInterestManagedTransactionIds } from "@/server/transactions/transaction-capabilities";
 import { validateNewTransactionAccounts } from "@/server/transactions/transaction-account-policy";
 import { z } from "zod";
 import {
@@ -293,37 +294,40 @@ async function applyBalanceEffect(
   }
 }
 
-export const transactionSchema = z
-  .object({
-    clientMutationId: z.string().uuid().optional(),
-    amount: z.number().positive("Amount must be positive"),
-    currency: z.string().default("IDR"),
-    exchangeRate: z.number().positive().default(1),
-    type: z.enum(["INCOME", "EXPENSE", "TRANSFER", "LIABILITY_PAYMENT"]),
-    description: z.string().optional(),
-    location: z.string().optional(),
-    latitude: z.number().optional(),
-    longitude: z.number().optional(),
-    googleMapsLink: z.string().optional(),
-    date: z.date().default(() => new Date()),
-    accountId: z.string().min(1, "From account is required"),
-    toAccountId: z.string().optional(),
-    categoryId: z.string().optional(),
-    isRecurring: z.boolean().default(false),
-    recurringRuleId: z.string().optional(),
-    splits: z
-      .array(
-        z.object({
-          categoryId: z.string().optional().nullable(),
-          amount: z.number().positive("Amount must be positive"),
-          description: z.string().optional().nullable(),
-          sortOrder: z.number().int().optional(),
-        })
-      )
-      .optional(),
-    referenceNumber: z.string().optional(),
-    createdBy: z.string().optional(),
-  })
+const transactionObjectSchema = z.object({
+  clientMutationId: z.string().uuid().optional(),
+  amount: z.number().positive("Amount must be positive"),
+  currency: z.string().default("IDR"),
+  exchangeRate: z.number().positive().default(1),
+  type: z.enum(["INCOME", "EXPENSE", "TRANSFER", "LIABILITY_PAYMENT"]),
+  description: z.string().optional(),
+  location: z.string().optional(),
+  latitude: z.number().optional(),
+  longitude: z.number().optional(),
+  googleMapsLink: z.string().optional(),
+  date: z.date().default(() => new Date()),
+  accountId: z.string().min(1, "From account is required"),
+  toAccountId: z.string().optional(),
+  categoryId: z.string().optional(),
+  isRecurring: z.boolean().default(false),
+  recurringRuleId: z.string().optional(),
+  splits: z
+    .array(
+      z.object({
+        categoryId: z.string().optional().nullable(),
+        amount: z.number().positive("Amount must be positive"),
+        description: z.string().optional().nullable(),
+        sortOrder: z.number().int().optional(),
+      })
+    )
+    .optional(),
+  referenceNumber: z.string().optional(),
+  createdBy: z.string().optional(),
+});
+
+const transactionUpdateSchema = transactionObjectSchema.partial();
+
+export const transactionSchema = transactionObjectSchema
   .refine(
     (data) => {
       if (
@@ -375,6 +379,14 @@ export async function createTransactionForUser(
       return {
         success: false,
         error: validatedFields.error.issues[0].message,
+      };
+    }
+
+    if (validatedFields.data.type === TransactionTypeEnum.LIABILITY_PAYMENT) {
+      return {
+        success: false,
+        error:
+          "Liability payments must be created from the Liabilities page.",
       };
     }
 
@@ -550,9 +562,18 @@ export async function createTransactionForUser(
 export async function updateTransactionForUser(
   userId: string,
   id: string,
-  data: Partial<TransactionInput>
+  input: Partial<TransactionInput>
 ) {
   try {
+    const validatedFields = transactionUpdateSchema.safeParse(input);
+    if (!validatedFields.success) {
+      return {
+        success: false,
+        error: validatedFields.error.issues[0]?.message ?? "Invalid transaction",
+      };
+    }
+    const data = validatedFields.data;
+
     const existingTransaction = await prisma.transaction.findFirst({
       where: { id, userId },
       include: {
@@ -593,6 +614,14 @@ export async function updateTransactionForUser(
         success: false,
         error:
           "Deposito-managed transactions cannot be edited here. Please use the Deposito Tracker page.",
+      };
+    }
+
+    const bankInterestIds = await getBankInterestManagedTransactionIds(userId, [id]);
+    if (bankInterestIds.has(id)) {
+      return {
+        success: false,
+        error: "Automatic bank-interest transactions cannot be edited here.",
       };
     }
 
@@ -930,11 +959,23 @@ export async function updateTransactionForUser(
   }
 }
 
-export async function deleteTransactionForUser(userId: string, id: string) {
+type DeleteTransactionResult =
+  | { success: true }
+  | {
+      success: false;
+      error: string;
+      code: "NOT_FOUND" | "MANAGED_TRANSACTION" | "INTERNAL_ERROR";
+    };
+
+export async function deleteTransactionForUser(
+  userId: string,
+  id: string
+): Promise<DeleteTransactionResult> {
   try {
     if (await isManagedDepositoTransaction(userId, id)) {
       return {
         success: false,
+        code: "MANAGED_TRANSACTION",
         error:
           "Deposito-managed transactions cannot be deleted here. Please use the Deposito Tracker page.",
       };
@@ -948,11 +989,48 @@ export async function deleteTransactionForUser(userId: string, id: string) {
         type: true,
         accountId: true,
         toAccountId: true,
+        account: { select: { type: true } },
+        toAccount: { select: { type: true } },
       },
     });
 
     if (!transaction) {
-      return { success: false, error: "Transaction not found" };
+      return {
+        success: false,
+        code: "NOT_FOUND",
+        error: "Transaction not found",
+      };
+    }
+
+    const bankInterestIds = await getBankInterestManagedTransactionIds(userId, [id]);
+    if (bankInterestIds.has(id)) {
+      return {
+        success: false,
+        code: "MANAGED_TRANSACTION",
+        error: "Automatic bank-interest transactions cannot be deleted here.",
+      };
+    }
+
+    if (transaction.type === TransactionTypeEnum.LIABILITY_PAYMENT) {
+      return {
+        success: false,
+        code: "MANAGED_TRANSACTION",
+        error:
+          "Liability payment transactions cannot be deleted here. Please use the Liabilities page to manage payments.",
+      };
+    }
+
+    if (
+      transaction.type === TransactionTypeEnum.TRANSFER &&
+      (isLoanReceivableAccountType(transaction.account.type) ||
+        isLoanReceivableAccountType(transaction.toAccount?.type ?? ""))
+    ) {
+      return {
+        success: false,
+        code: "MANAGED_TRANSACTION",
+        error:
+          "Loans Receivable transfers cannot be deleted here. Please manage them from the Loans Receivable page.",
+      };
     }
 
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
@@ -969,7 +1047,11 @@ export async function deleteTransactionForUser(userId: string, id: string) {
     return { success: true };
   } catch (error) {
     console.error("Delete transaction error:", error);
-    return { success: false, error: "Failed to delete transaction" };
+    return {
+      success: false,
+      code: "INTERNAL_ERROR",
+      error: "Failed to delete transaction",
+    };
   }
 }
 

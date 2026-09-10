@@ -106,12 +106,14 @@ The native client lives in `apps/mobile` and starts in Expo Go. Create `apps/mob
 EXPO_PUBLIC_API_URL="https://finhealth.chat"
 ```
 
-For local physical-device testing, use the computer's LAN address instead of `localhost`. Then start the web backend and Expo in separate terminals:
+Authenticated physical-device testing must use HTTPS because the app sends credentials and bearer sessions to this URL. Use an HTTPS hostname reachable from the phone, configure a certificate that is valid for that hostname, and trust its issuing certificate on both iOS and Android test devices. Then start the HTTPS web backend and Expo in separate terminals:
 
 ```bash
-pnpm dev
+pnpm dev:https
 pnpm mobile:start
 ```
+
+Set `EXPO_PUBLIC_API_URL` to that trusted `https://` LAN hostname. Plain HTTP is accepted only for local simulator/emulator loopback targets during development; the app rejects HTTP LAN and production API URLs before sending credentials.
 
 This is the only environment value exposed to Expo. Database, encryption, Auth.js, and OCR provider secrets stay on the Next.js server.
 

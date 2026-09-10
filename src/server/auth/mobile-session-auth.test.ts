@@ -79,6 +79,31 @@ describe("mobile session authentication", () => {
     assert.deepEqual(store.deletedIds, ["session-1"]);
   });
 
+  it("still rejects an expired session when cleanup fails", async () => {
+    const store = createStore({
+      ...validSession,
+      expiresAt: new Date("2026-09-09T00:00:00.000Z"),
+    });
+    store.deleteById = async () => {
+      throw new Error("database unavailable");
+    };
+
+    const originalConsoleError = console.error;
+    console.error = () => undefined;
+    try {
+      const result = await authenticateMobileRequestWithStore(
+        new Request("https://finhealth.example", {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        store,
+        new Date("2026-09-10T00:00:00.000Z")
+      );
+      assert.equal(result, null);
+    } finally {
+      console.error = originalConsoleError;
+    }
+  });
+
   it("returns only the user owned by the matching session", async () => {
     const store = createStore();
     const result = await authenticateMobileRequestWithStore(

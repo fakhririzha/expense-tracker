@@ -35,24 +35,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const cleanupHandler = setUnauthorizedHandler(clearAndRedirect);
     void (async () => {
-      const session = await getStoredSession();
-      if (!active) return;
-      if (!session) {
-        setStatus("unauthenticated");
-        return;
-      }
       try {
-        const currentUser = await getMe();
+        const session = await getStoredSession();
         if (!active) return;
-        setUser(currentUser);
-      } catch {
-        // Keep a valid local session usable for cached data when the device is offline.
-        // A server 401 invokes clearAndRedirect through the shared API client.
-      } finally {
-        if (active) {
-          const sessionStillExists = await getStoredSession();
-          if (active) setStatus(sessionStillExists ? "authenticated" : "unauthenticated");
+        if (!session) {
+          setStatus("unauthenticated");
+          return;
         }
+        try {
+          const currentUser = await getMe();
+          if (!active) return;
+          setUser(currentUser);
+        } catch {
+          // Keep a valid local session usable for cached data when the device is offline.
+          // A server 401 invokes clearAndRedirect through the shared API client.
+        }
+        const sessionStillExists = await getStoredSession();
+        if (active) {
+          setStatus(sessionStillExists ? "authenticated" : "unauthenticated");
+        }
+      } catch {
+        if (!active) return;
+        setUser(null);
+        setStatus("unauthenticated");
       }
     })();
 

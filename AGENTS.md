@@ -481,6 +481,7 @@ Notable current hooks include:
 - Keep the native scope limited to authentication, transaction history/detail, ordinary transaction CRUD, receipt prefill, account balances, signed-in user details, and logout.
 - Account and category management plus dashboards, budgets, goals, investments, deposito, liabilities, receivables, recurring rules, notifications, imports/exports, and financial targets remain web-only.
 - Store only bearer authentication material in SecureStore. Financial records belong in normal query caching, not SecureStore.
+- Require HTTPS for physical-device and production API URLs. Plain HTTP is limited to local simulator/emulator loopback targets during development.
 - The shared API client adds bearer authentication, validates responses through `packages/contracts`, normalizes errors, and clears the session and query cache on `401`.
 - Receipt images must be resized/compressed below 1 MB before upload and remain temporary. Never persist the photo, base64 data, or raw OCR provider response.
 - OCR line items remain available in the response for forward compatibility but must not silently create a split transaction on mobile.

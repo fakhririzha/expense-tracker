@@ -86,7 +86,9 @@ export function TransactionForm({ mode, transaction, onSaved }: TransactionFormP
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [ocrError, setOcrError] = useState<string | null>(null);
   const [ocrNotice, setOcrNotice] = useState<string | null>(null);
+  const [isScanning, setIsScanning] = useState(false);
   const mutationIdRef = useRef<string | null>(null);
+  const scanSequenceRef = useRef(0);
   const { control, handleSubmit, setValue, watch, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: initialValues(transaction),
@@ -208,6 +210,7 @@ export function TransactionForm({ mode, transaction, onSaved }: TransactionFormP
   });
 
   const openReceiptActions = () => {
+    if (isScanning) return;
     Alert.alert("Scan receipt", "Choose how to add a receipt image.", [
       { text: "Take photo", onPress: () => void scanReceipt("camera") },
       { text: "Choose photo", onPress: () => void scanReceipt("library") },
@@ -216,6 +219,8 @@ export function TransactionForm({ mode, transaction, onSaved }: TransactionFormP
   };
 
   const scanReceipt = async (source: "camera" | "library") => {
+    const scanSequence = ++scanSequenceRef.current;
+    setIsScanning(true);
     setOcrError(null);
     setOcrNotice(null);
     try {
@@ -235,6 +240,7 @@ export function TransactionForm({ mode, transaction, onSaved }: TransactionFormP
       if (result.canceled || !result.assets[0]) return;
       const file = await prepareReceiptImage(result.assets[0]);
       const response = await scanTransactionReceipt(file);
+      if (scanSequence !== scanSequenceRef.current) return;
       const ocr = response.data;
       if (ocr.type) changeTransactionType(ocr.type);
       if (ocr.amount !== null) setValue("amount", String(ocr.amount));
@@ -247,7 +253,11 @@ export function TransactionForm({ mode, transaction, onSaved }: TransactionFormP
       if (ocr.confidence !== null) notices.push(`Scan confidence: ${Math.round(ocr.confidence * 100)}%. Review the fields before saving.`);
       setOcrNotice(notices.join(" ") || "Receipt scanned. Review the fields before saving.");
     } catch (error) {
-      setOcrError(error instanceof ApiError ? error.message : error instanceof Error ? error.message : "Unable to scan this receipt.");
+      if (scanSequence === scanSequenceRef.current) {
+        setOcrError(error instanceof ApiError ? error.message : error instanceof Error ? error.message : "Unable to scan this receipt.");
+      }
+    } finally {
+      if (scanSequence === scanSequenceRef.current) setIsScanning(false);
     }
   };
 
@@ -346,11 +356,11 @@ export function TransactionForm({ mode, transaction, onSaved }: TransactionFormP
             <TextField label="Location" placeholder="Optional" value={value} onBlur={onBlur} onChangeText={onChange} error={errors.location?.message} />
           )}
         />
-        {mode === "create" ? <Button variant="secondary" onPress={openReceiptActions} disabled={!isOnline} loading={false}>Scan receipt</Button> : null}
+        {mode === "create" ? <Button variant="secondary" onPress={openReceiptActions} disabled={!isOnline || isScanning || mutation.isPending} loading={isScanning}>Scan receipt</Button> : null}
         {ocrNotice ? <Text selectable style={styles.notice}>{ocrNotice}</Text> : null}
         {ocrError ? <Text selectable style={styles.error}>{ocrError}</Text> : null}
         {submitError ? <Text selectable style={styles.error}>{submitError}</Text> : null}
-        <Button onPress={submit} disabled={!isOnline} loading={mutation.isPending}>{mode === "create" ? "Save transaction" : "Save changes"}</Button>
+        <Button onPress={submit} disabled={!isOnline || isScanning} loading={mutation.isPending}>{mode === "create" ? "Save transaction" : "Save changes"}</Button>
       </Card>
       <ModalPicker
         visible={picker === "account"}

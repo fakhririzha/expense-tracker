@@ -121,7 +121,13 @@ export async function DELETE(request: Request, context: RouteContext) {
       id
     );
     if (!result.success) {
-      return NextResponse.json({ error: result.error }, { status: 400 });
+      const status =
+        result.code === "INTERNAL_ERROR"
+          ? 500
+          : result.code === "NOT_FOUND"
+            ? 404
+            : 409;
+      return NextResponse.json({ error: result.error }, { status });
     }
     revalidateTransactionPaths();
     return NextResponse.json({ success: true });

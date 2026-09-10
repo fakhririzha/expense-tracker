@@ -22,7 +22,7 @@ export type MobileTransactionType = z.infer<
 >;
 
 export const isoDateTimeSchema = z.string().datetime({ offset: true });
-export const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+export const isoDateSchema = z.iso.date();
 
 export const transactionCapabilitiesSchema = z.object({
   canEdit: z.boolean(),

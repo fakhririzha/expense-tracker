@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  isoDateSchema,
   mobileCreateTransactionSchema,
   transactionListQuerySchema,
 } from "./transaction";
@@ -42,4 +43,10 @@ test("mobile transfer requires a distinct destination", () => {
 test("mobile pagination stays on existing server page sizes", () => {
   assert.equal(transactionListQuerySchema.safeParse({ pageSize: "25" }).success, true);
   assert.equal(transactionListQuerySchema.safeParse({ pageSize: "24" }).success, false);
+});
+
+test("OCR dates must be calendar-valid ISO dates", () => {
+  assert.equal(isoDateSchema.safeParse("2028-02-29").success, true);
+  assert.equal(isoDateSchema.safeParse("2027-02-29").success, false);
+  assert.equal(isoDateSchema.safeParse("2026-04-31").success, false);
 });

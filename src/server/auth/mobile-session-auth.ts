@@ -34,7 +34,11 @@ export async function authenticateMobileRequestWithStore(
   if (!session) return null;
 
   if (isMobileSessionExpired(session.expiresAt, now)) {
-    await store.deleteById(session.id);
+    try {
+      await store.deleteById(session.id);
+    } catch (error) {
+      console.error("Failed to remove expired mobile session:", error);
+    }
     return null;
   }
 

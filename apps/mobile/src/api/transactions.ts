@@ -69,6 +69,7 @@ export async function scanTransactionReceipt(file: Blob) {
   const response = await apiFormData<unknown>(
     "/api/mobile/v1/transactions/ocr",
     formData,
+    { timeoutMs: 60_000 },
   );
   return transactionOcrResponseSchema.parse(response);
 }

@@ -16,6 +16,8 @@ Set the only required mobile environment variable before starting Expo:
 EXPO_PUBLIC_API_URL=https://finhealth.chat
 ```
 
+Use HTTPS for physical devices and production builds. Local HTTP is limited to simulator/emulator loopback hosts during development. For LAN testing, run the backend with `pnpm dev:https`, use a certificate valid for the LAN hostname, trust its issuer on the iOS or Android device, and set `EXPO_PUBLIC_API_URL` to that trusted `https://` hostname.
+
 The app stores only its bearer session token and expiry in `expo-secure-store`. It never receives
 database credentials, encryption keys, or OCR provider credentials.
 
