@@ -5,6 +5,7 @@ const workspaceRoot = path.resolve(process.cwd());
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
+  transpilePackages: ["@finhealth/contracts"],
   turbopack: {
     root: workspaceRoot,
   },

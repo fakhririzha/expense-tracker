@@ -4,7 +4,7 @@ This file describes the current repository state for AI coding agents working on
 
 ## Project Overview
 
-FinHealth is a personal finance dashboard built with Next.js 16 and React 19. It covers day-to-day money tracking, portfolio valuation, liabilities, loans receivable, deposito balances, personal assets, subscriptions, multi-category budgets, goals, cash-flow forecasting, rule-based insights, month-end net-worth snapshots, PWA install support, browser push notifications, and supplementary Pegadaian gold reference prices.
+FinHealth is a personal finance platform with a Next.js 16 web application and an Expo mobile client. The web application remains the backend, Prisma/database owner, authentication source, OCR host, and complete product surface. The native app intentionally covers only frequent phone workflows.
 
 ### Current Feature Set
 
@@ -25,12 +25,15 @@ FinHealth is a personal finance dashboard built with Next.js 16 and React 19. It
 - **Data Tools**: CSV import with mapping and export support.
 - **PWA and Notifications**: Install prompt, offline fallback page, service worker, push subscriptions, notification preferences, and daily notification dispatch cron.
 - **Profile Security**: Self-service account deletion, base currency settings, financial targets, and notification settings.
+- **Expo Mobile**: Existing-credential sign-in, transaction history/detail, ordinary income/expense/transfer CRUD, receipt OCR prefill, account balances, signed-in account details, and logout.
 
 ## Technology Stack
 
 | Layer | Technology | Version |
 |-------|------------|---------|
 | Framework | Next.js | 16.2.12 |
+| Mobile Framework | Expo / Expo Router | 57 |
+| Native UI | React Native | 0.86.3 |
 | UI Library | React / React DOM | 19.2.3 |
 | Language | TypeScript | 5.x |
 | Styling | Tailwind CSS | 4.x |
@@ -51,6 +54,8 @@ FinHealth is a personal finance dashboard built with Next.js 16 and React 19. It
 
 ```text
 expense-tracker/
+├── apps/
+│   └── mobile/               # Expo Router native application
 ├── certificates/             # Local HTTPS certificates
 ├── content/
 │   └── changelog.md          # In-app changelog content
@@ -62,6 +67,8 @@ expense-tracker/
 │   ├── icons/                # PWA icons and favicons
 │   ├── offline.html          # Offline fallback page
 │   └── sw.js                 # Service worker
+├── packages/
+│   └── contracts/            # Pure TypeScript/Zod mobile network DTOs
 ├── src/
 │   ├── actions/              # Server Actions by feature
 │   ├── app/                  # Next.js App Router pages, layouts, API routes, manifest
@@ -71,6 +78,7 @@ expense-tracker/
 │   ├── hooks/                # TanStack Query hooks
 │   ├── lib/                  # Domain services, encryption, forecasting, insights, notifications
 │   ├── scripts/              # Operational scripts
+│   ├── server/               # Reusable auth and transaction domain services
 │   ├── types/                # Shared TypeScript types
 │   ├── auth.config.ts
 │   ├── auth.ts
@@ -125,6 +133,17 @@ expense-tracker/
 - `/api/cron/recurring`
 - `/api/investments/[id]/trades`
 
+Mobile API routes under `/api/mobile/v1`:
+
+- `POST /auth/login`
+- `DELETE /auth/session`
+- `GET /me`
+- `GET /accounts`
+- `GET /categories`
+- `GET` and `POST /transactions`
+- `GET`, `PATCH`, and `DELETE /transactions/[id]`
+- `POST /transactions/ocr`
+
 ## Build and Development Commands
 
 ```bash
@@ -135,6 +154,13 @@ pnpm build
 pnpm start
 pnpm start:https
 pnpm lint
+pnpm contracts:typecheck
+pnpm test:mobile-server
+pnpm mobile:start
+pnpm mobile:android
+pnpm mobile:ios
+pnpm mobile:lint
+pnpm mobile:typecheck
 pnpm db:migrate:dev
 pnpm db:migrate:prod
 pnpm prisma generate
@@ -149,6 +175,7 @@ pnpm db:backfill:account-encryption
 - `pnpm db:backfill:account-encryption` runs `src/scripts/backfill-account-encryption.ts`.
 - There is **no** `postinstall` script. Dependency installation does not automatically run Prisma commands.
 - There is **no** dedicated `type-check` script. Use `pnpm build` when build-level type validation matters.
+- `apps/mobile` starts with Expo Go and reads `EXPO_PUBLIC_API_URL` from its local environment.
 
 ## Environment Variables
 
@@ -170,6 +197,7 @@ pnpm db:backfill:account-encryption
 | `WEEKLY_INSIGHTS_CHAT_API_ENDPOINT` | OpenAI-compatible chat completions endpoint used for weekly AI insights | Required for weekly AI insights |
 | `WEEKLY_INSIGHTS_CHAT_API_KEY` | Bearer key for weekly AI insight generation | Required for weekly AI insights |
 | `WEEKLY_INSIGHTS_CHAT_API_MODEL` | Text-capable chat model used to create weekly AI insights | Required for weekly AI insights |
+| `EXPO_PUBLIC_API_URL` | Public Next.js backend base URL; set for the Expo app, usually in `apps/mobile/.env.local` | Mobile development/builds |
 
 Generate a new encryption key with:
 
@@ -226,6 +254,8 @@ openssl rand -base64 32
 **NotificationPreference**: User-level push toggle, category toggles, reminder lead times, and budget threshold settings.
 
 **NotificationEvent**: Delivery log and dedupe record for outbound notifications.
+
+**MobileSession**: Native bearer session with a SHA-256 token hash, expiry, and owning user relation. Never store raw mobile bearer tokens in the database.
 
 ### Important Enums
 
@@ -440,6 +470,20 @@ Notable current hooks include:
 - Existing transactions tied to an inactive account may still be edited without forcing an account replacement, as long as the inactive account is not newly selected.
 - Use `src/lib/transaction-split-validation.ts` for normalization and validation.
 - Use `src/lib/transaction-allocation-service.ts` when reports or insights need split-aware allocation rows.
+- Keep transaction ownership, balance, encryption, account, split, and managed-transaction rules in `src/server/transactions`; Server Actions and mobile routes must remain thin adapters.
+- Mobile mutation contracts allow only `INCOME`, `EXPENSE`, and `TRANSFER`. Do not add `LIABILITY_PAYMENT` or other managed creation paths to the native API.
+- Mobile transaction responses must include server-derived edit/delete capabilities. Do not recreate managed-transaction detection in Expo.
+- Mobile create requests use a stable `clientMutationId`. Keep the same ID across retries until success is known so a repeated request cannot apply financial effects twice.
+- Native transaction mutations require connectivity and must not be added to an offline replay queue.
+
+### Expo Mobile
+
+- Keep the native scope limited to authentication, transaction history/detail, ordinary transaction CRUD, receipt prefill, account balances, signed-in user details, and logout.
+- Account and category management plus dashboards, budgets, goals, investments, deposito, liabilities, receivables, recurring rules, notifications, imports/exports, and financial targets remain web-only.
+- Store only bearer authentication material in SecureStore. Financial records belong in normal query caching, not SecureStore.
+- The shared API client adds bearer authentication, validates responses through `packages/contracts`, normalizes errors, and clears the session and query cache on `401`.
+- Receipt images must be resized/compressed below 1 MB before upload and remain temporary. Never persist the photo, base64 data, or raw OCR provider response.
+- OCR line items remain available in the response for forward compatibility but must not silently create a split transaction on mobile.
 
 ### Transfers and Balance Integrity
 
@@ -486,7 +530,8 @@ Notable current hooks include:
 ## Authentication
 
 - Auth.js v5 with JWT sessions and Prisma adapter.
-- Credentials provider uses email and password.
+- Credentials provider and native login share `src/server/auth/verify-credentials.ts`, including Zod validation, rate limiting, bcrypt comparison, and dummy-hash timing protection.
+- Native authentication uses random 30-day bearer tokens stored only in SecureStore on-device; `MobileSession` persists only SHA-256 token hashes.
 - Middleware protects `/dashboard/*` and redirects authenticated users away from `/login` and `/register`.
 - The app expects `session.user.id` to be available in Server Actions.
 
@@ -551,6 +596,10 @@ Run the most relevant checks:
 ```bash
 pnpm lint
 pnpm build
+pnpm test:mobile-server
+pnpm contracts:typecheck
+pnpm mobile:lint
+pnpm mobile:typecheck
 git diff --check
 ```
 
@@ -574,6 +623,7 @@ Manual verification should cover the touched feature area plus affected cross-fe
 - Push notification opt-in, test notification flow, and notification preferences
 - PWA install prompt and offline fallback behavior
 - Import/export and category management
+- Native login, cold-start session restoration, transaction pagination and refresh, ordinary income/expense/transfer create/edit/delete, retry with the same `clientMutationId`, receipt camera/gallery scanning and OCR prefill, balance refresh, offline mutation blocking, and logout
 
 ## GitHub Delivery Workflow
 

@@ -1,5 +1,11 @@
 # FinHealth Changelog
 
+## v5.8.0
+
+- Added a focused FinHealth mobile app for iOS and Android with secure sign-in, transaction history and details, account balances, and sign-out.
+- Added native creation, editing, and deletion for everyday income, expense, and transfer transactions while keeping advanced and managed transactions safely read-only.
+- Added receipt photo scanning to prefill mobile transaction forms without storing receipt images, plus safer retry handling that prevents duplicate balance changes after uncertain connections.
+
 ## v5.7.4
 
 - Fixed a server connection issue that prevented remote push notifications from reaching Apple and other push services.

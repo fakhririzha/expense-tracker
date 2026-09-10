@@ -1,6 +1,6 @@
 # FinHealth
 
-FinHealth is a personal finance dashboard built with Next.js 16 and React 19. It tracks accounts, transactions, split expenses, liabilities, loans receivable, deposito balances, investments, personal assets, subscriptions, multi-category budgets, savings goals, historical net worth, cash-flow forecasts, rule-based insights, and browser notifications.
+FinHealth is a personal finance platform with a Next.js 16 web application and a focused Expo mobile client. The web application remains the backend and full product surface; the native app covers everyday transaction entry, receipt scanning, transaction history, and account balances.
 
 ## Highlights
 
@@ -14,13 +14,16 @@ FinHealth is a personal finance dashboard built with Next.js 16 and React 19. It
 - Subscriptions, recurring rules, calendar views, and upcoming bank-pressure alerts
 - CSV import/export, multi-currency reporting, budgets, goals, forecasting, and financial insights
 - Installable PWA support with offline fallback and optional browser push notifications
+- Native iOS and Android client for secure sign-in, ordinary transaction CRUD, receipt-assisted entry, and account balances
 
 ## Tech Stack
 
 | Layer | Technology | Version |
 |-------|------------|---------|
 | Framework | Next.js | 16.2.12 |
+| Mobile | Expo / Expo Router | 57 |
 | UI Library | React / React DOM | 19.2.3 |
+| Native UI | React Native | 0.86.3 |
 | Language | TypeScript | 5.x |
 | Styling | Tailwind CSS | 4.x |
 | Database | MySQL / MariaDB | 8.0+ |
@@ -95,6 +98,23 @@ pnpm dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+### Expo mobile app
+
+The native client lives in `apps/mobile` and starts in Expo Go. Create `apps/mobile/.env.local` with the URL that the phone or simulator can use to reach the FinHealth web server:
+
+```bash
+EXPO_PUBLIC_API_URL="https://finhealth.chat"
+```
+
+For local physical-device testing, use the computer's LAN address instead of `localhost`. Then start the web backend and Expo in separate terminals:
+
+```bash
+pnpm dev
+pnpm mobile:start
+```
+
+This is the only environment value exposed to Expo. Database, encryption, Auth.js, and OCR provider secrets stay on the Next.js server.
+
 ## Scripts
 
 | Command | Purpose |
@@ -105,6 +125,13 @@ Open [http://localhost:3000](http://localhost:3000).
 | `pnpm start` | Start the production server |
 | `pnpm start:https` | Start the production server with experimental HTTPS |
 | `pnpm lint` | Run ESLint |
+| `pnpm contracts:typecheck` | Type-check the shared mobile API contracts |
+| `pnpm test:mobile-server` | Run focused mobile authentication, contract, transaction-policy, balance, and OCR tests |
+| `pnpm mobile:start` | Start the Expo development server |
+| `pnpm mobile:android` | Start Expo and open Android |
+| `pnpm mobile:ios` | Start Expo and open iOS |
+| `pnpm mobile:lint` | Lint the Expo source |
+| `pnpm mobile:typecheck` | Type-check the Expo source |
 | `pnpm db:migrate:dev` | Run Prisma development migrations |
 | `pnpm db:migrate:prod` | Run Prisma production migrations |
 | `pnpm db:backfill:account-encryption` | Backfill encrypted account fields |
@@ -134,6 +161,7 @@ Notes:
 | `WEEKLY_INSIGHTS_CHAT_API_ENDPOINT` | OpenAI-compatible chat completions endpoint for weekly AI insights | Required for weekly AI insights |
 | `WEEKLY_INSIGHTS_CHAT_API_KEY` | Bearer token for weekly AI insight generation | Required for weekly AI insights |
 | `WEEKLY_INSIGHTS_CHAT_API_MODEL` | Text-capable chat model used to create weekly AI insights | Required for weekly AI insights |
+| `EXPO_PUBLIC_API_URL` | Public base URL of the FinHealth Next.js backend; set in `apps/mobile/.env.local` | Mobile development/builds |
 
 ## Current App Surface
 
@@ -172,15 +200,32 @@ Notes:
 - `/api/cron/pegadaian-gold-prices`
 - `/api/cron/recurring`
 
+### Mobile API
+
+The versioned `/api/mobile/v1` API provides native login/logout, the signed-in user, decrypted account summaries, categories, paginated transaction history and detail, ordinary transaction mutations, and receipt OCR. Except for login, requests use `Authorization: Bearer <token>`.
+
+- `POST /api/mobile/v1/auth/login`
+- `DELETE /api/mobile/v1/auth/session`
+- `GET /api/mobile/v1/me`
+- `GET /api/mobile/v1/accounts`
+- `GET /api/mobile/v1/categories`
+- `GET|POST /api/mobile/v1/transactions`
+- `GET|PATCH|DELETE /api/mobile/v1/transactions/[id]`
+- `POST /api/mobile/v1/transactions/ocr`
+
 ## Project Structure
 
 ```text
 expense-tracker/
+├── apps/
+│   └── mobile/                   # Expo Router native client
 ├── certificates/             # Local HTTPS certificates
 ├── content/                  # In-app changelog content
 ├── plans/                    # Design and implementation notes
 ├── prisma/                   # Prisma schema and migrations
 ├── public/                   # Static assets, icons, offline fallback, service worker
+├── packages/
+│   └── contracts/                # Pure Zod network DTOs shared by web and mobile
 ├── src/
 │   ├── actions/              # Server Actions by feature
 │   ├── app/                  # App Router pages, layouts, API routes, manifest
@@ -190,6 +235,7 @@ expense-tracker/
 │   ├── hooks/                # TanStack Query hooks
 │   ├── lib/                  # Domain services, encryption, forecasts, insights, notifications
 │   ├── scripts/              # Operational scripts
+│   ├── server/               # Reusable auth and transaction domain services
 │   └── types/                # Shared TypeScript types
 ├── AGENTS.md
 ├── CONTRIBUTING.md
@@ -200,7 +246,9 @@ expense-tracker/
 ## Architecture Notes
 
 - Auth.js handles credentials-based authentication with JWT sessions.
-- Server Actions under `src/actions` implement most authenticated reads and all mutations.
+- Native sessions use random 30-day bearer tokens. Only SHA-256 token hashes are stored in `MobileSession`; logout revokes the current device session.
+- Server Actions and mobile HTTP routes are thin adapters over the same transaction and OCR services in `src/server`, so financial rules are not duplicated in the client.
+- Network DTOs are defined and validated in `packages/contracts`; Prisma models are never sent directly to mobile.
 - Prisma uses a generated client under `src/generated/prisma/client`.
 - TanStack Query wraps client-side access to Server Actions.
 - Yahoo Finance powers live market quotes and FX data with fallback-aware handling.
@@ -216,6 +264,7 @@ expense-tracker/
 - `Budget` stores names in encrypted form and uses scoped many-to-many category coverage so one budget can track multiple expense categories.
 - Recurring rules, savings goals, subscriptions, and personal assets store their sensitive labels and notes in encrypted companion fields.
 - `TransactionSplit` supports manual split expense allocation.
+- `MobileSession` stores hashed native bearer sessions and is deleted with its owning user.
 - `NetWorthSnapshot` stores frozen month-end values for historical reporting.
 - `PushSubscription`, `NotificationPreference`, and `NotificationEvent` back browser push notifications.
 - `ExchangeRate` is a global cache and is not user-owned.
@@ -223,20 +272,25 @@ expense-tracker/
 
 ## Testing
 
-The project currently relies on linting plus manual verification.
+The project uses focused server/mobile tests, static checks, production builds, and manual verification.
 
 ```bash
+pnpm test:mobile-server
+pnpm contracts:typecheck
 pnpm lint
 pnpm build
-```
-
-When relevant, also run:
-
-```bash
+pnpm mobile:lint
+pnpm mobile:typecheck
 git diff --check
 ```
 
 For functional changes, manually verify the touched flow and its balance/reporting side effects. This is especially important for transactions, transfers, liabilities, receivables, split expenses, investments, market-price fallbacks, Pegadaian reference prices, forecasts, notifications, and imports.
+
+The native MVP supports create, edit, and delete for ordinary `INCOME`, `EXPENSE`, and `TRANSFER` transactions. Managed deposito, liability-payment, loans-receivable, automatic bank-interest, and split transactions can remain visible but are read-only according to server-returned capabilities. Account/category management and the wider planning, reporting, investment, liability, recurring, notification, and data-management surfaces remain web-only.
+
+Receipt scanning is a transient form helper. The app resizes and compresses the selected image below 1 MB, sends it to the authenticated server OCR route, applies approved fields to the form, and does not save the image, base64 data, or raw provider response. OCR line items remain in the contract for forward compatibility but do not create mobile split transactions.
+
+Native reads may use the normal in-memory TanStack Query cache while offline. Financial mutations require connectivity and are never queued. A stable `clientMutationId` is reused after uncertain create failures so the database uniqueness constraint prevents duplicate balance effects.
 
 Transaction CSV imports are limited to 512 KiB, 1,000 data rows, 32 columns,
 128 characters per header, and 2,048 characters per cell. Browser validation is
