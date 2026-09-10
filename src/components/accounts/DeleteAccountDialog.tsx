@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { AccountMutationConfirmationField } from "@/components/accounts/AccountMutationConfirmationField";
 import { Button } from "@/components/ui/button";
@@ -30,11 +30,6 @@ export function DeleteAccountDialog({
   const [error, setError] = useState<string | null>(null);
   const deleteMutation = useDeleteAccount();
   const { data: protection } = useAccountMutationProtection();
-
-  useEffect(() => {
-    setConfirmationCode("");
-    setError(null);
-  }, [account?.id]);
 
   const handleDelete = async () => {
     if (!account) return;

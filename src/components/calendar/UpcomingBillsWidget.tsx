@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { format, isToday, isTomorrow, isPast, differenceInDays } from "date-fns";
+import { format, isToday, isTomorrow, isPast } from "date-fns";
 import { CalendarEvent } from "@/actions/calendar-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,10 +11,8 @@ import {
   ArrowUpCircle,
   ArrowDownCircle,
   ArrowLeftRight,
-  AlertCircle,
   Clock,
 } from "lucide-react";
-import { TransactionType } from "@/generated/prisma/client/client";
 
 interface UpcomingBillsWidgetProps {
   events: CalendarEvent[];

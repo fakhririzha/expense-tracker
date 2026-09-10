@@ -129,7 +129,6 @@ export function EditAccountDialog({
   // Reset form with account data when account changes
   useEffect(() => {
     if (account && open) {
-      setConfirmationCode("");
       // For liability accounts (LOAN, CREDIT_CARD), convert balance to positive for display
       const displayBalance =
         account.type === "LOAN" ||
@@ -187,7 +186,13 @@ export function EditAccountDialog({
   });
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) setConfirmationCode("");
+        onOpenChange(nextOpen);
+      }}
+    >
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-125">
         <DialogHeader>
           <DialogTitle>Edit Account</DialogTitle>
