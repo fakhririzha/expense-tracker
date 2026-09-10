@@ -40,6 +40,40 @@ test("mobile transfer requires a distinct destination", () => {
   );
 });
 
+test("mobile locations require a valid coordinate pair and HTTPS maps link", () => {
+  assert.equal(
+    mobileCreateTransactionSchema.safeParse({
+      ...baseTransaction,
+      latitude: -6.2,
+      longitude: 106.816666,
+      googleMapsLink: "https://www.google.com/maps/search/?api=1&query=-6.2,106.816666",
+    }).success,
+    true
+  );
+  assert.equal(
+    mobileCreateTransactionSchema.safeParse({
+      ...baseTransaction,
+      latitude: -6.2,
+    }).success,
+    false
+  );
+  assert.equal(
+    mobileCreateTransactionSchema.safeParse({
+      ...baseTransaction,
+      latitude: -91,
+      longitude: 106.816666,
+    }).success,
+    false
+  );
+  assert.equal(
+    mobileCreateTransactionSchema.safeParse({
+      ...baseTransaction,
+      googleMapsLink: "http://www.google.com/maps",
+    }).success,
+    false
+  );
+});
+
 test("mobile pagination stays on existing server page sizes", () => {
   assert.equal(transactionListQuerySchema.safeParse({ pageSize: "25" }).success, true);
   assert.equal(transactionListQuerySchema.safeParse({ pageSize: "24" }).success, false);

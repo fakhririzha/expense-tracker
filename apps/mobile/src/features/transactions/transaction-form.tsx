@@ -22,7 +22,8 @@ import { createTransaction, scanTransactionReceipt, updateTransaction } from "@/
 import { ModalPicker, type PickerOption } from "@/components/modal-picker";
 import { Button, Card, Field, OfflineBanner, SelectField, TextField } from "@/components/ui";
 import { useNetworkStatus } from "@/hooks/use-network-status";
-import { createClientMutationId } from "@/features/transactions/format";
+import { createClientMutationId, formatMoney } from "@/features/transactions/format";
+import { LocationPickerModal } from "@/features/transactions/location-picker-modal";
 import { prepareReceiptImage } from "@/features/receipt-scan/prepare-receipt";
 import { colors, radii, spacing } from "@/theme/tokens";
 
@@ -37,6 +38,9 @@ const formSchema = z.object({
   categoryId: z.string(),
   description: z.string(),
   location: z.string(),
+  latitude: z.string(),
+  longitude: z.string(),
+  googleMapsLink: z.string(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -75,6 +79,9 @@ function initialValues(transaction?: MobileTransaction): FormValues {
     categoryId: transaction?.category?.id ?? "",
     description: transaction?.description ?? "",
     location: transaction?.location ?? "",
+    latitude: transaction?.latitude === null || transaction?.latitude === undefined ? "" : String(transaction.latitude),
+    longitude: transaction?.longitude === null || transaction?.longitude === undefined ? "" : String(transaction.longitude),
+    googleMapsLink: transaction?.googleMapsLink ?? "",
   };
 }
 
@@ -83,6 +90,7 @@ export function TransactionForm({ mode, transaction, onSaved }: TransactionFormP
   const isOnline = useNetworkStatus();
   const [picker, setPicker] = useState<"account" | "destination" | "category" | null>(null);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
+  const [locationPickerVisible, setLocationPickerVisible] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [ocrError, setOcrError] = useState<string | null>(null);
   const [ocrNotice, setOcrNotice] = useState<string | null>(null);
@@ -99,6 +107,9 @@ export function TransactionForm({ mode, transaction, onSaved }: TransactionFormP
   const destinationId = watch("toAccountId");
   const categoryId = watch("categoryId");
   const dateValue = watch("date");
+  const latitudeValue = watch("latitude");
+  const longitudeValue = watch("longitude");
+  const locationValue = watch("location");
   const accountsQuery = useQuery({ queryKey: ["accounts"], queryFn: getAccounts });
   const categoriesQuery = useQuery({
     queryKey: ["categories", type],
@@ -113,6 +124,7 @@ export function TransactionForm({ mode, transaction, onSaved }: TransactionFormP
     onSuccess: async (saved) => {
       await queryClient.invalidateQueries({ queryKey: ["transactions"] });
       await queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       if (mode === "create") mutationIdRef.current = null;
       onSaved(saved);
     },
@@ -164,6 +176,8 @@ export function TransactionForm({ mode, transaction, onSaved }: TransactionFormP
     }
     const amount = Number(values.amount.replace(/,/g, ""));
     const exchangeRate = Number(values.exchangeRate.replace(/,/g, ""));
+    const latitude = values.latitude ? Number(values.latitude) : null;
+    const longitude = values.longitude ? Number(values.longitude) : null;
     const payload = {
       amount,
       currency: sourceAccount?.currency ?? values.currency,
@@ -171,6 +185,9 @@ export function TransactionForm({ mode, transaction, onSaved }: TransactionFormP
       type: values.type,
       description: values.description.trim() || (mode === "edit" ? null : undefined),
       location: values.location.trim() || (mode === "edit" ? null : undefined),
+      latitude: latitude ?? (mode === "edit" ? null : undefined),
+      longitude: longitude ?? (mode === "edit" ? null : undefined),
+      googleMapsLink: values.googleMapsLink.trim() || (mode === "edit" ? null : undefined),
       date: new Date(values.date).toISOString(),
       accountId: values.accountId,
       toAccountId: values.type === "TRANSFER" ? values.toAccountId : null,
@@ -317,7 +334,7 @@ export function TransactionForm({ mode, transaction, onSaved }: TransactionFormP
           name="accountId"
           render={() => (
             <Field label="Account" error={errors.accountId?.message}>
-              <SelectField value={sourceAccount ? `${sourceAccount.name} · ${sourceAccount.currency}` : undefined} placeholder="Choose an account" onPress={() => setPicker("account")} />
+              <SelectField value={sourceAccount ? selectedAccountLabel(sourceAccount) : undefined} placeholder="Choose an account" onPress={() => setPicker("account")} />
             </Field>
           )}
         />
@@ -327,7 +344,7 @@ export function TransactionForm({ mode, transaction, onSaved }: TransactionFormP
             name="toAccountId"
             render={() => (
               <Field label="Destination account" error={errors.toAccountId?.message}>
-                <SelectField value={destinationAccount ? `${destinationAccount.name} · ${destinationAccount.currency}` : undefined} placeholder="Choose destination" onPress={() => setPicker("destination")} />
+                <SelectField value={destinationAccount ? selectedAccountLabel(destinationAccount) : undefined} placeholder="Choose destination" onPress={() => setPicker("destination")} />
               </Field>
             )}
           />
@@ -356,6 +373,26 @@ export function TransactionForm({ mode, transaction, onSaved }: TransactionFormP
             <TextField label="Location" placeholder="Optional" value={value} onBlur={onBlur} onChangeText={onChange} error={errors.location?.message} />
           )}
         />
+        <Button variant="secondary" onPress={() => setLocationPickerVisible(true)}>
+          {latitudeValue && longitudeValue ? "Change map location" : "Choose on map"}
+        </Button>
+        {latitudeValue && longitudeValue ? (
+          <View style={styles.locationSelection}>
+            <View style={styles.locationSelectionCopy}>
+              <Text selectable style={styles.locationSelectionTitle}>Map pin selected</Text>
+              <Text selectable style={styles.locationSelectionCoordinates}>{Number(latitudeValue).toFixed(6)}, {Number(longitudeValue).toFixed(6)}</Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                setValue("latitude", "");
+                setValue("longitude", "");
+                setValue("googleMapsLink", "");
+              }}>
+              <Text selectable style={styles.clearLocation}>Clear pin</Text>
+            </Pressable>
+          </View>
+        ) : null}
         {mode === "create" ? <Button variant="secondary" onPress={openReceiptActions} disabled={!isOnline || isScanning || mutation.isPending} loading={isScanning}>Scan receipt</Button> : null}
         {ocrNotice ? <Text selectable style={styles.notice}>{ocrNotice}</Text> : null}
         {ocrError ? <Text selectable style={styles.error}>{ocrError}</Text> : null}
@@ -400,6 +437,22 @@ export function TransactionForm({ mode, transaction, onSaved }: TransactionFormP
         }}
         emptyMessage="No categories are available for this transaction type."
       />
+      <LocationPickerModal
+        visible={locationPickerVisible}
+        initialCoordinate={latitudeValue && longitudeValue ? {
+          latitude: Number(latitudeValue),
+          longitude: Number(longitudeValue),
+        } : undefined}
+        initialLabel={locationValue}
+        onClose={() => setLocationPickerVisible(false)}
+        onSelect={(selection) => {
+          setValue("location", selection.location, { shouldDirty: true });
+          setValue("latitude", String(selection.latitude), { shouldDirty: true });
+          setValue("longitude", String(selection.longitude), { shouldDirty: true });
+          setValue("googleMapsLink", selection.googleMapsLink, { shouldDirty: true });
+          setLocationPickerVisible(false);
+        }}
+      />
     </View>
   );
 }
@@ -408,9 +461,13 @@ function accountOption(account: MobileAccount): PickerOption {
   return {
     id: account.id,
     label: account.name,
-    detail: `${account.type.replaceAll("_", " ")} · ${account.currency}${account.isActive ? "" : " · inactive (historical only)"}`,
+    detail: `${formatMoney(account.balance, account.currency)} · ${account.type.replaceAll("_", " ")}${account.isActive ? "" : " · inactive (historical only)"}`,
     disabled: !account.isActive,
   };
+}
+
+function selectedAccountLabel(account: MobileAccount) {
+  return `${account.name} · ${formatMoney(account.balance, account.currency)}`;
 }
 
 function formatDateForForm(value: string) {
@@ -429,6 +486,11 @@ const styles = StyleSheet.create({
   typeOptionTextSelected: { color: colors.primary },
   dateField: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.md, borderWidth: 1, justifyContent: "center", minHeight: 48, paddingHorizontal: spacing.md },
   dateText: { color: colors.text, fontSize: 16 },
+  locationSelection: { alignItems: "center", backgroundColor: colors.surfaceMuted, borderRadius: radii.md, flexDirection: "row", justifyContent: "space-between", padding: spacing.md },
+  locationSelectionCopy: { flex: 1, gap: 2 },
+  locationSelectionTitle: { color: colors.text, fontSize: 14, fontWeight: "700" },
+  locationSelectionCoordinates: { color: colors.textMuted, fontSize: 12 },
+  clearLocation: { color: colors.danger, fontSize: 13, fontWeight: "700", padding: spacing.sm },
   notice: { backgroundColor: colors.warningSoft, borderRadius: radii.md, color: colors.warning, lineHeight: 20, padding: spacing.md },
   error: { color: colors.danger, lineHeight: 20 },
 });

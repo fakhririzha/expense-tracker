@@ -81,20 +81,15 @@ function normalizeToCurrency(
   return amount * (conversionRates.get(currency) ?? 1);
 }
 
-export async function getExecutiveMetrics(): Promise<{
+export async function getExecutiveMetricsForUser(userId: string): Promise<{
   success: boolean;
   error?: string;
   data?: ExecutiveMetrics;
 }> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
-
     // Get user with preferences
     const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
+      where: { id: userId },
       select: {
         mainCurrency: true,
         retirementTarget: true,
@@ -116,16 +111,16 @@ export async function getExecutiveMetrics(): Promise<{
 
     const [accounts, personalAssets, transactions] = await Promise.all([
       prisma.financialAccount.findMany({
-        where: { userId: session.user.id, isActive: true },
+        where: { userId, isActive: true },
         select: executiveAccountSelect,
       }),
       prisma.personalAsset.findMany({
-        where: { userId: session.user.id, disposedAt: null },
+        where: { userId, disposedAt: null },
         select: executivePersonalAssetSelect,
       }),
       prisma.transaction.findMany({
         where: {
-          userId: session.user.id,
+          userId,
           date: { gte: sixMonthsAgo },
         },
         select: executiveTransactionSelect,
@@ -185,7 +180,7 @@ export async function getExecutiveMetrics(): Promise<{
     let valuationError: string | null = null;
     try {
       const portfolio = await getCurrentPortfolioValuation(
-        session.user.id,
+        userId,
         mainCurrency
       );
       portfolioSummary = portfolio.summary;
@@ -314,6 +309,19 @@ export async function getExecutiveMetrics(): Promise<{
     console.error("Get executive metrics error:", error);
     return { success: false, error: "Failed to fetch executive metrics" };
   }
+}
+
+export async function getExecutiveMetrics(): Promise<{
+  success: boolean;
+  error?: string;
+  data?: ExecutiveMetrics;
+}> {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return { success: false, error: "Unauthorized" };
+  }
+
+  return getExecutiveMetricsForUser(session.user.id);
 }
 
 function calculateHealthTier(

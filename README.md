@@ -1,6 +1,6 @@
 # FinHealth
 
-FinHealth is a personal finance platform with a Next.js 16 web application and a focused Expo mobile client. The web application remains the backend and full product surface; the native app covers everyday transaction entry, receipt scanning, transaction history, and account balances.
+FinHealth is a personal finance platform with a Next.js 16 web application and a focused Expo mobile client. The web application remains the backend and full product surface; the native app covers a concise financial dashboard, everyday transaction entry, receipt scanning, transaction history, mapped transaction locations, and account balances.
 
 ## Highlights
 
@@ -204,11 +204,12 @@ Notes:
 
 ### Mobile API
 
-The versioned `/api/mobile/v1` API provides native login/logout, the signed-in user, decrypted account summaries, categories, paginated transaction history and detail, ordinary transaction mutations, and receipt OCR. Except for login, requests use `Authorization: Bearer <token>`.
+The versioned `/api/mobile/v1` API provides native login/logout, the signed-in user, a server-calculated dashboard, decrypted account summaries, categories, paginated transaction history and detail, ordinary transaction mutations, and receipt OCR. Except for login, requests use `Authorization: Bearer <token>`.
 
 - `POST /api/mobile/v1/auth/login`
 - `DELETE /api/mobile/v1/auth/session`
 - `GET /api/mobile/v1/me`
+- `GET /api/mobile/v1/dashboard`
 - `GET /api/mobile/v1/accounts`
 - `GET /api/mobile/v1/categories`
 - `GET|POST /api/mobile/v1/transactions`
@@ -291,6 +292,8 @@ For functional changes, manually verify the touched flow and its balance/reporti
 The native MVP supports create, edit, and delete for ordinary `INCOME`, `EXPENSE`, and `TRANSFER` transactions. Managed deposito, liability-payment, loans-receivable, automatic bank-interest, and split transactions can remain visible but are read-only according to server-returned capabilities. Account/category management and the wider planning, reporting, investment, liability, recurring, notification, and data-management surfaces remain web-only.
 
 Receipt scanning is a transient form helper. The app resizes and compresses the selected image below 1 MB, sends it to the authenticated server OCR route, applies approved fields to the form, and does not save the image, base64 data, or raw provider response. OCR line items remain in the contract for forward compatibility but do not create mobile split transactions.
+
+Transaction forms can attach an optional native map pin. The app requests foreground location permission only when the user chooses the current-position action, and sends the selected label, coordinates, and HTTPS Maps link to the same server-authoritative transaction service used by the web app.
 
 Native reads may use the normal in-memory TanStack Query cache while offline. Financial mutations require connectivity and are never queued. A stable `clientMutationId` is reused after uncertain create failures so the database uniqueness constraint prevents duplicate balance effects.
 

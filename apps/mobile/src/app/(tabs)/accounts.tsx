@@ -1,11 +1,12 @@
 import type { MobileAccount } from "@finhealth/contracts";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { Alert, Text, View } from "react-native";
+import { Alert, RefreshControl, StyleSheet, Text, View } from "react-native";
 
 import { getAccounts } from "@/api/accounts";
 import { ApiError } from "@/api/client";
 import { getMe } from "@/api/auth";
+import { getDashboard } from "@/api/dashboard";
 import { Button, Card, ErrorState, LoadingState, OfflineBanner, Pill, ScreenScroll, SectionHeader } from "@/components/ui";
 import { useAuth } from "@/auth/auth-provider";
 import { useNetworkStatus } from "@/hooks/use-network-status";
@@ -33,11 +34,21 @@ function AccountCard({ account }: { account: MobileAccount }) {
   );
 }
 
+function SummaryMetric({ label, value, color = colors.text }: { label: string; value: string; color?: string }) {
+  return (
+    <View style={styles.summaryMetric}>
+      <Text selectable style={commonStyles.label}>{label}</Text>
+      <Text selectable style={[styles.summaryValue, { color }]}>{value}</Text>
+    </View>
+  );
+}
+
 export default function AccountsScreen() {
   const { user, signOut } = useAuth();
   const isOnline = useNetworkStatus();
   const [loggingOut, setLoggingOut] = useState(false);
   const accountsQuery = useQuery({ queryKey: ["accounts"], queryFn: getAccounts });
+  const dashboardQuery = useQuery({ queryKey: ["dashboard"], queryFn: getDashboard });
   const meQuery = useQuery({ queryKey: ["me"], queryFn: getMe, initialData: user ?? undefined });
 
   const confirmLogout = () => {
@@ -56,13 +67,52 @@ export default function AccountsScreen() {
   if (accountsQuery.isLoading) return <View style={commonStyles.screen}><OfflineBanner isOnline={isOnline} /><LoadingState label="Loading accounts…" /></View>;
   if (accountsQuery.isError) return <View style={commonStyles.screen}><OfflineBanner isOnline={isOnline} /><ErrorState message={accountsQuery.error instanceof Error ? accountsQuery.error.message : "Unable to load accounts."} onRetry={() => void accountsQuery.refetch()} /></View>;
 
+  const dashboard = dashboardQuery.data;
+  const refreshAll = async () => {
+    await Promise.all([accountsQuery.refetch(), dashboardQuery.refetch(), meQuery.refetch()]);
+  };
+
   return (
-    <ScreenScroll>
+    <ScreenScroll
+      refreshControl={
+        <RefreshControl
+          refreshing={accountsQuery.isRefetching || dashboardQuery.isRefetching}
+          onRefresh={() => void refreshAll()}
+          tintColor={colors.primary}
+        />
+      }>
       <OfflineBanner isOnline={isOnline} />
       <View style={{ gap: spacing.xs }}>
         <Text selectable style={commonStyles.title}>Accounts</Text>
         <Text selectable style={commonStyles.subtitle}>Balances are always refreshed from FinHealth.</Text>
       </View>
+      <Card style={{ gap: spacing.md }}>
+        <SectionHeader title="Account summary" />
+        {dashboard ? (
+          <View style={styles.summaryGrid}>
+            <SummaryMetric
+              label="Net worth"
+              value={dashboard.position.netWorth === null ? "Unavailable" : formatMoney(dashboard.position.netWorth, dashboard.displayCurrency)}
+              color={dashboard.position.netWorth !== null && dashboard.position.netWorth < 0 ? colors.expense : colors.primary}
+            />
+            <SummaryMetric
+              label="Total assets"
+              value={dashboard.position.totalAssets === null ? "Unavailable" : formatMoney(dashboard.position.totalAssets, dashboard.displayCurrency)}
+              color={colors.income}
+            />
+            <SummaryMetric label="Liquid funds" value={formatMoney(dashboard.position.liquidFunds, dashboard.displayCurrency)} />
+            <SummaryMetric label="Total debt" value={formatMoney(dashboard.position.totalDebt, dashboard.displayCurrency)} color={colors.expense} />
+          </View>
+        ) : dashboardQuery.isError ? (
+          <View style={{ gap: spacing.sm }}>
+            <Text selectable style={commonStyles.subtitle}>The account summary is temporarily unavailable.</Text>
+            <Button variant="ghost" onPress={() => void dashboardQuery.refetch()}>Retry summary</Button>
+          </View>
+        ) : (
+          <Text selectable style={commonStyles.subtitle}>Calculating your financial position…</Text>
+        )}
+        {dashboard?.valuationWarning ? <Text selectable style={styles.warning}>{dashboard.valuationWarning}</Text> : null}
+      </Card>
       <View style={{ gap: spacing.md }}>
         <SectionHeader title="Your accounts" />
         {(accountsQuery.data?.accounts ?? []).map((account) => <AccountCard key={account.id} account={account} />)}
@@ -79,3 +129,10 @@ export default function AccountsScreen() {
     </ScreenScroll>
   );
 }
+
+const styles = StyleSheet.create({
+  summaryGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md },
+  summaryMetric: { backgroundColor: colors.surfaceMuted, borderRadius: 12, flex: 1, gap: spacing.xs, minWidth: "46%", padding: spacing.md },
+  summaryValue: { fontSize: 17, fontVariant: ["tabular-nums"], fontWeight: "800" },
+  warning: { backgroundColor: colors.warningSoft, borderRadius: 10, color: colors.warning, fontSize: 12, lineHeight: 17, padding: spacing.md },
+});

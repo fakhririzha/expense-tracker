@@ -6,21 +6,24 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  type ScrollViewProps,
   type TextInputProps,
   View,
 } from "react-native";
 
 import { colors, commonStyles, radii, shadows, spacing } from "@/theme/tokens";
 
-export function ScreenScroll({ children, contentContainerStyle }: {
+export function ScreenScroll({ children, contentContainerStyle, refreshControl }: {
   children: ReactNode;
   contentContainerStyle?: object;
+  refreshControl?: ScrollViewProps["refreshControl"];
 }) {
   return (
     <ScrollView
       style={commonStyles.screen}
       contentInsetAdjustmentBehavior="automatic"
       keyboardShouldPersistTaps="handled"
+      refreshControl={refreshControl}
       contentContainerStyle={[styles.scrollContent, contentContainerStyle]}>
       {children}
     </ScrollView>

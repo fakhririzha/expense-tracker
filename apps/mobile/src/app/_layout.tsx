@@ -1,5 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Stack, usePathname, useRouter } from "expo-router";
+import type { Href } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect, type ReactNode } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
@@ -22,7 +23,7 @@ function AuthNavigationGuard({ children }: { children: ReactNode }) {
     if (status === "unauthenticated" && !isAuthRoute) {
       router.replace("/(auth)/login");
     } else if (status === "authenticated" && isAuthRoute) {
-      router.replace("/(tabs)/transactions");
+      router.replace("/(tabs)/dashboard" as Href);
     }
   }, [isAuthRoute, router, status]);
 

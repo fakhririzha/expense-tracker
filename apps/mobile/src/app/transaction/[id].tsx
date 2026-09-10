@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { Alert, Text, View } from "react-native";
+import { Alert, Linking, Text, View } from "react-native";
 
 import { deleteTransaction, getTransaction } from "@/api/transactions";
 import { ApiError } from "@/api/client";
@@ -25,6 +25,7 @@ export default function TransactionDetailScreen() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["transactions"] });
       await queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.removeQueries({ queryKey: ["transaction", transactionId] });
       router.replace("/(tabs)/transactions");
     },
@@ -37,6 +38,12 @@ export default function TransactionDetailScreen() {
 
   const transaction = query.data;
   const color = typeColor(transaction.type);
+  const coordinateMapsLink = transaction.latitude !== null && transaction.longitude !== null
+    ? `https://www.google.com/maps/search/?api=1&query=${transaction.latitude},${transaction.longitude}`
+    : null;
+  const mapsLink = transaction.googleMapsLink?.startsWith("https://")
+    ? transaction.googleMapsLink
+    : coordinateMapsLink;
   const onDelete = () => {
     Alert.alert("Delete transaction?", "The original balance change will be reversed on the server.", [
       { text: "Cancel", style: "cancel" },
@@ -66,6 +73,10 @@ export default function TransactionDetailScreen() {
             <DetailRow label="Exchange rate" value={String(transaction.exchangeRate)} />
             {transaction.description ? <DetailRow label="Description" value={transaction.description} /> : null}
             {transaction.location ? <DetailRow label="Location" value={transaction.location} /> : null}
+            {transaction.latitude !== null && transaction.longitude !== null ? (
+              <DetailRow label="Coordinates" value={`${transaction.latitude.toFixed(6)}, ${transaction.longitude.toFixed(6)}`} />
+            ) : null}
+            {mapsLink ? <Button variant="secondary" onPress={() => void Linking.openURL(mapsLink)}>Open in Maps</Button> : null}
             {transaction.splits.length > 0 ? (
               <View style={{ backgroundColor: colors.warningSoft, borderRadius: 10, padding: spacing.md }}>
                 <Text selectable style={{ color: colors.warning, lineHeight: 20 }}>This transaction has itemized split details. Split editing is available on the web app.</Text>

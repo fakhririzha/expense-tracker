@@ -25,7 +25,7 @@ FinHealth is a personal finance platform with a Next.js 16 web application and a
 - **Data Tools**: CSV import with mapping and export support.
 - **PWA and Notifications**: Install prompt, offline fallback page, service worker, push subscriptions, notification preferences, and daily notification dispatch cron.
 - **Profile Security**: Self-service account deletion, base currency settings, financial targets, and notification settings.
-- **Expo Mobile**: Existing-credential sign-in, transaction history/detail, ordinary income/expense/transfer CRUD, receipt OCR prefill, account balances, signed-in account details, and logout.
+- **Expo Mobile**: Existing-credential sign-in, focused dashboard analytics, transaction history/detail, ordinary income/expense/transfer CRUD, receipt OCR prefill, native transaction location pins, account balances and summary, signed-in account details, and logout.
 
 ## Technology Stack
 
@@ -138,6 +138,7 @@ Mobile API routes under `/api/mobile/v1`:
 - `POST /auth/login`
 - `DELETE /auth/session`
 - `GET /me`
+- `GET /dashboard`
 - `GET /accounts`
 - `GET /categories`
 - `GET` and `POST /transactions`
@@ -478,13 +479,15 @@ Notable current hooks include:
 
 ### Expo Mobile
 
-- Keep the native scope limited to authentication, transaction history/detail, ordinary transaction CRUD, receipt prefill, account balances, signed-in user details, and logout.
-- Account and category management plus dashboards, budgets, goals, investments, deposito, liabilities, receivables, recurring rules, notifications, imports/exports, and financial targets remain web-only.
+- Keep the native scope limited to authentication, focused dashboard analytics, transaction history/detail, ordinary transaction CRUD, receipt prefill, transaction location pins, account balances and summary, signed-in user details, and logout.
+- Account and category management plus detailed reports, budgets, goals, investment management, deposito, liabilities, receivables, recurring rules, notifications, imports/exports, and financial targets remain web-only.
 - Store only bearer authentication material in SecureStore. Financial records belong in normal query caching, not SecureStore.
 - Require HTTPS for physical-device and production API URLs. Plain HTTP is limited to local simulator/emulator loopback targets during development.
 - The shared API client adds bearer authentication, validates responses through `packages/contracts`, normalizes errors, and clears the session and query cache on `401`.
 - Receipt images must be resized/compressed below 1 MB before upload and remain temporary. Never persist the photo, base64 data, or raw OCR provider response.
 - OCR line items remain available in the response for forward compatibility but must not silently create a split transaction on mobile.
+- Keep dashboard and account summaries server-calculated; the Expo client must not reproduce financial aggregation or balance rules.
+- Transaction map pins use foreground location permission only. Persist location labels, coordinates, and HTTPS map links through the shared transaction service rather than introducing a separate mobile location store.
 
 ### Transfers and Balance Integrity
 

@@ -12,6 +12,7 @@ export default function TabsLayout() {
         headerTintColor: colors.primary,
         headerTitleStyle: { color: colors.text, fontWeight: "800" },
       }}>
+      <Tabs.Screen name="dashboard" options={{ title: "Dashboard", tabBarLabel: "Dashboard" }} />
       <Tabs.Screen name="transactions" options={{ title: "Transactions", tabBarLabel: "Activity" }} />
       <Tabs.Screen name="accounts" options={{ title: "Accounts", tabBarLabel: "Accounts" }} />
     </Tabs>
