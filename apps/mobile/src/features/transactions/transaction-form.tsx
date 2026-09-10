@@ -97,7 +97,7 @@ export function TransactionForm({ mode, transaction, onSaved }: TransactionFormP
   const [isScanning, setIsScanning] = useState(false);
   const mutationIdRef = useRef<string | null>(null);
   const scanSequenceRef = useRef(0);
-  const { control, handleSubmit, setValue, watch, formState: { errors } } = useForm<FormValues>({
+  const { control, handleSubmit, setValue, watch, formState: { dirtyFields, errors } } = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: initialValues(transaction),
   });
@@ -178,6 +178,9 @@ export function TransactionForm({ mode, transaction, onSaved }: TransactionFormP
     const exchangeRate = Number(values.exchangeRate.replace(/,/g, ""));
     const latitude = values.latitude ? Number(values.latitude) : null;
     const longitude = values.longitude ? Number(values.longitude) : null;
+    const locationMetadataChanged = Boolean(
+      dirtyFields.latitude || dirtyFields.longitude || dirtyFields.googleMapsLink
+    );
     const payload = {
       amount,
       currency: sourceAccount?.currency ?? values.currency,
@@ -185,9 +188,15 @@ export function TransactionForm({ mode, transaction, onSaved }: TransactionFormP
       type: values.type,
       description: values.description.trim() || (mode === "edit" ? null : undefined),
       location: values.location.trim() || (mode === "edit" ? null : undefined),
-      latitude: latitude ?? (mode === "edit" ? null : undefined),
-      longitude: longitude ?? (mode === "edit" ? null : undefined),
-      googleMapsLink: values.googleMapsLink.trim() || (mode === "edit" ? null : undefined),
+      latitude: mode === "edit"
+        ? locationMetadataChanged ? latitude : undefined
+        : latitude ?? undefined,
+      longitude: mode === "edit"
+        ? locationMetadataChanged ? longitude : undefined
+        : longitude ?? undefined,
+      googleMapsLink: mode === "edit"
+        ? locationMetadataChanged ? values.googleMapsLink.trim() || null : undefined
+        : values.googleMapsLink.trim() || undefined,
       date: new Date(values.date).toISOString(),
       accountId: values.accountId,
       toAccountId: values.type === "TRANSFER" ? values.toAccountId : null,
@@ -385,9 +394,9 @@ export function TransactionForm({ mode, transaction, onSaved }: TransactionFormP
             <Pressable
               accessibilityRole="button"
               onPress={() => {
-                setValue("latitude", "");
-                setValue("longitude", "");
-                setValue("googleMapsLink", "");
+                setValue("latitude", "", { shouldDirty: true });
+                setValue("longitude", "", { shouldDirty: true });
+                setValue("googleMapsLink", "", { shouldDirty: true });
               }}>
               <Text selectable style={styles.clearLocation}>Clear pin</Text>
             </Pressable>
