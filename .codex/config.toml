@@ -8,11 +8,25 @@ network_access = true
 # Orchestrator default
 model = "gpt-5.6-sol"
 model_reasoning_effort = "high"
+# service_tier = "fast"
 
 # Defaults used by every spawned sub-agent
 [agents]
+enabled = true
 default_subagent_model = "gpt-5.6-luna"
-default_subagent_reasoning_effort = "xhigh"
+default_subagent_reasoning_effort = "low"
 
 # Optional concurrency limit
-max_concurrent_threads_per_session = 5
+max_concurrent_threads_per_session = 6
+
+[features]
+hooks = true
+
+[[hooks.PreToolUse]]
+matcher = "^Bash$"
+
+[[hooks.PreToolUse.hooks]]
+type = "command"
+command = 'python3 "$HOME/.codex/hooks/shunt_read.py"'
+timeout = 3
+statusMessage = "Routing large reads"
