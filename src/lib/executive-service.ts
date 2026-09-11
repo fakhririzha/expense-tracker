@@ -1,11 +1,10 @@
-"use server";
+import "server-only";
 
 import {
   AccountType,
   Prisma,
   TransactionType,
 } from "@/generated/prisma/client/client";
-import { auth } from "@/auth";
 import prisma from "@/lib/db";
 import { getExchangeRate } from "@/lib/finance-service";
 import { getCurrentPortfolioValuation } from "@/lib/investment-valuation-service";
@@ -57,15 +56,25 @@ function getDistinctSourceCurrencies(
 async function getConversionRatesForCurrency(
   sourceCurrencies: string[],
   targetCurrency: string
-): Promise<Map<string, number>> {
-  const rateEntries = await Promise.all(
-    sourceCurrencies.map(async (currency) => [
+): Promise<{
+  rates: Map<string, number>;
+  missingCurrencies: string[];
+}> {
+  const rateResults = await Promise.all(
+    sourceCurrencies.map(async (currency) => ({
       currency,
-      (await getExchangeRate(currency, targetCurrency)) ?? 1,
-    ] as const)
+      rate: await getExchangeRate(currency, targetCurrency),
+    }))
   );
 
-  return new Map(rateEntries);
+  return {
+    rates: new Map(
+      rateResults.map(({ currency, rate }) => [currency, rate ?? 1])
+    ),
+    missingCurrencies: rateResults
+      .filter(({ rate }) => rate === null)
+      .map(({ currency }) => currency),
+  };
 }
 
 function normalizeToCurrency(
@@ -81,20 +90,15 @@ function normalizeToCurrency(
   return amount * (conversionRates.get(currency) ?? 1);
 }
 
-export async function getExecutiveMetrics(): Promise<{
+export async function getExecutiveMetricsForUser(userId: string): Promise<{
   success: boolean;
   error?: string;
   data?: ExecutiveMetrics;
 }> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
-
     // Get user with preferences
     const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
+      where: { id: userId },
       select: {
         mainCurrency: true,
         retirementTarget: true,
@@ -116,16 +120,16 @@ export async function getExecutiveMetrics(): Promise<{
 
     const [accounts, personalAssets, transactions] = await Promise.all([
       prisma.financialAccount.findMany({
-        where: { userId: session.user.id, isActive: true },
+        where: { userId, isActive: true },
         select: executiveAccountSelect,
       }),
       prisma.personalAsset.findMany({
-        where: { userId: session.user.id, disposedAt: null },
+        where: { userId, disposedAt: null },
         select: executivePersonalAssetSelect,
       }),
       prisma.transaction.findMany({
         where: {
-          userId: session.user.id,
+          userId,
           date: { gte: sixMonthsAgo },
         },
         select: executiveTransactionSelect,
@@ -137,10 +141,15 @@ export async function getExecutiveMetrics(): Promise<{
       accounts,
       personalAssets
     );
-    const conversionRates = await getConversionRatesForCurrency(
-      sourceCurrencies,
-      mainCurrency
-    );
+    const { rates: conversionRates, missingCurrencies } =
+      await getConversionRatesForCurrency(
+        sourceCurrencies,
+        mainCurrency
+      );
+    const currencyConversionError =
+      missingCurrencies.length > 0
+        ? `Currency conversion is unavailable for ${missingCurrencies.join(", ")}.`
+        : null;
 
     // Calculate account totals (normalized to main currency)
     let totalCash = 0;
@@ -185,7 +194,7 @@ export async function getExecutiveMetrics(): Promise<{
     let valuationError: string | null = null;
     try {
       const portfolio = await getCurrentPortfolioValuation(
-        session.user.id,
+        userId,
         mainCurrency
       );
       portfolioSummary = portfolio.summary;
@@ -303,6 +312,7 @@ export async function getExecutiveMetrics(): Promise<{
         totalRealizedPnL: portfolioSummary?.totalRealizedPnL ?? null,
         portfolioSummary,
         valuationError,
+        currencyConversionError,
         retirementTarget,
         retirementProgress,
         retirementProjection,

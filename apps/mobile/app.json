@@ -8,10 +8,11 @@
     "scheme": "finhealth",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon",
+      "icon": "./assets/images/icon.png",
       "infoPlist": {
         "NSCameraUsageDescription": "FinHealth uses the camera to scan receipts for transaction entry.",
-        "NSPhotoLibraryUsageDescription": "FinHealth uses your photo library to choose a receipt for transaction entry."
+        "NSPhotoLibraryUsageDescription": "FinHealth uses your photo library to choose a receipt for transaction entry.",
+        "NSLocationWhenInUseUsageDescription": "FinHealth uses your location only when you choose a transaction location."
       }
     },
     "android": {
@@ -20,10 +21,8 @@
         "READ_MEDIA_IMAGES"
       ],
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#FFFFFF",
+        "foregroundImage": "./assets/images/android-icon-foreground.png"
       },
       "predictiveBackGestureEnabled": false
     },
@@ -38,11 +37,17 @@
         {
           "backgroundColor": "#F6F8FB",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "imageWidth": 180
         }
       ],
       "expo-secure-store",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "FinHealth uses your location only when you choose a transaction location."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

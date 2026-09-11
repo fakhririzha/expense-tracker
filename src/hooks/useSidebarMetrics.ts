@@ -1,4 +1,4 @@
-import { getExecutiveMetrics } from "@/lib/executive-service";
+import { getExecutiveMetrics } from "@/actions/executive-actions";
 import { getBudgetSpendingSummary } from "@/actions/budget-actions";
 import { useQuery } from "@tanstack/react-query";
 import { startOfMonth } from "date-fns";

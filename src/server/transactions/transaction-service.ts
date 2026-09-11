@@ -19,6 +19,12 @@ import {
 } from "@/server/transactions/transaction-balance-effects";
 import { getBankInterestManagedTransactionIds } from "@/server/transactions/transaction-capabilities";
 import { validateNewTransactionAccounts } from "@/server/transactions/transaction-account-policy";
+import {
+  haveTransactionCoordinatesChanged,
+  haveTransactionMapsLinksChanged,
+  hasValidTransactionCoordinatePair,
+  isTrustedTransactionMapsLinkOrEmpty,
+} from "@/server/transactions/transaction-location-policy";
 import { z } from "zod";
 import {
   validateTransactionSplits,
@@ -66,6 +72,40 @@ function normalizeOptionalText(value?: string | null) {
 
   const trimmed = value?.trim() ?? "";
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function validateLocationMetadata(
+  value: {
+    latitude?: number | null;
+    longitude?: number | null;
+    googleMapsLink?: string | null;
+  },
+  context: z.RefinementCtx
+) {
+  if (!hasValidTransactionCoordinatePair(value.latitude, value.longitude)) {
+    context.addIssue({
+      code: "custom",
+      path: value.latitude === undefined || value.latitude === null
+        ? ["latitude"]
+        : ["longitude"],
+      message: "Latitude and longitude must be provided together",
+    });
+  }
+
+  const mapsLink = value.googleMapsLink?.trim();
+  if (mapsLink && mapsLink.length > 2_048) {
+    context.addIssue({
+      code: "custom",
+      path: ["googleMapsLink"],
+      message: "Maps link must be 2,048 characters or fewer",
+    });
+  } else if (mapsLink && !isTrustedTransactionMapsLinkOrEmpty(mapsLink)) {
+    context.addIssue({
+      code: "custom",
+      path: ["googleMapsLink"],
+      message: "Maps link must use a trusted HTTPS Maps URL",
+    });
+  }
 }
 
 function sanitizeOptionalForeignKey(value?: string | null) {
@@ -302,9 +342,9 @@ const transactionObjectSchema = z.object({
   type: z.enum(["INCOME", "EXPENSE", "TRANSFER", "LIABILITY_PAYMENT"]),
   description: z.string().optional(),
   location: z.string().optional(),
-  latitude: z.number().optional(),
-  longitude: z.number().optional(),
-  googleMapsLink: z.string().optional(),
+  latitude: z.number().min(-90).max(90).optional().nullable(),
+  longitude: z.number().min(-180).max(180).optional().nullable(),
+  googleMapsLink: z.string().optional().nullable(),
   date: z.date().default(() => new Date()),
   accountId: z.string().min(1, "From account is required"),
   toAccountId: z.string().optional(),
@@ -328,6 +368,7 @@ const transactionObjectSchema = z.object({
 const transactionUpdateSchema = transactionObjectSchema.partial();
 
 export const transactionSchema = transactionObjectSchema
+  .superRefine(validateLocationMetadata)
   .refine(
     (data) => {
       if (
@@ -607,6 +648,49 @@ export async function updateTransactionForUser(
 
     if (!existingTransaction) {
       return { success: false, error: "Transaction not found" };
+    }
+
+    if (
+      haveTransactionCoordinatesChanged(data, {
+        latitude: existingTransaction.latitude,
+        longitude: existingTransaction.longitude,
+      })
+    ) {
+      const effectiveLatitude =
+        data.latitude !== undefined ? data.latitude : existingTransaction.latitude;
+      const effectiveLongitude =
+        data.longitude !== undefined ? data.longitude : existingTransaction.longitude;
+
+      if (!hasValidTransactionCoordinatePair(effectiveLatitude, effectiveLongitude)) {
+        return {
+          success: false,
+          error: "Latitude and longitude must be provided together",
+        };
+      }
+    }
+
+    if (data.googleMapsLink !== undefined) {
+      const nextMapsLink = normalizeOptionalText(data.googleMapsLink);
+      if (
+        haveTransactionMapsLinksChanged(
+          data.googleMapsLink,
+          existingTransaction.googleMapsLink
+        ) &&
+        nextMapsLink
+      ) {
+        if (nextMapsLink.length > 2_048) {
+          return {
+            success: false,
+            error: "Maps link must be 2,048 characters or fewer",
+          };
+        }
+        if (!isTrustedTransactionMapsLinkOrEmpty(nextMapsLink)) {
+          return {
+            success: false,
+            error: "Maps link must use a trusted HTTPS Maps URL",
+          };
+        }
+      }
     }
 
     if (await isManagedDepositoTransaction(userId, id)) {

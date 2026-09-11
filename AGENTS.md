@@ -25,7 +25,7 @@ FinHealth is a personal finance platform with a Next.js 16 web application and a
 - **Data Tools**: CSV import with mapping and export support.
 - **PWA and Notifications**: Install prompt, offline fallback page, service worker, push subscriptions, notification preferences, and daily notification dispatch cron.
 - **Profile Security**: Self-service account deletion, base currency settings, financial targets, and notification settings.
-- **Expo Mobile**: Existing-credential sign-in, transaction history/detail, ordinary income/expense/transfer CRUD, receipt OCR prefill, account balances, signed-in account details, and logout.
+- **Expo Mobile**: Existing-credential sign-in, focused dashboard analytics, transaction history/detail, ordinary income/expense/transfer CRUD, receipt OCR prefill, native transaction location pins, account balances and summary, signed-in account details, and logout.
 
 ## Technology Stack
 
@@ -138,6 +138,7 @@ Mobile API routes under `/api/mobile/v1`:
 - `POST /auth/login`
 - `DELETE /auth/session`
 - `GET /me`
+- `GET /dashboard`
 - `GET /accounts`
 - `GET /categories`
 - `GET` and `POST /transactions`
@@ -198,6 +199,7 @@ pnpm db:backfill:account-encryption
 | `WEEKLY_INSIGHTS_CHAT_API_KEY` | Bearer key for weekly AI insight generation | Required for weekly AI insights |
 | `WEEKLY_INSIGHTS_CHAT_API_MODEL` | Text-capable chat model used to create weekly AI insights | Required for weekly AI insights |
 | `EXPO_PUBLIC_API_URL` | Public Next.js backend base URL; set for the Expo app, usually in `apps/mobile/.env.local` | Mobile development/builds |
+| `GOOGLE_MAPS_API_KEY` | Google Maps SDK for Android key injected through Expo app config; not needed in Expo Go | Standalone Android builds |
 
 Generate a new encryption key with:
 
@@ -478,13 +480,15 @@ Notable current hooks include:
 
 ### Expo Mobile
 
-- Keep the native scope limited to authentication, transaction history/detail, ordinary transaction CRUD, receipt prefill, account balances, signed-in user details, and logout.
-- Account and category management plus dashboards, budgets, goals, investments, deposito, liabilities, receivables, recurring rules, notifications, imports/exports, and financial targets remain web-only.
+- Keep the native scope limited to authentication, focused dashboard analytics, transaction history/detail, ordinary transaction CRUD, receipt prefill, transaction location pins, account balances and summary, signed-in user details, and logout.
+- Account and category management plus detailed reports, budgets, goals, investment management, deposito, liabilities, receivables, recurring rules, notifications, imports/exports, and financial targets remain web-only.
 - Store only bearer authentication material in SecureStore. Financial records belong in normal query caching, not SecureStore.
 - Require HTTPS for physical-device and production API URLs. Plain HTTP is limited to local simulator/emulator loopback targets during development.
 - The shared API client adds bearer authentication, validates responses through `packages/contracts`, normalizes errors, and clears the session and query cache on `401`.
 - Receipt images must be resized/compressed below 1 MB before upload and remain temporary. Never persist the photo, base64 data, or raw OCR provider response.
 - OCR line items remain available in the response for forward compatibility but must not silently create a split transaction on mobile.
+- Keep dashboard and account summaries server-calculated; the Expo client must not reproduce financial aggregation or balance rules.
+- Transaction map pins use foreground location permission only. Persist location labels, coordinates, and HTTPS map links through the shared transaction service rather than introducing a separate mobile location store.
 
 ### Transfers and Balance Integrity
 
@@ -626,6 +630,60 @@ Manual verification should cover the touched feature area plus affected cross-fe
 - Import/export and category management
 - Native login, cold-start session restoration, transaction pagination and refresh, ordinary income/expense/transfer create/edit/delete, retry with the same `clientMutationId`, receipt camera/gallery scanning and OCR prefill, balance refresh, offline mutation blocking, and logout
 
+<!-- BEGIN CODEX-SHUNT-WORKFLOW -->
+## Default Codex Engineering Workflow
+
+The primary agent owns requirements, planning, architecture, difficult debugging, risky implementation, and final correctness. Use specialist agents to keep broad mechanical context and noisy output away from the primary reasoning context.
+
+### Delegation policy
+
+Delegate broad repository exploration, large-file reading, multi-file tracing, dependency mapping, and pattern discovery to `bulk_reader`.
+
+Delegate narrow pattern-following implementation to `code_writer` when the task has a clear local precedent and does not require architectural or safety-critical judgment.
+
+Delegate noisy validation commands to `test_runner` when their raw output would add substantial low-value context.
+
+Use `reviewer` for an independent pass on meaningful or risky changes when a second perspective improves confidence.
+
+Parallelize independent exploration or implementation work when doing so clearly saves time, but do not create subagents merely to look busy.
+
+### Reads
+
+Broad reads are not a primary-agent responsibility. The large-read hook may reject commands that would dump a large source file into the primary context. When that happens, spawn `bulk_reader`, ask a precise question, then perform only the targeted follow-up reads needed for reasoning or editing.
+
+Targeted reads are encouraged. Prefer symbol searches, exact line ranges, and focused diffs over whole-file dumps.
+
+### Work that stays with the primary agent
+
+Keep these with the strongest reasoning agent unless the delegated task is purely evidentiary:
+- architecture and public API design
+- difficult debugging and root-cause reasoning
+- authentication and authorization decisions
+- security-sensitive code
+- concurrency and race-condition fixes
+- database transaction and data-loss-risk logic
+- ambiguous requirements
+- complex refactors with broad behavioral consequences
+- final diff review and completion decision
+
+### Implementation discipline
+
+Before changing code, understand the relevant execution path and local conventions. Make the smallest coherent change that satisfies the request. Do not expand scope without evidence that it is required.
+
+Subagent output is evidence, not authority. The primary agent remains responsible for correctness.
+
+### Completion
+
+Before declaring meaningful implementation work complete:
+1. inspect the final diff
+2. directly inspect the important changed sections
+3. run validation appropriate to the change
+4. resolve failures caused by the change
+5. check for security, data-integrity, and regression risks proportional to the task
+
+Do not repeatedly rerun broad validation after it passes unless later changes or unresolved evidence justify it.
+<!-- END CODEX-SHUNT-WORKFLOW -->
+
 ## GitHub Delivery Workflow
 
 Use this workflow to deliver every completed code change. For AI-agent delivery, the exact changelog version branch described here overrides the `feature/...` and `fix/...` branch examples in `CONTRIBUTING.md`.
@@ -637,12 +695,11 @@ Use this workflow to deliver every completed code change. For AI-agent delivery,
 5. Create the version branch from `main` while carrying the intended worktree changes, then run the relevant validation. Always run `git diff --check` and `pnpm lint`; run `pnpm build` when the change needs build-level TypeScript, Next.js, Prisma, authentication, routing, or shared-domain validation. Complete the relevant manual checks from this file.
 6. Review the complete diff, stage only the intended files, and generate a concise Conventional Commit message that follows `CONTRIBUTING.md`.
 7. Commit the staged changes, push the version branch to `origin` with upstream tracking, and create a ready-for-review pull request targeting `main`. The PR description must summarize the change, user impact, root cause when applicable, and validation performed.
-8. Run a separate code-review pass against the published PR diff. Review correctness, regressions, authentication and user ownership, encryption, financial balance integrity, migrations, and relevant validation coverage. Classify findings as critical, high, medium, or low, and post a concise review summary and any findings as a PR comment.
-9. Wait for every applicable GitHub status check to finish successfully. If the repository has no applicable checks, record that explicitly in the review summary.
-10. Fix every critical or high-severity finding on the same branch, update the changelog if the user-facing outcome changes, commit and push the fixes, and then rerun both the code review and status checks against the new head commit. Medium and low findings may be documented without blocking the merge.
-11. Merge the PR into `main` with a merge commit only when it is conflict-free, all applicable checks have passed, the review capability was available and completed, and no critical or high findings remain. Pin the merge to the reviewed head SHA so an unreviewed push cannot be merged accidentally.
-12. Do not merge when a check is pending or failing, the PR is conflicted, the review cannot be completed, or a critical or high finding remains. Leave the PR open and report the blocker instead.
-13. After a successful merge, check out local `main`, fast-forward it from `origin/main`, and verify that the worktree is clean and synchronized. Keep the release branch on the remote unless the user explicitly requests deletion.
+8. Wait for every applicable GitHub status check to finish successfully. If the repository has no applicable checks, record that explicitly in the review summary.
+9. Fix every critical or high-severity finding on the same branch, update the changelog if the user-facing outcome changes, commit and push the fixes, and then rerun both the code review and status checks against the new head commit. Medium and low findings may be documented without blocking the merge.
+10. Merge the PR into `main` with a merge commit only when it is conflict-free, all applicable checks have passed, the review capability was available and completed, and no critical or high findings remain. Pin the merge to the reviewed head SHA so an unreviewed push cannot be merged accidentally.
+11. Do not merge when a check is pending or failing, the PR is conflicted, the review cannot be completed, or a critical or high finding remains. Leave the PR open and report the blocker instead.
+12. After a successful merge, check out local `main`, fast-forward it from `origin/main`, and verify that the worktree is clean and synchronized. Keep the release branch on the remote unless the user explicitly requests deletion.
 
 ## Deployment
 

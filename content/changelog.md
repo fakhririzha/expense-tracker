@@ -1,5 +1,12 @@
 # FinHealth Changelog
 
+## v5.9.0
+
+- Added a phone-friendly financial dashboard with net worth, liquid funds, debt, savings rate, cash runway, monthly cash flow, and financial health.
+- Added account balances to transaction account pickers and a financial summary to the Accounts tab.
+- Added a native transaction location map with current-position support, movable pins, saved coordinates, and one-tap Maps links.
+- Updated the native app icon and splash artwork to match FinHealth on the web.
+
 ## v5.8.0
 
 - Added a focused FinHealth mobile app for iOS and Android with secure sign-in, transaction history and details, account balances, and sign-out.

@@ -122,6 +122,19 @@ export type MobileTransactionListResponse = z.infer<
   typeof mobileTransactionListResponseSchema
 >;
 
+function isTrustedMapsUrl(value: string) {
+  try {
+    const url = new URL(value);
+    const isGoogleMapsHost =
+      url.hostname === "google.com" ||
+      url.hostname.endsWith(".google.com") ||
+      url.hostname === "maps.app.goo.gl";
+    return url.protocol === "https:" && isGoogleMapsHost;
+  } catch {
+    return false;
+  }
+}
+
 const transactionMutationFields = {
   amount: z.number().positive(),
   currency: z.string().regex(/^[A-Z]{3}$/),
@@ -129,11 +142,31 @@ const transactionMutationFields = {
   type: mobileTransactionTypeSchema,
   description: z.string().trim().max(10_000).nullish(),
   location: z.string().trim().max(10_000).nullish(),
+  latitude: z.number().min(-90).max(90).nullish(),
+  longitude: z.number().min(-180).max(180).nullish(),
+  googleMapsLink: z.url().max(2_048).refine(isTrustedMapsUrl, {
+    message: "Maps link must use a trusted HTTPS Maps URL",
+  }).nullish(),
   date: isoDateTimeSchema,
   accountId: z.string().min(1),
   toAccountId: z.string().min(1).nullish(),
   categoryId: z.string().min(1).nullish(),
 } as const;
+
+function validateLocationCoordinates(
+  value: { latitude?: number | null; longitude?: number | null },
+  context: z.RefinementCtx
+) {
+  const hasLatitude = value.latitude !== undefined && value.latitude !== null;
+  const hasLongitude = value.longitude !== undefined && value.longitude !== null;
+  if (hasLatitude !== hasLongitude) {
+    context.addIssue({
+      code: "custom",
+      path: hasLatitude ? ["longitude"] : ["latitude"],
+      message: "Latitude and longitude must be provided together",
+    });
+  }
+}
 
 export const mobileCreateTransactionSchema = z
   .object({
@@ -141,6 +174,7 @@ export const mobileCreateTransactionSchema = z
     ...transactionMutationFields,
   })
   .superRefine((value, context) => {
+    validateLocationCoordinates(value, context);
     if (value.type === "TRANSFER" && !value.toAccountId) {
       context.addIssue({
         code: "custom",
@@ -165,6 +199,7 @@ export const mobileUpdateTransactionSchema = z
   .object(transactionMutationFields)
   .partial()
   .superRefine((value, context) => {
+    validateLocationCoordinates(value, context);
     if (value.type === "TRANSFER" && !value.toAccountId) {
       context.addIssue({
         code: "custom",

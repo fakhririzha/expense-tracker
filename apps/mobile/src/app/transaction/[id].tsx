@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { Alert, Text, View } from "react-native";
+import { Alert, Linking, Text, View } from "react-native";
 
 import { deleteTransaction, getTransaction } from "@/api/transactions";
 import { ApiError } from "@/api/client";
@@ -8,6 +8,21 @@ import { Button, Card, ErrorState, LoadingState, OfflineBanner, Pill, ScreenScro
 import { useNetworkStatus } from "@/hooks/use-network-status";
 import { formatMoney, formatTransactionDate, signedAmount, typeLabel } from "@/features/transactions/format";
 import { colors, commonStyles, spacing, typeColor } from "@/theme/tokens";
+
+function getTrustedMapsLink(value: string | null) {
+  if (!value) return null;
+
+  try {
+    const url = new URL(value);
+    const isGoogleMapsHost =
+      url.hostname === "google.com" ||
+      url.hostname.endsWith(".google.com") ||
+      url.hostname === "maps.app.goo.gl";
+    return url.protocol === "https:" && isGoogleMapsHost ? value : null;
+  } catch {
+    return null;
+  }
+}
 
 export default function TransactionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -25,6 +40,7 @@ export default function TransactionDetailScreen() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["transactions"] });
       await queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.removeQueries({ queryKey: ["transaction", transactionId] });
       router.replace("/(tabs)/transactions");
     },
@@ -37,6 +53,18 @@ export default function TransactionDetailScreen() {
 
   const transaction = query.data;
   const color = typeColor(transaction.type);
+  const coordinateMapsLink = transaction.latitude !== null && transaction.longitude !== null
+    ? `https://www.google.com/maps/search/?api=1&query=${transaction.latitude},${transaction.longitude}`
+    : null;
+  const mapsLink = coordinateMapsLink ?? getTrustedMapsLink(transaction.googleMapsLink);
+  const openMaps = async () => {
+    if (!mapsLink) return;
+    try {
+      await Linking.openURL(mapsLink);
+    } catch {
+      Alert.alert("Unable to open Maps", "Try again after checking your device settings.");
+    }
+  };
   const onDelete = () => {
     Alert.alert("Delete transaction?", "The original balance change will be reversed on the server.", [
       { text: "Cancel", style: "cancel" },
@@ -66,6 +94,10 @@ export default function TransactionDetailScreen() {
             <DetailRow label="Exchange rate" value={String(transaction.exchangeRate)} />
             {transaction.description ? <DetailRow label="Description" value={transaction.description} /> : null}
             {transaction.location ? <DetailRow label="Location" value={transaction.location} /> : null}
+            {transaction.latitude !== null && transaction.longitude !== null ? (
+              <DetailRow label="Coordinates" value={`${transaction.latitude.toFixed(6)}, ${transaction.longitude.toFixed(6)}`} />
+            ) : null}
+            {mapsLink ? <Button variant="secondary" onPress={() => void openMaps()}>Open in Maps</Button> : null}
             {transaction.splits.length > 0 ? (
               <View style={{ backgroundColor: colors.warningSoft, borderRadius: 10, padding: spacing.md }}>
                 <Text selectable style={{ color: colors.warning, lineHeight: 20 }}>This transaction has itemized split details. Split editing is available on the web app.</Text>
