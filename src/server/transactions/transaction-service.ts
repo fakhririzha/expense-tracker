@@ -23,7 +23,7 @@ import {
   haveTransactionCoordinatesChanged,
   haveTransactionMapsLinksChanged,
   hasValidTransactionCoordinatePair,
-  isHttpsTransactionMapsLinkOrEmpty,
+  isTrustedTransactionMapsLinkOrEmpty,
 } from "@/server/transactions/transaction-location-policy";
 import { z } from "zod";
 import {
@@ -99,11 +99,11 @@ function validateLocationMetadata(
       path: ["googleMapsLink"],
       message: "Maps link must be 2,048 characters or fewer",
     });
-  } else if (mapsLink && !isHttpsTransactionMapsLinkOrEmpty(mapsLink)) {
+  } else if (mapsLink && !isTrustedTransactionMapsLinkOrEmpty(mapsLink)) {
     context.addIssue({
       code: "custom",
       path: ["googleMapsLink"],
-      message: "Maps link must use HTTPS",
+      message: "Maps link must use a trusted HTTPS Maps URL",
     });
   }
 }
@@ -684,8 +684,11 @@ export async function updateTransactionForUser(
             error: "Maps link must be 2,048 characters or fewer",
           };
         }
-        if (!isHttpsTransactionMapsLinkOrEmpty(nextMapsLink)) {
-          return { success: false, error: "Maps link must use HTTPS" };
+        if (!isTrustedTransactionMapsLinkOrEmpty(nextMapsLink)) {
+          return {
+            success: false,
+            error: "Maps link must use a trusted HTTPS Maps URL",
+          };
         }
       }
     }

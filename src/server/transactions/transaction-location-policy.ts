@@ -32,14 +32,19 @@ export function haveTransactionMapsLinksChanged(
   return next !== undefined && normalizeMapsLink(next) !== normalizeMapsLink(current);
 }
 
-export function isHttpsTransactionMapsLinkOrEmpty(value: string) {
+export function isTrustedTransactionMapsLinkOrEmpty(value: string) {
   const normalizedValue = value.trim();
   if (normalizedValue.length === 0) {
     return true;
   }
 
   try {
-    return new URL(normalizedValue).protocol === "https:";
+    const url = new URL(normalizedValue);
+    const isGoogleMapsHost =
+      url.hostname === "google.com" ||
+      url.hostname.endsWith(".google.com") ||
+      url.hostname === "maps.app.goo.gl";
+    return url.protocol === "https:" && isGoogleMapsHost;
   } catch {
     return false;
   }

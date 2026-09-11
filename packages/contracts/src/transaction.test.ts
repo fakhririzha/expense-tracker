@@ -72,6 +72,13 @@ test("mobile locations require a valid coordinate pair and HTTPS maps link", () 
     }).success,
     false
   );
+  assert.equal(
+    mobileCreateTransactionSchema.safeParse({
+      ...baseTransaction,
+      googleMapsLink: "https://example.com/maps",
+    }).success,
+    false
+  );
 });
 
 test("mobile pagination stays on existing server page sizes", () => {

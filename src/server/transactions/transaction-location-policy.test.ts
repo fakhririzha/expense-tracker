@@ -5,7 +5,7 @@ import {
   haveTransactionCoordinatesChanged,
   haveTransactionMapsLinksChanged,
   hasValidTransactionCoordinatePair,
-  isHttpsTransactionMapsLinkOrEmpty,
+  isTrustedTransactionMapsLinkOrEmpty,
 } from "./transaction-location-policy";
 
 test("transaction location coordinates must be provided or cleared together", () => {
@@ -52,12 +52,17 @@ test("legacy coordinate metadata changes only when a supplied value differs", ()
   );
 });
 
-test("transaction maps links must use HTTPS when present", () => {
-  assert.equal(isHttpsTransactionMapsLinkOrEmpty(""), true);
+test("transaction maps links must use trusted HTTPS hosts when present", () => {
+  assert.equal(isTrustedTransactionMapsLinkOrEmpty(""), true);
   assert.equal(
-    isHttpsTransactionMapsLinkOrEmpty("https://www.google.com/maps?q=-6.2,106.8"),
+    isTrustedTransactionMapsLinkOrEmpty("https://www.google.com/maps?q=-6.2,106.8"),
     true
   );
-  assert.equal(isHttpsTransactionMapsLinkOrEmpty("http://example.com"), false);
-  assert.equal(isHttpsTransactionMapsLinkOrEmpty("not a URL"), false);
+  assert.equal(
+    isTrustedTransactionMapsLinkOrEmpty("https://maps.app.goo.gl/example"),
+    true
+  );
+  assert.equal(isTrustedTransactionMapsLinkOrEmpty("http://google.com/maps"), false);
+  assert.equal(isTrustedTransactionMapsLinkOrEmpty("https://example.com/maps"), false);
+  assert.equal(isTrustedTransactionMapsLinkOrEmpty("not a URL"), false);
 });
