@@ -20,6 +20,8 @@ import {
 import { getBankInterestManagedTransactionIds } from "@/server/transactions/transaction-capabilities";
 import { validateNewTransactionAccounts } from "@/server/transactions/transaction-account-policy";
 import {
+  haveTransactionCoordinatesChanged,
+  haveTransactionMapsLinksChanged,
   hasValidTransactionCoordinatePair,
   isHttpsTransactionMapsLinkOrEmpty,
 } from "@/server/transactions/transaction-location-policy";
@@ -72,8 +74,12 @@ function normalizeOptionalText(value?: string | null) {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-function validateLocationCoordinates(
-  value: { latitude?: number | null; longitude?: number | null },
+function validateLocationMetadata(
+  value: {
+    latitude?: number | null;
+    longitude?: number | null;
+    googleMapsLink?: string | null;
+  },
   context: z.RefinementCtx
 ) {
   if (!hasValidTransactionCoordinatePair(value.latitude, value.longitude)) {
@@ -83,6 +89,21 @@ function validateLocationCoordinates(
         ? ["latitude"]
         : ["longitude"],
       message: "Latitude and longitude must be provided together",
+    });
+  }
+
+  const mapsLink = value.googleMapsLink?.trim();
+  if (mapsLink && mapsLink.length > 2_048) {
+    context.addIssue({
+      code: "custom",
+      path: ["googleMapsLink"],
+      message: "Maps link must be 2,048 characters or fewer",
+    });
+  } else if (mapsLink && !isHttpsTransactionMapsLinkOrEmpty(mapsLink)) {
+    context.addIssue({
+      code: "custom",
+      path: ["googleMapsLink"],
+      message: "Maps link must use HTTPS",
     });
   }
 }
@@ -323,12 +344,7 @@ const transactionObjectSchema = z.object({
   location: z.string().optional(),
   latitude: z.number().min(-90).max(90).optional().nullable(),
   longitude: z.number().min(-180).max(180).optional().nullable(),
-  googleMapsLink: z
-    .string()
-    .max(2_048)
-    .refine(isHttpsTransactionMapsLinkOrEmpty, "Maps link must use HTTPS")
-    .optional()
-    .nullable(),
+  googleMapsLink: z.string().optional().nullable(),
   date: z.date().default(() => new Date()),
   accountId: z.string().min(1, "From account is required"),
   toAccountId: z.string().optional(),
@@ -352,7 +368,7 @@ const transactionObjectSchema = z.object({
 const transactionUpdateSchema = transactionObjectSchema.partial();
 
 export const transactionSchema = transactionObjectSchema
-  .superRefine(validateLocationCoordinates)
+  .superRefine(validateLocationMetadata)
   .refine(
     (data) => {
       if (
@@ -634,7 +650,12 @@ export async function updateTransactionForUser(
       return { success: false, error: "Transaction not found" };
     }
 
-    if (data.latitude !== undefined || data.longitude !== undefined) {
+    if (
+      haveTransactionCoordinatesChanged(data, {
+        latitude: existingTransaction.latitude,
+        longitude: existingTransaction.longitude,
+      })
+    ) {
       const effectiveLatitude =
         data.latitude !== undefined ? data.latitude : existingTransaction.latitude;
       const effectiveLongitude =
@@ -645,6 +666,27 @@ export async function updateTransactionForUser(
           success: false,
           error: "Latitude and longitude must be provided together",
         };
+      }
+    }
+
+    if (data.googleMapsLink !== undefined) {
+      const nextMapsLink = normalizeOptionalText(data.googleMapsLink);
+      if (
+        haveTransactionMapsLinksChanged(
+          data.googleMapsLink,
+          existingTransaction.googleMapsLink
+        ) &&
+        nextMapsLink
+      ) {
+        if (nextMapsLink.length > 2_048) {
+          return {
+            success: false,
+            error: "Maps link must be 2,048 characters or fewer",
+          };
+        }
+        if (!isHttpsTransactionMapsLinkOrEmpty(nextMapsLink)) {
+          return { success: false, error: "Maps link must use HTTPS" };
+        }
       }
     }
 

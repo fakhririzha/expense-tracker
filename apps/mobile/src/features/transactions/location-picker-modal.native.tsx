@@ -47,6 +47,14 @@ function buildGoogleMapsLink({ latitude, longitude }: Coordinate) {
   return `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
 }
 
+function hasSameCoordinate(left: Coordinate, right?: Coordinate) {
+  return Boolean(
+    right &&
+    left.latitude === right.latitude &&
+    left.longitude === right.longitude
+  );
+}
+
 function formatAddress(address?: Location.LocationGeocodedAddress) {
   if (!address) return null;
   const parts = [
@@ -80,6 +88,7 @@ export function LocationPickerModal({
   useEffect(() => {
     resolveSequenceRef.current += 1;
     if (!visible) {
+      setIsLocating(false);
       setIsResolving(false);
       return;
     }
@@ -95,6 +104,8 @@ export function LocationPickerModal({
 
   const chooseCoordinate = (nextCoordinate: Coordinate) => {
     if (isResolving) return;
+    resolveSequenceRef.current += 1;
+    setIsLocating(false);
     setCoordinate(nextCoordinate);
     setError(null);
   };
@@ -104,10 +115,12 @@ export function LocationPickerModal({
   };
 
   const handleUseCurrentLocation = async () => {
+    const sequence = ++resolveSequenceRef.current;
     setIsLocating(true);
     setError(null);
     try {
       const permission = await Location.requestForegroundPermissionsAsync();
+      if (sequence !== resolveSequenceRef.current) return;
       if (!permission.granted) {
         setError("Allow location access to use your current position.");
         return;
@@ -115,6 +128,7 @@ export function LocationPickerModal({
       const current = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
       });
+      if (sequence !== resolveSequenceRef.current) return;
       const nextCoordinate = {
         latitude: current.coords.latitude,
         longitude: current.coords.longitude,
@@ -124,15 +138,22 @@ export function LocationPickerModal({
       setRegion(nextRegion);
       mapRef.current?.animateToRegion(nextRegion, 300);
     } catch {
-      setError("Unable to retrieve your current location. Try again or place the pin manually.");
+      if (sequence === resolveSequenceRef.current) {
+        setError("Unable to retrieve your current location. Try again or place the pin manually.");
+      }
     } finally {
-      setIsLocating(false);
+      if (sequence === resolveSequenceRef.current) {
+        setIsLocating(false);
+      }
     }
   };
 
   const confirmLocation = async () => {
     const sequence = ++resolveSequenceRef.current;
     const selectedCoordinate = { ...coordinate };
+    const fallbackLabel = hasSameCoordinate(selectedCoordinate, initialCoordinate)
+      ? initialLabel?.trim() || "Pinned location"
+      : "Pinned location";
     setIsResolving(true);
     setError(null);
     try {
@@ -140,14 +161,14 @@ export function LocationPickerModal({
       if (sequence !== resolveSequenceRef.current) return;
       onSelect({
         ...selectedCoordinate,
-        location: formatAddress(addresses[0]) || initialLabel?.trim() || "Pinned location",
+        location: formatAddress(addresses[0]) || fallbackLabel,
         googleMapsLink: buildGoogleMapsLink(selectedCoordinate),
       });
     } catch {
       if (sequence !== resolveSequenceRef.current) return;
       onSelect({
         ...selectedCoordinate,
-        location: initialLabel?.trim() || "Pinned location",
+        location: fallbackLabel,
         googleMapsLink: buildGoogleMapsLink(selectedCoordinate),
       });
     } finally {
@@ -159,6 +180,7 @@ export function LocationPickerModal({
 
   const cancel = () => {
     resolveSequenceRef.current += 1;
+    setIsLocating(false);
     setIsResolving(false);
     onClose();
   };

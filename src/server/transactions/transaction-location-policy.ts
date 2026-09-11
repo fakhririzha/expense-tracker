@@ -11,6 +11,27 @@ export function hasValidTransactionCoordinatePair(
   );
 }
 
+export function haveTransactionCoordinatesChanged(
+  next: { latitude?: number | null; longitude?: number | null },
+  current: { latitude: number | null; longitude: number | null }
+) {
+  return (
+    (next.latitude !== undefined && next.latitude !== current.latitude) ||
+    (next.longitude !== undefined && next.longitude !== current.longitude)
+  );
+}
+
+function normalizeMapsLink(value: string | null | undefined) {
+  return value?.trim() || null;
+}
+
+export function haveTransactionMapsLinksChanged(
+  next: string | null | undefined,
+  current: string | null
+) {
+  return next !== undefined && normalizeMapsLink(next) !== normalizeMapsLink(current);
+}
+
 export function isHttpsTransactionMapsLinkOrEmpty(value: string) {
   const normalizedValue = value.trim();
   if (normalizedValue.length === 0) {
