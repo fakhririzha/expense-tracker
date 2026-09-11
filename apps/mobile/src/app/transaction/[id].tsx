@@ -9,6 +9,21 @@ import { useNetworkStatus } from "@/hooks/use-network-status";
 import { formatMoney, formatTransactionDate, signedAmount, typeLabel } from "@/features/transactions/format";
 import { colors, commonStyles, spacing, typeColor } from "@/theme/tokens";
 
+function getTrustedMapsLink(value: string | null) {
+  if (!value) return null;
+
+  try {
+    const url = new URL(value);
+    const isGoogleMapsHost =
+      url.hostname === "google.com" ||
+      url.hostname.endsWith(".google.com") ||
+      url.hostname === "maps.app.goo.gl";
+    return url.protocol === "https:" && isGoogleMapsHost ? value : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function TransactionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const transactionId = Array.isArray(id) ? id[0] : id;
@@ -41,9 +56,15 @@ export default function TransactionDetailScreen() {
   const coordinateMapsLink = transaction.latitude !== null && transaction.longitude !== null
     ? `https://www.google.com/maps/search/?api=1&query=${transaction.latitude},${transaction.longitude}`
     : null;
-  const mapsLink = transaction.googleMapsLink?.startsWith("https://")
-    ? transaction.googleMapsLink
-    : coordinateMapsLink;
+  const mapsLink = coordinateMapsLink ?? getTrustedMapsLink(transaction.googleMapsLink);
+  const openMaps = async () => {
+    if (!mapsLink) return;
+    try {
+      await Linking.openURL(mapsLink);
+    } catch {
+      Alert.alert("Unable to open Maps", "Try again after checking your device settings.");
+    }
+  };
   const onDelete = () => {
     Alert.alert("Delete transaction?", "The original balance change will be reversed on the server.", [
       { text: "Cancel", style: "cancel" },
@@ -76,7 +97,7 @@ export default function TransactionDetailScreen() {
             {transaction.latitude !== null && transaction.longitude !== null ? (
               <DetailRow label="Coordinates" value={`${transaction.latitude.toFixed(6)}, ${transaction.longitude.toFixed(6)}`} />
             ) : null}
-            {mapsLink ? <Button variant="secondary" onPress={() => void Linking.openURL(mapsLink)}>Open in Maps</Button> : null}
+            {mapsLink ? <Button variant="secondary" onPress={() => void openMaps()}>Open in Maps</Button> : null}
             {transaction.splits.length > 0 ? (
               <View style={{ backgroundColor: colors.warningSoft, borderRadius: 10, padding: spacing.md }}>
                 <Text selectable style={{ color: colors.warning, lineHeight: 20 }}>This transaction has itemized split details. Split editing is available on the web app.</Text>
