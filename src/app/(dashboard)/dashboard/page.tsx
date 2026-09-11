@@ -7,7 +7,7 @@ import { DashboardChangelogDialog } from "@/components/dashboard/DashboardChange
 import { GettingStartedCard } from "@/components/onboarding/GettingStartedCard";
 import { TourLauncherButton } from "@/components/onboarding/TourLauncherButton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getExecutiveMetrics } from "@/lib/executive-service";
+import { getExecutiveMetrics } from "@/actions/executive-actions";
 import { getPeriodLabel } from "@/lib/net-worth-period";
 import { getNetWorthSnapshotSummaryForUser } from "@/lib/net-worth-snapshot-service";
 import { ONBOARDING_TOUR_TARGETS } from "@/lib/onboarding/constants";

@@ -94,6 +94,7 @@ export interface ExecutiveMetrics {
     assetCount: number;
   } | null;
   valuationError: string | null;
+  currencyConversionError: string | null;
 
   // Retirement Progress
   retirementTarget: number | null;

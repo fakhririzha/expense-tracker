@@ -100,8 +100,15 @@ export default function AccountsScreen() {
               value={dashboard.position.totalAssets === null ? "Unavailable" : formatMoney(dashboard.position.totalAssets, dashboard.displayCurrency)}
               color={colors.income}
             />
-            <SummaryMetric label="Liquid funds" value={formatMoney(dashboard.position.liquidFunds, dashboard.displayCurrency)} />
-            <SummaryMetric label="Total debt" value={formatMoney(dashboard.position.totalDebt, dashboard.displayCurrency)} color={colors.expense} />
+            <SummaryMetric
+              label="Liquid funds"
+              value={dashboard.position.liquidFunds === null ? "Unavailable" : formatMoney(dashboard.position.liquidFunds, dashboard.displayCurrency)}
+            />
+            <SummaryMetric
+              label="Total debt"
+              value={dashboard.position.totalDebt === null ? "Unavailable" : formatMoney(dashboard.position.totalDebt, dashboard.displayCurrency)}
+              color={colors.expense}
+            />
           </View>
         ) : dashboardQuery.isError ? (
           <View style={{ gap: spacing.sm }}>

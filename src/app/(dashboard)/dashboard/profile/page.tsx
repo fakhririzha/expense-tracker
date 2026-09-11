@@ -12,7 +12,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import prisma from "@/lib/db";
-import { getExecutiveMetrics } from "@/lib/executive-service";
+import { getExecutiveMetrics } from "@/actions/executive-actions";
 import { CircleDollarSign, Mail, ShieldAlert, Target, UserRound } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";

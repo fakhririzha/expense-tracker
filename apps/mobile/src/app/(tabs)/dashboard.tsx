@@ -153,13 +153,21 @@ export default function DashboardScreen() {
       <View style={styles.metricGrid}>
         <MetricCard
           label="Liquid funds"
-          value={formatMoney(dashboard.position.liquidFunds, currency)}
+          value={
+            dashboard.position.liquidFunds === null
+              ? "Unavailable"
+              : formatMoney(dashboard.position.liquidFunds, currency)
+          }
           detail="Cash and bank accounts"
           color={colors.income}
         />
         <MetricCard
           label="Total debt"
-          value={formatMoney(dashboard.position.totalDebt, currency)}
+          value={
+            dashboard.position.totalDebt === null
+              ? "Unavailable"
+              : formatMoney(dashboard.position.totalDebt, currency)
+          }
           detail="Loans and credit cards"
           color={colors.expense}
         />
@@ -170,7 +178,11 @@ export default function DashboardScreen() {
         />
         <MetricCard
           label="Cash runway"
-          value={`${dashboard.cashFlow.monthsOfRunway.toFixed(1)} mo`}
+          value={
+            dashboard.cashFlow.monthsOfRunway === null
+              ? "Unavailable"
+              : `${dashboard.cashFlow.monthsOfRunway.toFixed(1)} mo`
+          }
           detail="At average spending"
         />
       </View>

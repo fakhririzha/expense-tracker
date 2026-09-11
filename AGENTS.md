@@ -199,6 +199,7 @@ pnpm db:backfill:account-encryption
 | `WEEKLY_INSIGHTS_CHAT_API_KEY` | Bearer key for weekly AI insight generation | Required for weekly AI insights |
 | `WEEKLY_INSIGHTS_CHAT_API_MODEL` | Text-capable chat model used to create weekly AI insights | Required for weekly AI insights |
 | `EXPO_PUBLIC_API_URL` | Public Next.js backend base URL; set for the Expo app, usually in `apps/mobile/.env.local` | Mobile development/builds |
+| `GOOGLE_MAPS_API_KEY` | Google Maps SDK for Android key injected through Expo app config; not needed in Expo Go | Standalone Android builds |
 
 Generate a new encryption key with:
 

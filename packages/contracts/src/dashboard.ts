@@ -6,16 +6,16 @@ export const mobileDashboardResponseSchema = z.object({
   displayCurrency: z.string().regex(/^[A-Z]{3}$/),
   position: z.object({
     totalAssets: finiteAmountSchema.nullable(),
-    totalDebt: finiteAmountSchema,
+    totalDebt: finiteAmountSchema.nullable(),
     netWorth: finiteAmountSchema.nullable(),
-    liquidFunds: finiteAmountSchema,
+    liquidFunds: finiteAmountSchema.nullable(),
     investmentValue: finiteAmountSchema.nullable(),
   }),
   cashFlow: z.object({
     averageMonthlyIncome: finiteAmountSchema,
     averageMonthlyExpenses: finiteAmountSchema,
     savingsRate: finiteAmountSchema,
-    monthsOfRunway: finiteAmountSchema,
+    monthsOfRunway: finiteAmountSchema.nullable(),
   }),
   health: z
     .object({

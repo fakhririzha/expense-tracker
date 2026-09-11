@@ -1,11 +1,10 @@
-"use server";
+import "server-only";
 
 import {
   AccountType,
   Prisma,
   TransactionType,
 } from "@/generated/prisma/client/client";
-import { auth } from "@/auth";
 import prisma from "@/lib/db";
 import { getExchangeRate } from "@/lib/finance-service";
 import { getCurrentPortfolioValuation } from "@/lib/investment-valuation-service";
@@ -57,15 +56,25 @@ function getDistinctSourceCurrencies(
 async function getConversionRatesForCurrency(
   sourceCurrencies: string[],
   targetCurrency: string
-): Promise<Map<string, number>> {
-  const rateEntries = await Promise.all(
-    sourceCurrencies.map(async (currency) => [
+): Promise<{
+  rates: Map<string, number>;
+  missingCurrencies: string[];
+}> {
+  const rateResults = await Promise.all(
+    sourceCurrencies.map(async (currency) => ({
       currency,
-      (await getExchangeRate(currency, targetCurrency)) ?? 1,
-    ] as const)
+      rate: await getExchangeRate(currency, targetCurrency),
+    }))
   );
 
-  return new Map(rateEntries);
+  return {
+    rates: new Map(
+      rateResults.map(({ currency, rate }) => [currency, rate ?? 1])
+    ),
+    missingCurrencies: rateResults
+      .filter(({ rate }) => rate === null)
+      .map(({ currency }) => currency),
+  };
 }
 
 function normalizeToCurrency(
@@ -132,10 +141,15 @@ export async function getExecutiveMetricsForUser(userId: string): Promise<{
       accounts,
       personalAssets
     );
-    const conversionRates = await getConversionRatesForCurrency(
-      sourceCurrencies,
-      mainCurrency
-    );
+    const { rates: conversionRates, missingCurrencies } =
+      await getConversionRatesForCurrency(
+        sourceCurrencies,
+        mainCurrency
+      );
+    const currencyConversionError =
+      missingCurrencies.length > 0
+        ? `Currency conversion is unavailable for ${missingCurrencies.join(", ")}.`
+        : null;
 
     // Calculate account totals (normalized to main currency)
     let totalCash = 0;
@@ -298,6 +312,7 @@ export async function getExecutiveMetricsForUser(userId: string): Promise<{
         totalRealizedPnL: portfolioSummary?.totalRealizedPnL ?? null,
         portfolioSummary,
         valuationError,
+        currencyConversionError,
         retirementTarget,
         retirementProgress,
         retirementProjection,
@@ -309,19 +324,6 @@ export async function getExecutiveMetricsForUser(userId: string): Promise<{
     console.error("Get executive metrics error:", error);
     return { success: false, error: "Failed to fetch executive metrics" };
   }
-}
-
-export async function getExecutiveMetrics(): Promise<{
-  success: boolean;
-  error?: string;
-  data?: ExecutiveMetrics;
-}> {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return { success: false, error: "Unauthorized" };
-  }
-
-  return getExecutiveMetricsForUser(session.user.id);
 }
 
 function calculateHealthTier(

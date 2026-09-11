@@ -70,6 +70,7 @@ export function LocationPickerModal({
   const initialLatitude = initialCoordinate?.latitude;
   const initialLongitude = initialCoordinate?.longitude;
   const mapRef = useRef<MapView>(null);
+  const resolveSequenceRef = useRef(0);
   const [coordinate, setCoordinate] = useState<Coordinate>(startingCoordinate);
   const [region, setRegion] = useState<Region>(() => regionFor(startingCoordinate));
   const [isLocating, setIsLocating] = useState(false);
@@ -77,7 +78,11 @@ export function LocationPickerModal({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!visible) return;
+    resolveSequenceRef.current += 1;
+    if (!visible) {
+      setIsResolving(false);
+      return;
+    }
     const nextCoordinate = initialLatitude !== undefined && initialLongitude !== undefined
       ? { latitude: initialLatitude, longitude: initialLongitude }
       : defaultCoordinate;
@@ -89,6 +94,7 @@ export function LocationPickerModal({
   }, [initialLatitude, initialLongitude, visible]);
 
   const chooseCoordinate = (nextCoordinate: Coordinate) => {
+    if (isResolving) return;
     setCoordinate(nextCoordinate);
     setError(null);
   };
@@ -125,35 +131,47 @@ export function LocationPickerModal({
   };
 
   const confirmLocation = async () => {
+    const sequence = ++resolveSequenceRef.current;
+    const selectedCoordinate = { ...coordinate };
     setIsResolving(true);
     setError(null);
     try {
-      const addresses = await Location.reverseGeocodeAsync(coordinate);
+      const addresses = await Location.reverseGeocodeAsync(selectedCoordinate);
+      if (sequence !== resolveSequenceRef.current) return;
       onSelect({
-        ...coordinate,
+        ...selectedCoordinate,
         location: formatAddress(addresses[0]) || initialLabel?.trim() || "Pinned location",
-        googleMapsLink: buildGoogleMapsLink(coordinate),
+        googleMapsLink: buildGoogleMapsLink(selectedCoordinate),
       });
     } catch {
+      if (sequence !== resolveSequenceRef.current) return;
       onSelect({
-        ...coordinate,
+        ...selectedCoordinate,
         location: initialLabel?.trim() || "Pinned location",
-        googleMapsLink: buildGoogleMapsLink(coordinate),
+        googleMapsLink: buildGoogleMapsLink(selectedCoordinate),
       });
     } finally {
-      setIsResolving(false);
+      if (sequence === resolveSequenceRef.current) {
+        setIsResolving(false);
+      }
     }
   };
 
+  const cancel = () => {
+    resolveSequenceRef.current += 1;
+    setIsResolving(false);
+    onClose();
+  };
+
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={cancel}>
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
           <View style={styles.headerCopy}>
             <Text selectable style={styles.title}>Choose location</Text>
             <Text selectable style={styles.subtitle}>Tap the map to move the pin.</Text>
           </View>
-          <Button variant="ghost" onPress={onClose}>Cancel</Button>
+          <Button variant="ghost" onPress={cancel}>Cancel</Button>
         </View>
         <MapView
           ref={mapRef}
