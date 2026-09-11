@@ -22,7 +22,7 @@
     "mobile:ios": "pnpm --dir apps/mobile ios",
     "mobile:lint": "pnpm --dir apps/mobile lint",
     "mobile:typecheck": "pnpm --dir apps/mobile typecheck",
-    "test:mobile-server": "node --import tsx --test src/server/auth/mobile-session-auth.test.ts src/server/auth/mobile-session-token.test.ts src/server/auth/verify-credentials.test.ts src/server/mobile-api/bounded-form-data.test.ts src/server/transactions/transaction-account-policy.test.ts src/server/transactions/transaction-balance-effects.test.ts src/server/transactions/transaction-capability-policy.test.ts src/server/transactions/transaction-ocr-result.test.ts src/server/transactions/transaction-ocr-validation.test.ts packages/contracts/src/transaction.test.ts",
+    "test:mobile-server": "node --import tsx --test src/server/auth/mobile-session-auth.test.ts src/server/auth/mobile-session-token.test.ts src/server/auth/verify-credentials.test.ts src/server/mobile-api/bounded-form-data.test.ts src/server/transactions/transaction-account-policy.test.ts src/server/transactions/transaction-balance-effects.test.ts src/server/transactions/transaction-capability-policy.test.ts src/server/transactions/transaction-location-policy.test.ts src/server/transactions/transaction-ocr-result.test.ts src/server/transactions/transaction-ocr-validation.test.ts packages/contracts/src/transaction.test.ts",
     "start": "next start",
     "start:https": "next start --experimental-https",
     "lint": "eslint"

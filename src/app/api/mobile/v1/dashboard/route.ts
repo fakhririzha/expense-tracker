@@ -19,36 +19,43 @@ export async function GET(request: Request) {
     }
 
     const metrics = result.data;
-    return NextResponse.json({
-      displayCurrency: metrics.displayCurrency,
-      position: {
-        totalAssets: metrics.totalAssets,
-        totalDebt: metrics.totalDebt,
-        netWorth: metrics.netWorth,
-        liquidFunds: metrics.totalCash + metrics.totalSavings,
-        investmentValue: metrics.investmentValue,
-      },
-      cashFlow: {
-        averageMonthlyIncome: metrics.avgMonthlyIncome,
-        averageMonthlyExpenses: metrics.avgMonthlyExpenses,
-        savingsRate: metrics.savingsRate,
-        monthsOfRunway: metrics.monthsOfRunway,
-      },
-      health:
-        metrics.healthTier &&
-        metrics.healthTierInfo &&
-        metrics.debtToWealthRatio !== null
-          ? {
-              tier: metrics.healthTier,
-              label: metrics.healthTierInfo.label,
-              description: metrics.healthTierInfo.description,
-              debtToWealthRatio: metrics.debtToWealthRatio,
-            }
+    return NextResponse.json(
+      {
+        displayCurrency: metrics.displayCurrency,
+        position: {
+          totalAssets: metrics.totalAssets,
+          totalDebt: metrics.totalDebt,
+          netWorth: metrics.netWorth,
+          liquidFunds: metrics.totalCash + metrics.totalSavings,
+          investmentValue: metrics.investmentValue,
+        },
+        cashFlow: {
+          averageMonthlyIncome: metrics.avgMonthlyIncome,
+          averageMonthlyExpenses: metrics.avgMonthlyExpenses,
+          savingsRate: metrics.savingsRate,
+          monthsOfRunway: metrics.monthsOfRunway,
+        },
+        health:
+          metrics.healthTier &&
+          metrics.healthTierInfo &&
+          metrics.debtToWealthRatio !== null
+            ? {
+                tier: metrics.healthTier,
+                label: metrics.healthTierInfo.label,
+                description: metrics.healthTierInfo.description,
+                debtToWealthRatio: metrics.debtToWealthRatio,
+              }
+            : null,
+        valuationWarning: metrics.valuationError
+          ? "Some investment values are temporarily unavailable."
           : null,
-      valuationWarning: metrics.valuationError
-        ? "Some investment values are temporarily unavailable."
-        : null,
-    });
+      },
+      {
+        headers: {
+          "Cache-Control": "private, no-store, max-age=0",
+        },
+      }
+    );
   } catch (error) {
     console.error("Mobile dashboard error:", error);
     return NextResponse.json(

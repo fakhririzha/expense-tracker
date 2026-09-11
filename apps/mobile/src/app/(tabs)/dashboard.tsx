@@ -106,7 +106,7 @@ export default function DashboardScreen() {
       </View>
     );
   }
-  if (query.isError || !query.data) {
+  if (!query.data) {
     return (
       <View style={commonStyles.screen}>
         <OfflineBanner isOnline={isOnline} />
@@ -133,6 +133,11 @@ export default function DashboardScreen() {
         />
       }>
       <OfflineBanner isOnline={isOnline} />
+      {query.isError ? (
+        <Text selectable style={styles.warning}>
+          The latest refresh failed. Showing your previously loaded dashboard.
+        </Text>
+      ) : null}
       <View style={{ gap: spacing.xs }}>
         <Text selectable style={commonStyles.title}>Dashboard</Text>
         <Text selectable style={commonStyles.subtitle}>A quick view of your financial position.</Text>

@@ -19,6 +19,10 @@ import {
 } from "@/server/transactions/transaction-balance-effects";
 import { getBankInterestManagedTransactionIds } from "@/server/transactions/transaction-capabilities";
 import { validateNewTransactionAccounts } from "@/server/transactions/transaction-account-policy";
+import {
+  hasValidTransactionCoordinatePair,
+  isHttpsTransactionMapsLinkOrEmpty,
+} from "@/server/transactions/transaction-location-policy";
 import { z } from "zod";
 import {
   validateTransactionSplits,
@@ -66,6 +70,21 @@ function normalizeOptionalText(value?: string | null) {
 
   const trimmed = value?.trim() ?? "";
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function validateLocationCoordinates(
+  value: { latitude?: number | null; longitude?: number | null },
+  context: z.RefinementCtx
+) {
+  if (!hasValidTransactionCoordinatePair(value.latitude, value.longitude)) {
+    context.addIssue({
+      code: "custom",
+      path: value.latitude === undefined || value.latitude === null
+        ? ["latitude"]
+        : ["longitude"],
+      message: "Latitude and longitude must be provided together",
+    });
+  }
 }
 
 function sanitizeOptionalForeignKey(value?: string | null) {
@@ -304,7 +323,12 @@ const transactionObjectSchema = z.object({
   location: z.string().optional(),
   latitude: z.number().min(-90).max(90).optional().nullable(),
   longitude: z.number().min(-180).max(180).optional().nullable(),
-  googleMapsLink: z.string().optional().nullable(),
+  googleMapsLink: z
+    .string()
+    .max(2_048)
+    .refine(isHttpsTransactionMapsLinkOrEmpty, "Maps link must use HTTPS")
+    .optional()
+    .nullable(),
   date: z.date().default(() => new Date()),
   accountId: z.string().min(1, "From account is required"),
   toAccountId: z.string().optional(),
@@ -328,6 +352,7 @@ const transactionObjectSchema = z.object({
 const transactionUpdateSchema = transactionObjectSchema.partial();
 
 export const transactionSchema = transactionObjectSchema
+  .superRefine(validateLocationCoordinates)
   .refine(
     (data) => {
       if (
@@ -607,6 +632,20 @@ export async function updateTransactionForUser(
 
     if (!existingTransaction) {
       return { success: false, error: "Transaction not found" };
+    }
+
+    if (data.latitude !== undefined || data.longitude !== undefined) {
+      const effectiveLatitude =
+        data.latitude !== undefined ? data.latitude : existingTransaction.latitude;
+      const effectiveLongitude =
+        data.longitude !== undefined ? data.longitude : existingTransaction.longitude;
+
+      if (!hasValidTransactionCoordinatePair(effectiveLatitude, effectiveLongitude)) {
+        return {
+          success: false,
+          error: "Latitude and longitude must be provided together",
+        };
+      }
     }
 
     if (await isManagedDepositoTransaction(userId, id)) {
