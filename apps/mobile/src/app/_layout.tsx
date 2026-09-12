@@ -3,10 +3,11 @@ import { Stack, usePathname, useRouter } from "expo-router";
 import type { Href } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect, type ReactNode } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
 import { queryClient } from "@/api/query-client";
 import { AuthProvider, useAuth } from "@/auth/auth-provider";
+import { BrandShimmer } from "@/components/brand-shimmer";
 import { colors } from "@/theme/tokens";
 
 void SplashScreen.preventAutoHideAsync();
@@ -30,8 +31,8 @@ function AuthNavigationGuard({ children }: { children: ReactNode }) {
   if (status === "loading") {
     return (
       <View style={styles.loading}>
-        <Text selectable style={styles.brand}>FinHealth</Text>
-        <ActivityIndicator color={colors.primary} size="large" />
+        <BrandShimmer label="Restoring your FinHealth session…" />
+        <Text selectable style={styles.loadingLabel}>Restoring your FinHealth session…</Text>
       </View>
     );
   }
@@ -58,5 +59,5 @@ export default function RootLayout() {
 
 const styles = StyleSheet.create({
   loading: { alignItems: "center", backgroundColor: colors.background, flex: 1, gap: 20, justifyContent: "center" },
-  brand: { color: colors.primary, fontSize: 30, fontWeight: "800", letterSpacing: -0.6 },
+  loadingLabel: { color: colors.textMuted, fontSize: 15, lineHeight: 21 },
 });
