@@ -8,11 +8,13 @@
     "scheme": "finhealth",
     "userInterfaceStyle": "automatic",
     "ios": {
+      "bundleIdentifier": "chat.finhealth.mobile",
       "icon": "./assets/images/icon.png",
       "infoPlist": {
         "NSCameraUsageDescription": "FinHealth uses the camera to scan receipts for transaction entry.",
         "NSPhotoLibraryUsageDescription": "FinHealth uses your photo library to choose a receipt for transaction entry.",
-        "NSLocationWhenInUseUsageDescription": "FinHealth uses your location only when you choose a transaction location."
+        "NSLocationWhenInUseUsageDescription": "FinHealth uses your location only when you choose a transaction location.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -52,6 +54,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "3ba0c043-d119-42d5-aa62-d83218bd8fcc"
+      }
+    },
+    "owner": "fakhririzha"
   }
 }

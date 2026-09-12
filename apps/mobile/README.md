@@ -54,5 +54,40 @@ pnpm mobile:lint
 pnpm mobile:typecheck
 ```
 
+## Install on iPhone
+
+The iOS app uses the bundle identifier `chat.finhealth.mobile`. Link it to the Expo account once
+from `apps/mobile`, then configure the public backend URL in both EAS environments:
+
+```bash
+pnpm dlx eas-cli@latest init
+pnpm dlx eas-cli@latest env:set --environment preview --name EXPO_PUBLIC_API_URL --value https://finhealth.chat --visibility plaintext
+pnpm dlx eas-cli@latest env:set --environment production --name EXPO_PUBLIC_API_URL --value https://finhealth.chat --visibility plaintext
+```
+
+For a direct device installation, register the iPhone and create an internal preview build:
+
+```bash
+pnpm dlx eas-cli@latest device:create
+pnpm eas:build:ios:preview --local
+```
+
+Use the `pnpm eas:build:*` scripts rather than calling `eas-cli` directly. Those
+scripts keep local iOS builds from picking up conflicting command-line tools.
+
+Open the build URL on the registered iPhone and tap Install. This ad hoc build is intended for
+quick personal testing and requires an Apple Developer membership.
+
+For private TestFlight distribution, create and submit the store build instead:
+
+```bash
+pnpm eas:build:ios:production
+pnpm eas:submit:ios
+```
+
+After Apple processes the build, add it to an internal TestFlight group in App Store Connect,
+install Apple's TestFlight app on the iPhone, and accept the invitation. TestFlight builds do not
+require a running Expo development server but expire after 90 days.
+
 Native mutations require a network connection. Cached GET responses remain available while
 offline, and the app shows an offline indicator instead of queueing financial changes.

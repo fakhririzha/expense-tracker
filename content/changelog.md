@@ -1,5 +1,17 @@
 # FinHealth Changelog
 
+## v5.9.2
+
+- Fixed iPhone preview builds that failed while installing native iOS dependencies.
+- Fixed iPhone builds that failed to compile on the current Xcode toolchain.
+- Fixed cloud mobile builds failing during dependency installation.
+- Updated the mobile app to the latest compatible Expo SDK 57 packages.
+
+## v5.9.1
+
+- Added iPhone build profiles for direct device installation and private TestFlight distribution.
+- Assigned FinHealth a stable iOS app identity for Apple signing and future updates.
+
 ## v5.9.0
 
 - Added a phone-friendly financial dashboard with net worth, liquid funds, debt, savings rate, cash runway, monthly cash flow, and financial health.

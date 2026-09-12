@@ -134,6 +134,9 @@ This is the only environment value exposed to Expo. Database, encryption, Auth.j
 | `pnpm mobile:ios` | Start Expo and open iOS |
 | `pnpm mobile:lint` | Lint the Expo source |
 | `pnpm mobile:typecheck` | Type-check the Expo source |
+| `pnpm --dir apps/mobile eas:build:ios:preview` | Build an installable iPhone preview through EAS |
+| `pnpm --dir apps/mobile eas:build:ios:production` | Build the iOS App Store/TestFlight package through EAS |
+| `pnpm --dir apps/mobile eas:submit:ios` | Submit the latest production iOS build to App Store Connect |
 | `pnpm db:migrate:dev` | Run Prisma development migrations |
 | `pnpm db:migrate:prod` | Run Prisma production migrations |
 | `pnpm db:backfill:account-encryption` | Backfill encrypted account fields |
