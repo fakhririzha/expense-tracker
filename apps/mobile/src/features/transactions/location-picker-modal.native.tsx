@@ -35,6 +35,18 @@ const defaultCoordinate: Coordinate = {
   longitude: 106.816666,
 };
 
+function isValidCoordinate(coordinate: Coordinate | undefined): coordinate is Coordinate {
+  return Boolean(
+    coordinate &&
+    Number.isFinite(coordinate.latitude) &&
+    Number.isFinite(coordinate.longitude) &&
+    coordinate.latitude >= -90 &&
+    coordinate.latitude <= 90 &&
+    coordinate.longitude >= -180 &&
+    coordinate.longitude <= 180
+  );
+}
+
 function regionFor(coordinate: Coordinate): Region {
   return {
     ...coordinate,
@@ -74,9 +86,9 @@ export function LocationPickerModal({
   onClose,
   onSelect,
 }: LocationPickerModalProps) {
-  const startingCoordinate = initialCoordinate ?? defaultCoordinate;
-  const initialLatitude = initialCoordinate?.latitude;
-  const initialLongitude = initialCoordinate?.longitude;
+  const startingCoordinate = isValidCoordinate(initialCoordinate) ? initialCoordinate : defaultCoordinate;
+  const initialLatitude = isValidCoordinate(initialCoordinate) ? initialCoordinate.latitude : undefined;
+  const initialLongitude = isValidCoordinate(initialCoordinate) ? initialCoordinate.longitude : undefined;
   const mapRef = useRef<MapView>(null);
   const resolveSequenceRef = useRef(0);
   const [coordinate, setCoordinate] = useState<Coordinate>(startingCoordinate);
@@ -103,7 +115,7 @@ export function LocationPickerModal({
   }, [initialLatitude, initialLongitude, visible]);
 
   const chooseCoordinate = (nextCoordinate: Coordinate) => {
-    if (isResolving) return;
+    if (isResolving || !isValidCoordinate(nextCoordinate)) return;
     resolveSequenceRef.current += 1;
     setIsLocating(false);
     setCoordinate(nextCoordinate);
@@ -119,10 +131,22 @@ export function LocationPickerModal({
     setIsLocating(true);
     setError(null);
     try {
-      const permission = await Location.requestForegroundPermissionsAsync();
+      const servicesEnabled = await Location.hasServicesEnabledAsync();
+      if (sequence !== resolveSequenceRef.current) return;
+      if (!servicesEnabled) {
+        setError("Turn on Location Services in Settings, then try again.");
+        return;
+      }
+      const existingPermission = await Location.getForegroundPermissionsAsync();
+      if (sequence !== resolveSequenceRef.current) return;
+      const permission = existingPermission.granted
+        ? existingPermission
+        : await Location.requestForegroundPermissionsAsync();
       if (sequence !== resolveSequenceRef.current) return;
       if (!permission.granted) {
-        setError("Allow location access to use your current position.");
+        setError(permission.canAskAgain
+          ? "Allow location access to use your current position."
+          : "Location access is denied. Enable it in Settings to use your current position.");
         return;
       }
       const current = await Location.getCurrentPositionAsync({
@@ -133,6 +157,10 @@ export function LocationPickerModal({
         latitude: current.coords.latitude,
         longitude: current.coords.longitude,
       };
+      if (!isValidCoordinate(nextCoordinate)) {
+        setError("Your device returned an invalid location. Try again or place the pin manually.");
+        return;
+      }
       const nextRegion = regionFor(nextCoordinate);
       setCoordinate(nextCoordinate);
       setRegion(nextRegion);
@@ -151,6 +179,10 @@ export function LocationPickerModal({
   const confirmLocation = async () => {
     const sequence = ++resolveSequenceRef.current;
     const selectedCoordinate = { ...coordinate };
+    if (!isValidCoordinate(selectedCoordinate)) {
+      setError("Choose a valid location on the map before continuing.");
+      return;
+    }
     const fallbackLabel = hasSameCoordinate(selectedCoordinate, initialCoordinate)
       ? initialLabel?.trim() || "Pinned location"
       : "Pinned location";
@@ -199,10 +231,11 @@ export function LocationPickerModal({
           ref={mapRef}
           style={styles.map}
           region={region}
-          onRegionChangeComplete={setRegion}
+          onRegionChangeComplete={(nextRegion) => {
+            if (isValidCoordinate(nextRegion)) setRegion(nextRegion);
+          }}
           onPress={handleMapPress}
-          showsCompass
-          showsUserLocation>
+          showsCompass>
           <Marker coordinate={coordinate} draggable onDragEnd={(event) => chooseCoordinate(event.nativeEvent.coordinate)} />
         </MapView>
         <View style={styles.footer}>
@@ -211,8 +244,8 @@ export function LocationPickerModal({
           </Text>
           {error ? <Text selectable style={styles.error}>{error}</Text> : null}
           <View style={styles.actions}>
-            <Button variant="secondary" onPress={() => void handleUseCurrentLocation()} disabled={isResolving || isLocating}>
-              {isLocating ? "Locating…" : "Use current location"}
+            <Button variant="secondary" onPress={() => void handleUseCurrentLocation()} disabled={isResolving} loading={isLocating}>
+              Use current location
             </Button>
             <Button onPress={() => void confirmLocation()} disabled={isLocating} loading={isResolving}>
               Use this location

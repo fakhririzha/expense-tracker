@@ -343,7 +343,7 @@ export function TransactionForm({ mode, transaction, onSaved }: TransactionFormP
           name="accountId"
           render={() => (
             <Field label="Account" error={errors.accountId?.message}>
-              <SelectField value={sourceAccount ? selectedAccountLabel(sourceAccount) : undefined} placeholder="Choose an account" onPress={() => setPicker("account")} />
+              <SelectField value={sourceAccount ? selectedAccountLabel(sourceAccount) : undefined} placeholder="Choose an account" onPress={() => setPicker("account")} disabled={accountsQuery.isLoading} loading={accountsQuery.isLoading} />
             </Field>
           )}
         />
@@ -353,7 +353,7 @@ export function TransactionForm({ mode, transaction, onSaved }: TransactionFormP
             name="toAccountId"
             render={() => (
               <Field label="Destination account" error={errors.toAccountId?.message}>
-                <SelectField value={destinationAccount ? selectedAccountLabel(destinationAccount) : undefined} placeholder="Choose destination" onPress={() => setPicker("destination")} />
+                <SelectField value={destinationAccount ? selectedAccountLabel(destinationAccount) : undefined} placeholder="Choose destination" onPress={() => setPicker("destination")} disabled={accountsQuery.isLoading} loading={accountsQuery.isLoading} />
               </Field>
             )}
           />
@@ -363,7 +363,7 @@ export function TransactionForm({ mode, transaction, onSaved }: TransactionFormP
             name="categoryId"
             render={() => (
               <Field label="Category">
-                <SelectField value={selectedCategory?.name} placeholder="Choose a category (optional)" onPress={() => setPicker("category")} disabled={categoriesQuery.isLoading} />
+                <SelectField value={selectedCategory?.name} placeholder="Choose a category (optional)" onPress={() => setPicker("category")} disabled={categoriesQuery.isLoading} loading={categoriesQuery.isLoading} />
               </Field>
             )}
           />

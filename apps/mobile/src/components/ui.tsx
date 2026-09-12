@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import {
-  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,6 +10,7 @@ import {
   View,
 } from "react-native";
 
+import { BrandShimmer } from "@/components/brand-shimmer";
 import { colors, commonStyles, radii, shadows, spacing } from "@/theme/tokens";
 
 export function ScreenScroll({ children, contentContainerStyle, refreshControl }: {
@@ -66,9 +66,8 @@ export function Button({
         pressed && !isDisabled && styles.buttonPressed,
         style,
       ]}>
-      {loading ? (
-        <ActivityIndicator color={variant === "ghost" ? colors.primary : colors.white} />
-      ) : (
+      <View style={styles.buttonContent}>
+        {loading ? <BrandShimmer variant="compact" label="" /> : null}
         <Text
           selectable
           style={[
@@ -78,7 +77,7 @@ export function Button({
           ]}>
           {children}
         </Text>
-      )}
+      </View>
     </Pressable>
   );
 }
@@ -115,7 +114,7 @@ export function TextField({ error, label, style, ...props }: TextInputProps & { 
 export function LoadingState({ label = "Loading…" }: { label?: string }) {
   return (
     <View style={styles.centerState}>
-      <ActivityIndicator size="large" color={colors.primary} />
+      <BrandShimmer label={label} />
       <Text selectable style={commonStyles.subtitle}>{label}</Text>
     </View>
   );
@@ -180,23 +179,25 @@ export function SelectField({
   placeholder,
   onPress,
   disabled = false,
+  loading = false,
   error,
 }: {
   value?: string;
   placeholder: string;
   onPress: () => void;
   disabled?: boolean;
+  loading?: boolean;
   error?: string;
 }) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityState={{ disabled }}
-      disabled={disabled}
+      accessibilityState={{ busy: loading, disabled: disabled || loading }}
+      disabled={disabled || loading}
       onPress={onPress}
-      style={({ pressed }) => [styles.select, disabled && styles.disabled, pressed && !disabled && styles.buttonPressed]}>
+      style={({ pressed }) => [styles.select, (disabled || loading) && styles.disabled, pressed && !disabled && !loading && styles.buttonPressed]}>
       <Text selectable style={value ? styles.selectValue : styles.selectPlaceholder}>{value ?? placeholder}</Text>
-      <Text selectable style={styles.selectChevron}>⌄</Text>
+      {loading ? <View pointerEvents="none" style={styles.selectLoading}><BrandShimmer variant="compact" label="" /></View> : <Text selectable style={styles.selectChevron}>⌄</Text>}
       {error ? <Text selectable style={styles.errorText}>{error}</Text> : null}
     </Pressable>
   );
@@ -217,6 +218,7 @@ export const styles = StyleSheet.create({
   buttonDanger: { backgroundColor: colors.danger },
   buttonGhost: { backgroundColor: "transparent" },
   buttonText: { color: colors.white, fontSize: 16, fontWeight: "700" },
+  buttonContent: { alignItems: "center", flexDirection: "row", gap: spacing.sm, justifyContent: "center" },
   buttonSecondaryText: { color: colors.text },
   buttonGhostText: { color: colors.primary },
   buttonDisabled: { opacity: 0.45 },
@@ -253,6 +255,7 @@ export const styles = StyleSheet.create({
   selectValue: { color: colors.text, fontSize: 16, paddingRight: spacing.xl },
   selectPlaceholder: { color: colors.textMuted, fontSize: 16, paddingRight: spacing.xl },
   selectChevron: { color: colors.textMuted, fontSize: 22, position: "absolute", right: spacing.md, top: 8 },
+  selectLoading: { position: "absolute", right: spacing.md, top: 13 },
   disabled: { opacity: 0.5 },
   modalCard: {
     backgroundColor: colors.surface,

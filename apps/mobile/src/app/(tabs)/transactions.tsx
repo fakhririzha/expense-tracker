@@ -4,7 +4,7 @@ import { Link, useRouter } from "expo-router";
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 
 import { getTransactions } from "@/api/transactions";
-import { Button, EmptyState, ErrorState, OfflineBanner, Pill } from "@/components/ui";
+import { Button, EmptyState, ErrorState, LoadingState, OfflineBanner, Pill } from "@/components/ui";
 import { useNetworkStatus } from "@/hooks/use-network-status";
 import { formatTransactionDate, signedAmount, typeLabel } from "@/features/transactions/format";
 import { colors, commonStyles, radii, spacing, typeColor } from "@/theme/tokens";
@@ -60,7 +60,7 @@ export default function TransactionsScreen() {
   const transactions = query.data?.pages.flatMap((page) => page.transactions) ?? [];
 
   if (query.isLoading) {
-    return <View style={commonStyles.screen}><OfflineBanner isOnline={isOnline} /><SkeletonRows /></View>;
+    return <View style={commonStyles.screen}><OfflineBanner isOnline={isOnline} /><LoadingState label="Loading your activity…" /></View>;
   }
   if (query.isError && transactions.length === 0) {
     return (

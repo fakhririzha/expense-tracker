@@ -1,5 +1,10 @@
 # FinHealth Changelog
 
+## v5.9.3
+
+- Added clearer native tab icons and FinHealth-branded loading feedback throughout the mobile app.
+- Improved transaction location picking so iPhone preview builds request location only after you choose to use it, with clearer in-app guidance when access or services are unavailable.
+
 ## v5.9.2
 
 - Fixed iPhone preview builds that failed while installing native iOS dependencies.
