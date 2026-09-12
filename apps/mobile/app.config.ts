@@ -7,6 +7,12 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     ...config,
     name: config.name ?? "FinHealth",
     slug: config.slug ?? "finhealth",
+    plugins: [
+      ...(config.plugins ?? []),
+      "expo-font",
+      "expo-image",
+      "expo-web-browser",
+    ],
     android: {
       ...config.android,
       ...(googleMapsApiKey

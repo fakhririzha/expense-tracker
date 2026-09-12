@@ -17,3 +17,14 @@ onlyBuiltDependencies:
   - prisma
   - sharp
   - unrs-resolver
+
+overrides:
+  '@babel/core': 7.29.6
+  find-my-way: 9.7.0
+  lodash: 4.18.1
+  postcss: 8.5.18
+  sharp: 0.35.3
+  valibot: 1.4.2
+
+patchedDependencies:
+  expo-modules-jsi@57.1.0: patches/expo-modules-jsi@57.1.0.patch
