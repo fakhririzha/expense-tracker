@@ -1,5 +1,9 @@
 # FinHealth Changelog
 
+## v5.9.4
+
+- Fixed Android preview and production builds by assigning FinHealth its stable Android app identity.
+
 ## v5.9.3
 
 - Added clearer native tab icons and FinHealth-branded loading feedback throughout the mobile app.

@@ -18,6 +18,7 @@
       }
     },
     "android": {
+      "package": "chat.finhealth.mobile",
       "permissions": [
         "CAMERA",
         "READ_MEDIA_IMAGES"
