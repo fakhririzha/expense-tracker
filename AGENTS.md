@@ -630,7 +630,6 @@ Manual verification should cover the touched feature area plus affected cross-fe
 - Import/export and category management
 - Native login, cold-start session restoration, transaction pagination and refresh, ordinary income/expense/transfer create/edit/delete, retry with the same `clientMutationId`, receipt camera/gallery scanning and OCR prefill, balance refresh, offline mutation blocking, and logout
 
-<!-- BEGIN CODEX-SHUNT-WORKFLOW -->
 ## Default Codex Engineering Workflow
 
 The primary agent owns requirements, planning, architecture, difficult debugging, risky implementation, and final correctness. Use specialist agents to keep broad mechanical context and noisy output away from the primary reasoning context.
@@ -682,7 +681,6 @@ Before declaring meaningful implementation work complete:
 5. check for security, data-integrity, and regression risks proportional to the task
 
 Do not repeatedly rerun broad validation after it passes unless later changes or unresolved evidence justify it.
-<!-- END CODEX-SHUNT-WORKFLOW -->
 
 ## GitHub Delivery Workflow
 

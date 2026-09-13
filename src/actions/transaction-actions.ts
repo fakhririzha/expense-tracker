@@ -18,8 +18,6 @@ async function getAuthenticatedUserId(): Promise<string | null> {
   return session?.user?.id ?? null;
 }
 
-export type { TransactionInput };
-
 export async function createTransaction(data: TransactionInput) {
   const userId = await getAuthenticatedUserId();
   if (!userId) return { success: false as const, error: "Unauthorized" };

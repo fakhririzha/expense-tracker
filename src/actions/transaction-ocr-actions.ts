@@ -4,10 +4,7 @@ import { auth } from "@/auth";
 import {
   scanTransactionBillForUser,
   type ScanTransactionBillResult,
-  type TransactionOcrResult,
 } from "@/server/transactions/transaction-ocr-service";
-
-export type { ScanTransactionBillResult, TransactionOcrResult };
 
 export async function scanTransactionBill(
   formData: FormData
