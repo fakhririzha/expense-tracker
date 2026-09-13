@@ -53,3 +53,5 @@ next-env.d.ts
 .claude/*
 .kilocode/*
 certificates
+
+*.ipa

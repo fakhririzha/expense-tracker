@@ -1,11 +1,9 @@
 "use client";
 
-import {
-  scanTransactionBill,
-  type TransactionOcrResult,
-} from "@/actions/transaction-ocr-actions";
+import { scanTransactionBill } from "@/actions/transaction-ocr-actions";
 import { useAccounts } from "@/hooks/useAccountQueries";
 import { useCreateTransaction } from "@/hooks/useTransactionQueries";
+import type { TransactionOcrResult } from "@/server/transactions/transaction-ocr-result";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Checkbox } from "@/components/ui/checkbox";

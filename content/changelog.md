@@ -1,5 +1,11 @@
 # FinHealth Changelog
 
+## v5.9.5
+
+- Restored transaction history and other dashboard data that could fail to load after the mobile app update.
+- Added convenient Android preview and production build commands for mobile releases.
+- Included the latest Android build for release testing.
+
 ## v5.9.4
 
 - Fixed Android preview and production builds by assigning FinHealth its stable Android app identity.
