@@ -11,12 +11,42 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { RotateCcw, AlertCircle, CheckCircle2 } from "lucide-react";
 import { format } from "date-fns";
 
 interface LiabilityPaymentHistoryProps {
   accountId?: string;
   limit?: number;
+}
+
+function LiabilityPaymentHistorySkeleton() {
+  return (
+    <div className="rounded-md border" aria-hidden="true">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            {Array.from({ length: 6 }).map((_, index) => (
+              <TableHead key={index}>
+                <Skeleton className="h-4 w-20" />
+              </TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {Array.from({ length: 5 }).map((_, rowIndex) => (
+            <TableRow key={rowIndex}>
+              {Array.from({ length: 6 }).map((_, cellIndex) => (
+                <TableCell key={cellIndex}>
+                  <Skeleton className="h-4 w-4/5" />
+                </TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
 }
 
 /**
@@ -69,13 +99,7 @@ export function LiabilityPaymentHistory({
   }
 
   if (loading) {
-    return (
-      <div className="space-y-2">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="h-12 w-full bg-muted animate-pulse rounded" />
-        ))}
-      </div>
-    );
+    return <LiabilityPaymentHistorySkeleton />;
   }
 
   if (error) {

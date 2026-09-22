@@ -4,9 +4,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 export function FinancialInsightsSkeleton() {
   return (
     <Card>
-      <CardHeader className="space-y-3">
-        <Skeleton className="h-6 w-48" />
-        <Skeleton className="h-4 w-72" />
+      <CardHeader className="gap-3">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-2">
+            <Skeleton className="h-6 w-48" />
+            <Skeleton className="h-4 w-72" />
+          </div>
+          <Skeleton className="h-7 w-16 rounded-full" />
+        </div>
       </CardHeader>
       <CardContent className="space-y-3">
         {Array.from({ length: 3 }).map((_, index) => (

@@ -41,6 +41,7 @@ import {
 import { MoneyInput } from "@/components/ui/money-input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TransactionAccountCombobox } from "@/components/transactions/TransactionAccountCombobox";
+import { TransactionCategoryCombobox } from "@/components/transactions/TransactionCategoryCombobox";
 import { TransactionSplitEditor } from "@/components/transactions/TransactionSplitEditor";
 import {
   isDepositoAccountType,
@@ -1188,23 +1189,15 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Category (Optional)</FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          value={field.value ?? ""}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select category" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {categories.map((category) => (
-                              <SelectItem key={category.id} value={category.id}>
-                                {category.icon} {category.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <FormControl>
+                          <TransactionCategoryCombobox
+                            emptyMessage="No categories found."
+                            onChange={field.onChange}
+                            options={categories}
+                            placeholder="Select category"
+                            value={field.value ?? ""}
+                          />
+                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}

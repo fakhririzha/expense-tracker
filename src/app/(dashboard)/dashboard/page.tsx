@@ -7,50 +7,13 @@ import {
   DashboardMoneyPlanSection,
   DashboardPositionSection,
 } from "@/components/dashboard/DashboardHomeSections";
+import {
+  DashboardMoneyPlanSkeleton,
+  DashboardPositionSkeleton,
+} from "@/components/dashboard/DashboardLoadingSkeleton";
 import { GettingStartedCard } from "@/components/onboarding/GettingStartedCard";
 import { TourLauncherButton } from "@/components/onboarding/TourLauncherButton";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { ONBOARDING_TOUR_TARGETS } from "@/lib/onboarding/constants";
-
-function MoneyPlanFallback() {
-  return (
-    <Card>
-      <CardHeader>
-        <div className="h-6 w-48 animate-pulse bg-muted" />
-      </CardHeader>
-      <CardContent>
-        <div className="h-24 animate-pulse bg-muted" />
-      </CardContent>
-    </Card>
-  );
-}
-
-function PositionFallback() {
-  return (
-    <div className="space-y-6" aria-hidden="true">
-      <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, index) => (
-          <Card key={index}>
-            <CardHeader>
-              <div className="h-5 w-28 animate-pulse bg-muted" />
-            </CardHeader>
-            <CardContent>
-              <div className="h-8 w-36 animate-pulse bg-muted" />
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card>
-          <CardContent className="h-40 animate-pulse bg-muted" />
-        </Card>
-        <Card>
-          <CardContent className="h-40 animate-pulse bg-muted" />
-        </Card>
-      </div>
-    </div>
-  );
-}
 
 /**
  * Render the authenticated user's action-led dashboard and financial position.
@@ -88,11 +51,11 @@ export default async function DashboardPage() {
 
       <GettingStartedCard />
 
-      <Suspense fallback={<MoneyPlanFallback />}>
+      <Suspense fallback={<DashboardMoneyPlanSkeleton />}>
         <DashboardMoneyPlanSection />
       </Suspense>
 
-      <Suspense fallback={<PositionFallback />}>
+      <Suspense fallback={<DashboardPositionSkeleton />}>
         <DashboardPositionSection userId={session.user.id} />
       </Suspense>
     </div>

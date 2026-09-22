@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 
+import { AccountsPageSkeleton } from "@/components/accounts/AccountsPageSkeleton";
 import { AddAccountDialog } from "@/components/accounts/AddAccountDialog";
 import { DeleteAccountDialog } from "@/components/accounts/DeleteAccountDialog";
 import { EditAccountDialog } from "@/components/accounts/EditAccountDialog";
@@ -350,6 +351,10 @@ export default function AccountsPage() {
   };
   const hasNoAccounts = !isLoading && accountList.length === 0;
 
+  if (isLoading) {
+    return <AccountsPageSkeleton />;
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -425,11 +430,7 @@ export default function AccountsPage() {
       )}
 
       {/* Accounts Table */}
-      {isLoading ? (
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-        </div>
-      ) : hasNoAccounts ? (
+      {hasNoAccounts ? (
         <ContextualEmptyState
           title="Add your first account"
           description="Start by adding your main bank, cash, or investment account."

@@ -3,6 +3,7 @@
 import Link from "next/link";
 
 import { ContextualEmptyState } from "@/components/onboarding/ContextualEmptyState";
+import { LoansReceivablePageSkeleton } from "@/components/receivables/LoansReceivablePageSkeleton";
 import { ReceivableTransferDialog } from "@/components/receivables/ReceivableTransferDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -71,6 +72,10 @@ export function LoansReceivableManager() {
   const activeAccounts = accounts.filter((account) => account.isActive);
   const displayCurrency = summary?.displayCurrency ?? "IDR";
 
+  if (summaryLoading || historyLoading) {
+    return <LoansReceivablePageSkeleton />;
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -94,9 +99,7 @@ export function LoansReceivableManager() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {summaryLoading
-                ? "Loading..."
-                : formatCurrency(summary?.totalOutstanding ?? 0, displayCurrency)}
+              {formatCurrency(summary?.totalOutstanding ?? 0, displayCurrency)}
             </div>
             <p className="text-xs text-muted-foreground">
               Current receivable balances
@@ -131,7 +134,7 @@ export function LoansReceivableManager() {
         </Card>
       </div>
 
-      {activeAccounts.length === 0 && !summaryLoading ? (
+      {activeAccounts.length === 0 ? (
         <ContextualEmptyState
           title="Add your first receivable"
           description="Track money others owe you."
@@ -150,13 +153,7 @@ export function LoansReceivableManager() {
           <CardDescription>Current principal by account</CardDescription>
         </CardHeader>
         <CardContent>
-          {summaryLoading ? (
-            <div className="space-y-2">
-              {Array.from({ length: 3 }).map((_, index) => (
-                <div key={index} className="h-12 w-full animate-pulse rounded bg-muted" />
-              ))}
-            </div>
-          ) : accounts.length === 0 ? (
+          {accounts.length === 0 ? (
             <div className="py-8 text-center text-muted-foreground">
               No receivable accounts found.
             </div>
@@ -197,13 +194,7 @@ export function LoansReceivableManager() {
           <CardDescription>Disbursements and repayments</CardDescription>
         </CardHeader>
         <CardContent>
-          {historyLoading ? (
-            <div className="space-y-2">
-              {Array.from({ length: 5 }).map((_, index) => (
-                <div key={index} className="h-12 w-full animate-pulse rounded bg-muted" />
-              ))}
-            </div>
-          ) : history.length === 0 ? (
+          {history.length === 0 ? (
             <div className="py-8 text-center text-muted-foreground">
               No Loans Receivable transfers found.
             </div>

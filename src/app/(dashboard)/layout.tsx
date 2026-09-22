@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Suspense } from "react";
 import { LogOut, UserRound } from "lucide-react";
 
 import { logout } from "@/actions/auth-actions";
@@ -63,11 +62,9 @@ export default async function DashboardLayout({
         <GuidedDashboardTourProvider>
           <div className="min-h-screen bg-background flex font-sans">
 
-          <Suspense fallback={<Sidebar pauseMetrics />}>
-            <SidebarMetricsBoundary userId={session.user.id} nowIso={metricsNowIso}>
-              <Sidebar />
-            </SidebarMetricsBoundary>
-          </Suspense>
+          <SidebarMetricsBoundary userId={session.user.id} nowIso={metricsNowIso}>
+            <Sidebar />
+          </SidebarMetricsBoundary>
 
           <div className="flex-1 flex flex-col min-w-0">
             {/* Top Navigation */}
@@ -77,11 +74,9 @@ export default async function DashboardLayout({
             >
               <div className="flex h-16 items-center justify-between px-4 md:px-8">
 
-                <Suspense fallback={<MobileSidebar pauseMetrics />}>
-                  <SidebarMetricsBoundary userId={session.user.id} nowIso={metricsNowIso}>
-                    <MobileSidebar />
-                  </SidebarMetricsBoundary>
-                </Suspense>
+                <SidebarMetricsBoundary userId={session.user.id} nowIso={metricsNowIso}>
+                  <MobileSidebar />
+                </SidebarMetricsBoundary>
 
                 {/* Flex spacer for desktop so profile is on right */}
                 <div className="hidden md:block flex-1"></div>
