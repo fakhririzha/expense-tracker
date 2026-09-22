@@ -1,5 +1,9 @@
 # FinHealth Changelog
 
+## v5.9.7
+
+- Restored instant back-and-forth paging in Transactions while keeping initial history loading fast.
+
 ## v5.9.6
 
 - Improved Transactions loading so your account, category, and transaction data is ready sooner when you open or filter your history.

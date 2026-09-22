@@ -2,7 +2,7 @@
 
 import { type SortingState } from "@tanstack/react-table";
 import { format as formatDate } from "date-fns";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useDeleteTransaction, useTransactions } from "@/hooks/useTransactionQueries";
@@ -56,7 +56,6 @@ function buildUrl(pathname: string, params: URLSearchParams) {
  */
 export function TransactionsPageClient() {
   const pathname = usePathname();
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -116,9 +115,9 @@ export function TransactionsPageClient() {
         nextParams.set(key, value);
       });
 
-      router.replace(buildUrl(pathname, nextParams), { scroll: false });
+      window.history.replaceState(null, "", buildUrl(pathname, nextParams));
     },
-    [pathname, router, searchParams]
+    [pathname, searchParams]
   );
 
   const accounts = useMemo(
