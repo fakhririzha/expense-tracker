@@ -833,3 +833,194 @@ export async function getMonthlySummary(params: {
     return { success: false, error: "Failed to fetch monthly summary" };
   }
 }
+
+const reportOverviewSchema = reportDateRangeSchema.extend({
+  year: z.number().int(),
+  month: z.number().int().min(1).max(12),
+});
+
+function isOnOrBetween(date: Date, start: Date, end: Date): boolean {
+  const time = date.getTime();
+  return time >= start.getTime() && time <= end.getTime();
+}
+
+export async function getReportsOverview(params: {
+  startDate: Date;
+  endDate: Date;
+  year: number;
+  month: number;
+}): Promise<{
+  success: boolean;
+  data?: {
+    trendsByGroup: Record<"day" | "week" | "month", SpendingTrendPoint[]>;
+    expenseCategories: CategoryBreakdownItem[];
+    incomeCategories: CategoryBreakdownItem[];
+    monthlySummary: MonthlySummary;
+  };
+  error?: string;
+}> {
+  try {
+    const user = await getAuthenticatedReportUser();
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const validated = reportOverviewSchema.safeParse(params);
+    if (!validated.success) {
+      return { success: false, error: validated.error.issues[0].message };
+    }
+
+    const { startDate, endDate, year, month } = validated.data;
+    const { startDate: monthStart, endDate: monthEnd } = getMonthRange(year, month);
+    const previousMonth = month === 1 ? 12 : month - 1;
+    const previousYear = month === 1 ? year - 1 : year;
+    const { startDate: previousStart, endDate: previousEnd } = getMonthRange(
+      previousYear,
+      previousMonth
+    );
+    const rangeStart = new Date(
+      Math.min(startDate.getTime(), monthStart.getTime(), previousStart.getTime())
+    );
+    const rangeEnd = new Date(
+      Math.max(endDate.getTime(), monthEnd.getTime(), previousEnd.getTime())
+    );
+
+    const transactions = await fetchCategorizedTransactions({
+      userId: user.id,
+      startDate: rangeStart,
+      endDate: rangeEnd,
+      types: ["INCOME", "EXPENSE"],
+    });
+    const selectedTransactions = transactions.filter((transaction) =>
+      isOnOrBetween(transaction.date, startDate, endDate)
+    );
+    const currentMonthTransactions = transactions.filter((transaction) =>
+      isOnOrBetween(transaction.date, monthStart, monthEnd)
+    );
+    const previousMonthTransactions = transactions.filter((transaction) =>
+      isOnOrBetween(transaction.date, previousStart, previousEnd)
+    );
+    const converter = await createReportCurrencyConverter({
+      targetCurrency: user.mainCurrency,
+      sourceCurrencies: collectSourceCurrencies([
+        selectedTransactions,
+        currentMonthTransactions,
+        previousMonthTransactions,
+      ]),
+    });
+
+    const expenseTransactions = selectedTransactions.filter(
+      (transaction) => transaction.type === "EXPENSE"
+    );
+    const expenseAmounts = await convertAmounts(expenseTransactions, converter);
+    const trendsByGroup = {
+      day: buildGroupedTrend(expenseTransactions, expenseAmounts, "day"),
+      week: buildGroupedTrend(expenseTransactions, expenseAmounts, "week"),
+      month: buildGroupedTrend(expenseTransactions, expenseAmounts, "month"),
+    };
+
+    const [expenseCategories, incomeCategories, monthlyTotals, previousTotals, topExpenseCategories, topIncomeCategories] =
+      await Promise.all([
+        buildCategoryBreakdownFromTransactions({
+          transactions: expenseTransactions,
+          type: "EXPENSE",
+          converter,
+        }),
+        buildCategoryBreakdownFromTransactions({
+          transactions: selectedTransactions.filter((transaction) => transaction.type === "INCOME"),
+          type: "INCOME",
+          converter,
+        }),
+        buildMonthlyTotals({
+          transactions: currentMonthTransactions.map((transaction) => ({
+            date: transaction.date,
+            amount: transaction.amount,
+            currency: transaction.currency,
+            exchangeRate: transaction.exchangeRate,
+            type: transaction.type as "INCOME" | "EXPENSE",
+          })),
+          converter,
+        }),
+        buildMonthlyTotals({
+          transactions: previousMonthTransactions.map((transaction) => ({
+            date: transaction.date,
+            amount: transaction.amount,
+            currency: transaction.currency,
+            exchangeRate: transaction.exchangeRate,
+            type: transaction.type as "INCOME" | "EXPENSE",
+          })),
+          converter,
+        }),
+        buildCategoryBreakdownFromTransactions({
+          transactions: currentMonthTransactions.filter((transaction) => transaction.type === "EXPENSE"),
+          type: "EXPENSE",
+          converter,
+        }),
+        buildCategoryBreakdownFromTransactions({
+          transactions: currentMonthTransactions.filter((transaction) => transaction.type === "INCOME"),
+          type: "INCOME",
+          converter,
+        }),
+      ]);
+
+    return {
+      success: true,
+      data: {
+        trendsByGroup,
+        expenseCategories,
+        incomeCategories,
+        monthlySummary: {
+          year,
+          month,
+          totalIncome: monthlyTotals.totalIncome,
+          totalExpense: monthlyTotals.totalExpense,
+          netFlow: monthlyTotals.totalIncome - monthlyTotals.totalExpense,
+          transactionCount: currentMonthTransactions.length,
+          topExpenseCategories: topExpenseCategories.slice(0, 5),
+          topIncomeCategories: topIncomeCategories.slice(0, 5),
+          previousMonthComparison:
+            previousMonthTransactions.length > 0
+              ? {
+                  incomeChange: monthlyTotals.totalIncome - previousTotals.totalIncome,
+                  expenseChange: monthlyTotals.totalExpense - previousTotals.totalExpense,
+                  netChange:
+                    monthlyTotals.totalIncome -
+                    monthlyTotals.totalExpense -
+                    (previousTotals.totalIncome - previousTotals.totalExpense),
+                }
+              : null,
+        },
+      },
+    };
+  } catch (error) {
+    console.error("Get reports overview error:", error);
+    return { success: false, error: "Failed to fetch reports" };
+  }
+}
+
+function buildGroupedTrend(
+  transactions: Array<{ date: Date }>,
+  normalizedAmounts: number[],
+  groupBy: "day" | "week" | "month"
+): SpendingTrendPoint[] {
+  const groupedData = new Map<string, { amount: number; date: Date }>();
+
+  transactions.forEach((transaction, index) => {
+    const key = formatDateByGroup(transaction.date, groupBy);
+    const existing = groupedData.get(key);
+    const normalizedAmount = normalizedAmounts[index] ?? 0;
+    if (existing) {
+      existing.amount += normalizedAmount;
+      return;
+    }
+    groupedData.set(key, { amount: normalizedAmount, date: transaction.date });
+  });
+
+  return Array.from(groupedData.entries())
+    .map(([date, data]) => ({
+      date,
+      amount: data.amount,
+      label: getLabelForGroup(data.date, groupBy),
+    }))
+    .sort((left, right) => left.date.localeCompare(right.date));
+}

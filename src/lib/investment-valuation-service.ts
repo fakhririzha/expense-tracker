@@ -1,3 +1,6 @@
+import { unstable_cache } from "next/cache";
+import { cache } from "react";
+
 import { Prisma, UnitType } from "@/generated/prisma/client/client";
 import prisma from "@/lib/db";
 import {
@@ -96,6 +99,38 @@ type LiveQuoteDetails = {
 };
 
 const PEGADAIAN_GOLD_SYMBOL = "GC=F";
+const PORTFOLIO_VALUATION_CACHE_SECONDS = 5 * 60;
+
+const valuationInFlight = new Map<string, Promise<PortfolioValuation>>();
+
+export function portfolioValuationTag(userId: string): string {
+  return `portfolio-valuation:${userId}`;
+}
+
+function reviveDate(value: Date | string): Date {
+  return value instanceof Date ? value : new Date(value);
+}
+
+function revivePortfolioValuation(valuation: PortfolioValuation): PortfolioValuation {
+  return {
+    ...valuation,
+    assets: valuation.assets.map((asset) => ({
+      ...asset,
+      createdAt: reviveDate(asset.createdAt),
+      updatedAt: reviveDate(asset.updatedAt),
+      pegadaianGoldPrice: asset.pegadaianGoldPrice
+        ? {
+            ...asset.pegadaianGoldPrice,
+            effectiveDate: reviveDate(asset.pegadaianGoldPrice.effectiveDate),
+            sourceUpdatedAt: asset.pegadaianGoldPrice.sourceUpdatedAt
+              ? reviveDate(asset.pegadaianGoldPrice.sourceUpdatedAt)
+              : null,
+            fetchedAt: reviveDate(asset.pegadaianGoldPrice.fetchedAt),
+          }
+        : asset.pegadaianGoldPrice,
+    })),
+  };
+}
 
 function getCurrencyPairKey(fromCurrency: string, toCurrency: string): string {
   return `${fromCurrency}:${toCurrency}`;
@@ -267,7 +302,7 @@ export async function getAssetPriceInCurrency(
   };
 }
 
-export async function getCurrentPortfolioValuation(
+async function loadCurrentPortfolioValuation(
   userId: string,
   displayCurrency: string
 ): Promise<PortfolioValuation> {
@@ -466,3 +501,39 @@ export async function getCurrentPortfolioValuation(
 
   return { assets: valuedAssets, summary, displayCurrency };
 }
+
+function readCachedPortfolioValuation(
+  userId: string,
+  displayCurrency: string
+): Promise<PortfolioValuation> {
+  return unstable_cache(
+    () => loadCurrentPortfolioValuation(userId, displayCurrency),
+    ["portfolio-valuation", userId, displayCurrency],
+    {
+      revalidate: PORTFOLIO_VALUATION_CACHE_SECONDS,
+      tags: [portfolioValuationTag(userId)],
+    }
+  )();
+}
+
+async function getCurrentPortfolioValuationShared(
+  userId: string,
+  displayCurrency: string
+): Promise<PortfolioValuation> {
+  const key = `${userId}:${displayCurrency}`;
+  const pending = valuationInFlight.get(key);
+  if (pending) {
+    return pending;
+  }
+
+  const request = readCachedPortfolioValuation(userId, displayCurrency)
+    .then(revivePortfolioValuation)
+    .finally(() => {
+      valuationInFlight.delete(key);
+    });
+  valuationInFlight.set(key, request);
+  return request;
+}
+
+// One valuation per user and currency for a few minutes, including parallel callers.
+export const getCurrentPortfolioValuation = cache(getCurrentPortfolioValuationShared);

@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select";
 import { Loader2, Target } from "lucide-react";
 import { useMemo, useState } from "react";
-import { useGoalsSummary, useGoalsStats } from "@/hooks/useGoalQueries";
+import { useGoalsSummary } from "@/hooks/useGoalQueries";
 
 type SortOption = "progress" | "targetDate" | "amount" | "name";
 type FilterOption = "all" | "inProgress" | "completed";
@@ -29,16 +29,20 @@ export default function GoalsPage() {
   const [sortBy, setSortBy] = useState<SortOption>("progress");
   const [filterBy, setFilterBy] = useState<FilterOption>("all");
 
-  const { data: goals = [], isLoading } = useGoalsSummary();
-  const {
-    data: stats = {
-      totalSaved: 0,
-      totalTarget: 0,
-      inProgressCount: 0,
-      completedCount: 0,
-      totalGoals: 0,
-    },
-  } = useGoalsStats();
+  const { data: goals, isLoading } = useGoalsSummary();
+  const goalList = useMemo(
+    () => (goals ?? []) as GoalWithProgress[],
+    [goals]
+  );
+  const stats = useMemo(() => {
+    return {
+      totalSaved: goalList.reduce((sum, goal) => sum + goal.currentAmount, 0),
+      totalTarget: goalList.reduce((sum, goal) => sum + goal.targetAmount, 0),
+      inProgressCount: goalList.filter((goal) => !goal.isCompleted).length,
+      completedCount: goalList.filter((goal) => goal.isCompleted).length,
+      totalGoals: goalList.length,
+    };
+  }, [goalList]);
 
   const handleEdit = (goal: GoalWithProgress) => {
     setEditingGoal(goal);
@@ -46,7 +50,7 @@ export default function GoalsPage() {
   };
 
   const sortedGoals = useMemo(() => {
-    const filtered = (goals as GoalWithProgress[]).filter((goal) => {
+    const filtered = goalList.filter((goal) => {
       switch (filterBy) {
         case "inProgress":
           return !goal.isCompleted;
@@ -74,7 +78,7 @@ export default function GoalsPage() {
           return 0;
       }
     });
-  }, [goals, filterBy, sortBy]);
+  }, [goalList, filterBy, sortBy]);
 
   if (isLoading) {
     return (
@@ -137,7 +141,7 @@ export default function GoalsPage() {
         </Select>
       </div>
 
-      {(goals as GoalWithProgress[]).length === 0 ? (
+      {goalList.length === 0 ? (
         <ContextualEmptyState
           title="Set your first savings target"
           description="Set a savings target and track your progress over time."

@@ -9,6 +9,7 @@ import {
     getInvestmentAccounts,
 } from "@/lib/investment-validation";
 import {
+    assetPriceCacheTag,
     getAssetPrice,
     searchSymbols,
 } from "@/lib/finance-service";
@@ -22,9 +23,10 @@ import { isPreciousMetal } from "@/lib/unit-conversion";
 import {
     getAssetPriceInCurrency,
     getCurrentPortfolioValuation,
+    portfolioValuationTag,
 } from "@/lib/investment-valuation-service";
 import { Prisma, UnitType } from "@/generated/prisma/client/client";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { z } from "zod";
 import { encryptUserField, decryptUserField } from "@/lib/user-encryption";
 import { rethrowEncryptionConfigurationError } from "@/lib/encryption";
@@ -255,6 +257,7 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
         return { asset: updated, balanceBefore, balanceAfter };
       });
 
+      updateTag(portfolioValuationTag(session.user.id));
       revalidatePath("/dashboard");
       revalidatePath("/dashboard/investments");
       revalidatePath("/dashboard/accounts");
@@ -346,6 +349,7 @@ export async function createInvestmentAsset(data: InvestmentAssetInput) {
       return { asset: newAsset, balanceBefore, balanceAfter };
     });
 
+    updateTag(portfolioValuationTag(session.user.id));
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/investments");
     revalidatePath("/dashboard/accounts");
@@ -575,6 +579,7 @@ export async function recordTrade(data: TradeInput) {
       };
     });
 
+    updateTag(portfolioValuationTag(session.user.id));
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/investments");
     revalidatePath("/dashboard/accounts");
@@ -781,8 +786,8 @@ export async function refreshPortfolioPrices() {
       return { success: false, error: "Unauthorized" };
     }
 
-    // Revalidate portfolio data by triggering path revalidation
-    // This will cause fresh data to be fetched on next load
+    updateTag(portfolioValuationTag(session.user.id));
+    updateTag(assetPriceCacheTag);
     revalidatePath("/dashboard/investments", "page");
     revalidatePath("/dashboard", "page");
     

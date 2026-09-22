@@ -206,10 +206,16 @@ function NavItems({
   );
 }
 
-function SidebarGoalSnapshot({ tourId }: { tourId: string }) {
-  const { data, isLoading } = useSidebarMetrics();
+function SidebarGoalSnapshot({
+  tourId,
+  pauseMetrics = false,
+}: {
+  tourId: string;
+  pauseMetrics?: boolean;
+}) {
+  const { data, isLoading } = useSidebarMetrics({ enabled: !pauseMetrics });
 
-  if (isLoading) {
+  if (pauseMetrics || isLoading || !data) {
     return (
       <div
         data-tour-id={tourId}
@@ -340,7 +346,7 @@ function SidebarGoalSnapshot({ tourId }: { tourId: string }) {
   );
 }
 
-export function Sidebar() {
+export function Sidebar({ pauseMetrics = false }: { pauseMetrics?: boolean }) {
   const pathname = usePathname();
 
   return (
@@ -364,13 +370,16 @@ export function Sidebar() {
       </nav>
 
       <div className="p-4 border-t-4 border-black">
-        <SidebarGoalSnapshot tourId={ONBOARDING_TOUR_TARGETS.desktopGoalSnapshot} />
+        <SidebarGoalSnapshot
+          tourId={ONBOARDING_TOUR_TARGETS.desktopGoalSnapshot}
+          pauseMetrics={pauseMetrics}
+        />
       </div>
     </aside>
   );
 }
 
-export function MobileSidebar() {
+export function MobileSidebar({ pauseMetrics = false }: { pauseMetrics?: boolean }) {
   const pathname = usePathname();
 
   return (
@@ -415,7 +424,10 @@ export function MobileSidebar() {
         </nav>
 
         <div className="border-t-4 border-black p-4">
-          <SidebarGoalSnapshot tourId={ONBOARDING_TOUR_TARGETS.mobileGoalSnapshot} />
+          <SidebarGoalSnapshot
+            tourId={ONBOARDING_TOUR_TARGETS.mobileGoalSnapshot}
+            pauseMetrics={pauseMetrics}
+          />
         </div>
       </SheetContent>
     </Sheet>

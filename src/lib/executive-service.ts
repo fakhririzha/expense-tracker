@@ -1,13 +1,15 @@
 import "server-only";
 
+import { cache } from "react";
+
 import {
   AccountType,
   Prisma,
-  TransactionType,
 } from "@/generated/prisma/client/client";
 import prisma from "@/lib/db";
 import { getExchangeRate } from "@/lib/finance-service";
 import { getCurrentPortfolioValuation } from "@/lib/investment-valuation-service";
+import { averageMonthlyNormalizedAmount } from "@/lib/transaction-aggregates";
 import { calculateRetirementProjection } from "@/lib/retirement-projection";
 import {
   type ExecutiveMetrics,
@@ -25,13 +27,6 @@ const executivePersonalAssetSelect = {
   currentValue: true,
   currency: true,
 } satisfies Prisma.PersonalAssetSelect;
-
-const executiveTransactionSelect = {
-  type: true,
-  amount: true,
-  exchangeRate: true,
-  date: true,
-} satisfies Prisma.TransactionSelect;
 
 type ExecutiveAccountRow = Prisma.FinancialAccountGetPayload<{
   select: typeof executiveAccountSelect;
@@ -90,7 +85,7 @@ function normalizeToCurrency(
   return amount * (conversionRates.get(currency) ?? 1);
 }
 
-export async function getExecutiveMetricsForUser(userId: string): Promise<{
+async function loadExecutiveMetricsForUser(userId: string): Promise<{
   success: boolean;
   error?: string;
   data?: ExecutiveMetrics;
@@ -118,7 +113,7 @@ export async function getExecutiveMetricsForUser(userId: string): Promise<{
     const sixMonthsAgo = new Date();
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
-    const [accounts, personalAssets, transactions] = await Promise.all([
+    const [accounts, personalAssets, monthlyAverages] = await Promise.all([
       prisma.financialAccount.findMany({
         where: { userId, isActive: true },
         select: executiveAccountSelect,
@@ -127,12 +122,9 @@ export async function getExecutiveMetricsForUser(userId: string): Promise<{
         where: { userId, disposedAt: null },
         select: executivePersonalAssetSelect,
       }),
-      prisma.transaction.findMany({
-        where: {
-          userId,
-          date: { gte: sixMonthsAgo },
-        },
-        select: executiveTransactionSelect,
+      averageMonthlyNormalizedAmount({
+        userId,
+        from: sixMonthsAgo,
       }),
     ]);
 
@@ -216,29 +208,8 @@ export async function getExecutiveMetricsForUser(userId: string): Promise<{
       );
     }
 
-    // Calculate monthly averages from transactions
-    let totalExpenses = 0;
-    let totalIncome = 0;
-    const expenseMonths = new Set<string>();
-    const incomeMonths = new Set<string>();
-
-    for (const tx of transactions) {
-      const normalizedAmount = tx.amount * tx.exchangeRate;
-      const monthKey = `${tx.date.getFullYear()}-${tx.date.getMonth()}`;
-
-      if (tx.type === TransactionType.EXPENSE) {
-        totalExpenses += normalizedAmount;
-        expenseMonths.add(monthKey);
-      } else if (tx.type === TransactionType.INCOME) {
-        totalIncome += normalizedAmount;
-        incomeMonths.add(monthKey);
-      }
-    }
-
-    const avgMonthlyExpenses =
-      expenseMonths.size > 0 ? totalExpenses / expenseMonths.size : 0;
-    const avgMonthlyIncome =
-      incomeMonths.size > 0 ? totalIncome / incomeMonths.size : 0;
+    const avgMonthlyExpenses = monthlyAverages.expense;
+    const avgMonthlyIncome = monthlyAverages.income;
 
     // Calculate key metrics
     const totalAssets = portfolioSummary
@@ -359,3 +330,5 @@ function calculateHealthTier(
   // Default to F if none match
   return "F";
 }
+
+export const getExecutiveMetricsForUser = cache(loadExecutiveMetricsForUser);

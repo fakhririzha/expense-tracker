@@ -1,5 +1,11 @@
 # FinHealth Changelog
 
+## v5.9.8
+
+- Dashboard financial position appears while the monthly money plan and release notes finish loading.
+- Portfolio prices are reused for a few minutes, so the home page, sidebar, insights, and investments do not each request a fresh market quote.
+- Spending totals, insights, forecasts, calendars, reports, accounts, budgets, goals, subscriptions, and liabilities load less repeated data.
+
 ## v5.9.7
 
 - Restored instant back-and-forth paging in Transactions while keeping initial history loading fast.

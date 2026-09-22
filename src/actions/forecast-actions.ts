@@ -441,7 +441,9 @@ export async function getCashFlowForecast(
             },
           })
         : Promise.resolve([]),
-      prisma.transaction.findMany({
+      args.variableSpendingMode === "none"
+        ? Promise.resolve([])
+        : prisma.transaction.findMany({
         where: {
           userId: session.user.id,
           date: {
@@ -505,6 +507,41 @@ export async function getCashFlowForecast(
         : Promise.resolve([]),
     ]);
 
+    const accountNames = new Map(
+      decryptedAccounts.map((account) => [account.id, account.name])
+    );
+    const referencedAccounts = [
+      ...futureTransactions.flatMap((transaction) => [
+        transaction.account,
+        transaction.toAccount,
+      ]),
+      ...historyTransactions.flatMap((transaction) => [
+        transaction.account,
+        transaction.toAccount,
+      ]),
+      ...subscriptions.map((subscription) => subscription.account),
+    ].filter((account): account is NonNullable<typeof account> => account !== null);
+    const missingAccountNames = new Map<string, string | null>();
+    for (const account of referencedAccounts) {
+      if (!accountNames.has(account.id)) {
+        missingAccountNames.set(account.id, account.nameEncrypted);
+      }
+    }
+    await Promise.all(
+      [...missingAccountNames].map(async ([accountId, nameEncrypted]) => {
+        accountNames.set(
+          accountId,
+          nameEncrypted
+            ? await decryptAccountName(session.user.id, nameEncrypted)
+            : "Account"
+        );
+      })
+    );
+    const namedAccount = <T extends { id: string }>(account: T) => ({
+      ...account,
+      name: accountNames.get(account.id) ?? "Account",
+    });
+
     const [
       decryptedFutureTransactions,
       decryptedRecurringRules,
@@ -512,25 +549,11 @@ export async function getCashFlowForecast(
       decryptedHistoryTransactions,
     ] =
       await Promise.all([
-        Promise.all(
-          futureTransactions.map(async (transaction) => ({
+        Promise.resolve(
+          futureTransactions.map((transaction) => ({
             ...transaction,
-            account: {
-              ...transaction.account,
-              name: await decryptAccountName(
-                session.user.id,
-                transaction.account.nameEncrypted
-              ),
-            },
-            toAccount: transaction.toAccount
-              ? {
-                  ...transaction.toAccount,
-                  name: await decryptAccountName(
-                    session.user.id,
-                    transaction.toAccount.nameEncrypted
-                  ),
-                }
-              : null,
+            account: namedAccount(transaction.account),
+            toAccount: transaction.toAccount ? namedAccount(transaction.toAccount) : null,
           }))
         ),
         Promise.all(
@@ -553,36 +576,14 @@ export async function getCashFlowForecast(
               subscription.nameEncrypted,
               subscription.name
             ),
-            account: subscription.account
-              ? {
-                  ...subscription.account,
-                  name: await decryptAccountName(
-                    session.user.id,
-                    subscription.account.nameEncrypted
-                  ),
-                }
-              : null,
+            account: subscription.account ? namedAccount(subscription.account) : null,
           }))
         ),
-        Promise.all(
-          historyTransactions.map(async (transaction) => ({
+        Promise.resolve(
+          historyTransactions.map((transaction) => ({
             ...transaction,
-            account: {
-              ...transaction.account,
-              name: await decryptAccountName(
-                session.user.id,
-                transaction.account.nameEncrypted
-              ),
-            },
-            toAccount: transaction.toAccount
-              ? {
-                  ...transaction.toAccount,
-                  name: await decryptAccountName(
-                    session.user.id,
-                    transaction.toAccount.nameEncrypted
-                  ),
-                }
-              : null,
+            account: namedAccount(transaction.account),
+            toAccount: transaction.toAccount ? namedAccount(transaction.toAccount) : null,
           }))
         ),
       ]);
@@ -661,23 +662,29 @@ export async function getCashFlowForecast(
     const historicalForecastCandidates: { amountInMainCurrency: number; date: Date }[] = [];
     let historicalOutflowBasis = 0;
 
-    for (const transaction of decryptedHistoryTransactions) {
-      const event = await buildTransactionEvent(
-        transaction as unknown as TransactionForecastSource,
-        trackedAccountIds,
-        async (amount, _currency, options) => ({
-          amountInTargetCurrency:
-            options?.storedRate && options.storedRate > 0
-              ? roundMoney(amount * options.storedRate)
-              : roundMoney(amount * transaction.exchangeRate),
-          conversionRate:
-            options?.storedRate && options.storedRate > 0
-              ? options.storedRate
-              : transaction.exchangeRate,
-          conversionSource: "stored_transaction_rate",
-        })
-      );
+    const historicalEvents = await Promise.all(
+      decryptedHistoryTransactions.map(async (transaction) => {
+        const event = await buildTransactionEvent(
+          transaction as unknown as TransactionForecastSource,
+          trackedAccountIds,
+          async (amount, _currency, options) => ({
+            amountInTargetCurrency:
+              options?.storedRate && options.storedRate > 0
+                ? roundMoney(amount * options.storedRate)
+                : roundMoney(amount * transaction.exchangeRate),
+            conversionRate:
+              options?.storedRate && options.storedRate > 0
+                ? options.storedRate
+                : transaction.exchangeRate,
+            conversionSource: "stored_transaction_rate",
+          })
+        );
 
+        return { transaction, event };
+      })
+    );
+
+    for (const { transaction, event } of historicalEvents) {
       if (!event || event.excludedFromProjection || event.amountInMainCurrency === null) {
         continue;
       }
@@ -721,31 +728,51 @@ export async function getCashFlowForecast(
       const plannedExpenseByCategoryId = new Map<string, number>();
       let uncategorizedPlannedExpense = 0;
 
-      for (const budget of decryptedBudgets) {
-        const range = getBudgetPeriodRange(budget.period, startDate);
-        const categoryIds = budget.categories.map((entry) => entry.categoryId);
-        const spent = budget.scope === "CATEGORIES"
-          ? flattenTransactionAllocationRows(
-              await prisma.transaction.findMany({
-                where: {
-                  userId: session.user.id,
-                  date: {
-                    gte: range.start,
-                    lt: startDate,
-                  },
-                  type: TransactionType.EXPENSE,
+      const budgetWindowStart = decryptedBudgets.reduce<Date | null>((earliest, budget) => {
+        const rangeStart = getBudgetPeriodRange(budget.period, startDate).start;
+        if (!earliest || rangeStart < earliest) {
+          return rangeStart;
+        }
+        return earliest;
+      }, null);
+      const budgetSpending = budgetWindowStart
+        ? await prisma.transaction.findMany({
+            where: {
+              userId: session.user.id,
+              date: {
+                gte: budgetWindowStart,
+                lt: startDate,
+              },
+              type: {
+                in: [TransactionType.EXPENSE, TransactionType.LIABILITY_PAYMENT],
+              },
+            },
+            select: {
+              id: true,
+              amount: true,
+              currency: true,
+              exchangeRate: true,
+              type: true,
+              date: true,
+              categoryId: true,
+              accountId: true,
+              toAccountId: true,
+              description: true,
+              category: {
+                select: {
+                  id: true,
+                  name: true,
+                  icon: true,
+                  color: true,
                 },
+              },
+              splits: {
                 select: {
                   id: true,
                   amount: true,
-                  currency: true,
-                  exchangeRate: true,
-                  type: true,
-                  date: true,
-                  categoryId: true,
-                  accountId: true,
-                  toAccountId: true,
                   description: true,
+                  sortOrder: true,
+                  categoryId: true,
                   category: {
                     select: {
                       id: true,
@@ -754,25 +781,21 @@ export async function getCashFlowForecast(
                       color: true,
                     },
                   },
-                  splits: {
-                    select: {
-                      id: true,
-                      amount: true,
-                      description: true,
-                      sortOrder: true,
-                      categoryId: true,
-                      category: {
-                        select: {
-                          id: true,
-                          name: true,
-                          icon: true,
-                          color: true,
-                        },
-                      },
-                    },
-                  },
                 },
-              })
+              },
+            },
+          })
+        : [];
+
+      for (const budget of decryptedBudgets) {
+        const range = getBudgetPeriodRange(budget.period, startDate);
+        const categoryIds = budget.categories.map((entry) => entry.categoryId);
+        const rowsInRange = budgetSpending.filter(
+          (transaction) => transaction.date >= range.start
+        );
+        const spent = budget.scope === "CATEGORIES"
+          ? flattenTransactionAllocationRows(
+              rowsInRange.filter((transaction) => transaction.type === TransactionType.EXPENSE)
             )
               .filter(
                 (transaction) =>
@@ -780,25 +803,7 @@ export async function getCashFlowForecast(
                   categoryIds.includes(transaction.categoryId)
               )
               .reduce((sum, transaction) => sum + transaction.normalizedAmount, 0)
-          : (
-              await prisma.transaction.findMany({
-                where: {
-                  userId: session.user.id,
-                  date: {
-                    gte: range.start,
-                    lt: startDate,
-                  },
-                  type: {
-                    in: [TransactionType.EXPENSE, TransactionType.LIABILITY_PAYMENT],
-                  },
-                },
-                select: {
-                  amount: true,
-                  exchangeRate: true,
-                  currency: true,
-                },
-              })
-            ).reduce((sum, transaction) => {
+          : rowsInRange.reduce((sum, transaction) => {
               const normalized =
                 transaction.currency === user.mainCurrency
                   ? transaction.amount

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getAccounts,
+  getAccountsPageData,
   getAccountsSummary,
   createAccount,
   updateAccount,
@@ -29,6 +30,17 @@ export function useAccounts(type?: string) {
       const result = await getAccounts(
         type as AccountTypeValue | undefined
       );
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+  });
+}
+
+export function useAccountsPageData() {
+  return useQuery({
+    queryKey: [...accountKeys.all, "page"] as const,
+    queryFn: async () => {
+      const result = await getAccountsPageData();
       if (!result.success) throw new Error(result.error);
       return result.data;
     },

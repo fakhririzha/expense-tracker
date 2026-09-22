@@ -5,6 +5,7 @@ import {
   createSubscription,
   deleteSubscription,
   getSubscriptionById,
+  getSubscriptionPageData,
   getSubscriptions,
   getSubscriptionSummary,
   linkSubscriptionToRecurringRule,
@@ -25,6 +26,7 @@ export const subscriptionKeys = {
     [...subscriptionKeys.lists(), filters] as const,
   detail: (id: string) => [...subscriptionKeys.all, "detail", id] as const,
   summary: () => [...subscriptionKeys.all, "summary"] as const,
+  page: () => [...subscriptionKeys.all, "page"] as const,
 };
 
 interface SubscriptionQueryOptions {
@@ -63,6 +65,20 @@ export function useSubscription(id?: string) {
       return result.data!;
     },
     enabled: !!id,
+  });
+}
+
+export function useSubscriptionPageData(options: SubscriptionQueryOptions = {}) {
+  return useQuery({
+    queryKey: subscriptionKeys.page(),
+    queryFn: async () => {
+      const result = await getSubscriptionPageData();
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
+    enabled: options.enabled ?? true,
   });
 }
 

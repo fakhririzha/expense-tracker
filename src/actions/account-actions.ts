@@ -455,15 +455,18 @@ export async function getAccountsSummary() {
       currency: string;
     }
 
+    const rates = await loadDisplayCurrencyRates(
+      [
+        ...accounts.map((account) => account.currency),
+        ...personalAssets.map((asset) => asset.currency),
+      ],
+      user.mainCurrency
+    );
     const initialSummary: AccountSummary = { totalAssets: 0, totalLiabilities: 0, byType: {} };
     
     const summary = initialSummary;
     for (const account of accounts as AccountItem[]) {
-      const rate =
-        account.currency === user.mainCurrency
-          ? 1
-          : (await getExchangeRate(account.currency, user.mainCurrency)) ?? 1;
-      const balance = account.balance * rate;
+      const balance = account.balance * rateForCurrency(rates, account.currency, user.mainCurrency);
 
       if (isAssetAccountType(account.type)) {
         summary.totalAssets += balance;
@@ -476,11 +479,8 @@ export async function getAccountsSummary() {
 
     let totalPersonalAssets = 0;
     for (const asset of personalAssets) {
-      const rate =
-        asset.currency === user.mainCurrency
-          ? 1
-          : (await getExchangeRate(asset.currency, user.mainCurrency)) ?? 1;
-      totalPersonalAssets += asset.currentValue * rate;
+      totalPersonalAssets +=
+        asset.currentValue * rateForCurrency(rates, asset.currency, user.mainCurrency);
     }
     summary.totalAssets += totalPersonalAssets;
     summary.byType.PERSONAL_ASSET = totalPersonalAssets;
@@ -522,5 +522,153 @@ export async function getAccountsSummary() {
   } catch (error) {
     console.error("Get accounts summary error:", error);
     return { success: false, error: "Failed to fetch summary" };
+  }
+}
+
+async function loadDisplayCurrencyRates(
+  currencies: string[],
+  mainCurrency: string
+): Promise<Map<string, number>> {
+  const distinct = [...new Set(currencies.filter((currency) => currency !== mainCurrency))];
+  const entries = await Promise.all(
+    distinct.map(async (currency) => {
+      const rate = await getExchangeRate(currency, mainCurrency);
+      return [currency, rate ?? 1] as const;
+    })
+  );
+  return new Map(entries);
+}
+
+function rateForCurrency(
+  rates: Map<string, number>,
+  currency: string,
+  mainCurrency: string
+): number {
+  return currency === mainCurrency ? 1 : rates.get(currency) ?? 1;
+}
+
+export async function getAccountsPageData() {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return { success: false as const, error: "Unauthorized" };
+    }
+
+    const [user, accountsResult, personalAssets] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { mainCurrency: true },
+      }),
+      getAccountsForUser(session.user.id),
+      prisma.personalAsset.findMany({
+        where: { userId: session.user.id, disposedAt: null },
+        select: { currentValue: true, currency: true },
+      }),
+    ]);
+
+    if (!user) {
+      return { success: false as const, error: "User not found" };
+    }
+    if (!accountsResult.success) {
+      return { success: false as const, error: accountsResult.error };
+    }
+
+    const activeAccounts = accountsResult.data.filter((account) => account.isActive);
+    const rates = await loadDisplayCurrencyRates(
+      [
+        ...activeAccounts.map((account) => account.currency),
+        ...personalAssets.map((asset) => asset.currency),
+      ],
+      user.mainCurrency
+    );
+    const summary = {
+      totalAssets: 0,
+      totalLiabilities: 0,
+      byType: {} as Record<string, number>,
+    };
+
+    for (const account of activeAccounts) {
+      const balance =
+        account.balance * rateForCurrency(rates, account.currency, user.mainCurrency);
+      if (isAssetAccountType(account.type)) {
+        summary.totalAssets += balance;
+      } else if (isLiabilityAccountType(account.type)) {
+        summary.totalLiabilities += Math.abs(balance);
+      }
+      summary.byType[account.type] = (summary.byType[account.type] || 0) + balance;
+    }
+
+    let totalPersonalAssets = 0;
+    for (const asset of personalAssets) {
+      totalPersonalAssets +=
+        asset.currentValue * rateForCurrency(rates, asset.currency, user.mainCurrency);
+    }
+    summary.totalAssets += totalPersonalAssets;
+    summary.byType.PERSONAL_ASSET = totalPersonalAssets;
+
+    let totalInvestments: number | null = null;
+    let valuationError: string | null = null;
+    try {
+      const portfolio = await getCurrentPortfolioValuation(
+        session.user.id,
+        user.mainCurrency
+      );
+      totalInvestments = portfolio.summary.totalValue;
+      summary.totalAssets += totalInvestments;
+      summary.byType.INVESTMENT_HOLDINGS = totalInvestments;
+    } catch (error) {
+      console.error("Get accounts portfolio valuation error:", error);
+      valuationError =
+        error instanceof Error
+          ? error.message
+          : "Current investment valuation is unavailable";
+    }
+
+    const totalAssets = totalInvestments === null ? null : summary.totalAssets;
+
+    return {
+      success: true as const,
+      data: {
+        accounts: accountsResult.data,
+        summary: {
+          ...summary,
+          totalAssets,
+          netWorth: totalAssets === null ? null : totalAssets - summary.totalLiabilities,
+          totalInvestments,
+          totalPersonalAssets,
+          valuationError,
+          displayCurrency: user.mainCurrency,
+        },
+      },
+    };
+  } catch (error) {
+    console.error("Get accounts page data error:", error);
+    return { success: false as const, error: "Failed to fetch accounts" };
+  }
+}
+
+export async function getLiabilityAccounts() {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return { success: false as const, error: "Unauthorized", data: [] };
+    }
+
+    const accounts = await prisma.financialAccount.findMany({
+      where: {
+        userId: session.user.id,
+        isActive: true,
+        type: { in: ["LOAN", "CREDIT_CARD"] },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return {
+      success: true as const,
+      data: await decryptAccountRecords(session.user.id, accounts),
+    };
+  } catch (error) {
+    console.error("Get liability accounts error:", error);
+    return { success: false as const, error: "Failed to fetch liabilities", data: [] };
   }
 }

@@ -19,6 +19,7 @@ import type {
   BudgetScopeValue,
 } from "@/lib/budget-utils";
 import prisma from "@/lib/db";
+import { sumNormalizedAmount } from "@/lib/transaction-aggregates";
 import { flattenTransactionAllocationRows } from "@/lib/transaction-allocation-service";
 import {
   BudgetPeriod,
@@ -68,6 +69,7 @@ export interface BudgetsSummaryData {
   budgets: BudgetWithProgress[];
   overallMonthlySpendingLimit: number | null;
   currency: string;
+  comparison: BudgetVsActualItem[];
 }
 
 interface BudgetAccountSummary {
@@ -399,22 +401,12 @@ export async function getBudgetSpendingSummary(startDate: Date, endDate: Date) {
       return { success: false, error: "Unauthorized" };
     }
 
-    const transactions = await prisma.transaction.findMany({
-      where: {
-        userId: session.user.id,
-        type: { in: BUDGET_SPENDING_TYPES },
-        date: { gte: startDate, lte: endDate },
-      },
-      select: {
-        amount: true,
-        exchangeRate: true,
-      },
+    const totalSpent = await sumNormalizedAmount({
+      userId: session.user.id,
+      types: ["EXPENSE", "LIABILITY_PAYMENT"],
+      from: startDate,
+      to: endDate,
     });
-
-    const totalSpent = transactions.reduce(
-      (sum, transaction) => sum + getNormalizedAmount(transaction),
-      0
-    );
 
     return { success: true, data: { totalSpent } };
   } catch (error) {
@@ -738,6 +730,7 @@ export async function getBudgetsSummary(): Promise<{
           budgets: [],
           overallMonthlySpendingLimit: user.monthlyBudget,
           currency: user.mainCurrency,
+          comparison: [],
         },
       };
     }
@@ -746,14 +739,16 @@ export async function getBudgetsSummary(): Promise<{
       budgetRecords.map((budget) => mapBudgetRecord(session.user.id, budget))
     );
     const now = new Date();
+    const monthStart = startOfMonth(now);
+    const monthEnd = endOfMonth(now);
     const dateRanges = budgets.map((budget) =>
       getBudgetDateRange(budget.period, now)
     );
     const minDate = new Date(
-      Math.min(...dateRanges.map((range) => range.start.getTime()))
+      Math.min(monthStart.getTime(), ...dateRanges.map((range) => range.start.getTime()))
     );
     const maxDate = new Date(
-      Math.max(...dateRanges.map((range) => range.end.getTime()))
+      Math.max(monthEnd.getTime(), ...dateRanges.map((range) => range.end.getTime()))
     );
 
     const parentTransactions = await prisma.transaction.findMany({
@@ -783,12 +778,84 @@ export async function getBudgetsSummary(): Promise<{
       return buildBudgetProgressRecord(budget, spent, now);
     });
 
+    const expensesByCategory = new Map<
+      string,
+      { category: BudgetCategorySummary; amount: number }
+    >();
+    for (const allocation of allocationRows) {
+      if (allocation.date < monthStart || allocation.date > monthEnd) {
+        continue;
+      }
+
+      const categoryId = allocation.categoryId || "uncategorized";
+      const existing = expensesByCategory.get(categoryId);
+      if (existing) {
+        existing.amount += allocation.normalizedAmount;
+      } else {
+        expensesByCategory.set(categoryId, {
+          category: toBudgetCategorySummary(allocation.category),
+          amount: allocation.normalizedAmount,
+        });
+      }
+    }
+
+    const coveredCategoryIds = new Set<string>();
+    const comparison: BudgetVsActualItem[] = budgets.map((budget) => {
+      const { start, end } = getBudgetDateRange(budget.period, now);
+
+      if (budget.scope === BudgetScope.CATEGORIES) {
+        budget.categoryIds.forEach((categoryId) => coveredCategoryIds.add(categoryId));
+      }
+
+      const actual =
+        budget.scope === BudgetScope.CATEGORIES
+          ? getBudgetAllocationSpend(
+              new Set(budget.categoryIds),
+              allocationRows,
+              start,
+              end
+            )
+          : getBudgetGlobalSpend(parentTransactions, start, end);
+      const variance = budget.amount - actual;
+
+      return {
+        budgetId: budget.id,
+        budgetName: budget.name,
+        scope: budget.scope,
+        categories: budget.categories,
+        budgeted: budget.amount,
+        actual,
+        variance,
+        percentageUsed: budget.amount > 0 ? (actual / budget.amount) * 100 : 0,
+        isOverBudget: actual > budget.amount,
+      };
+    });
+
+    for (const [categoryId, data] of expensesByCategory) {
+      if (categoryId !== "uncategorized" && coveredCategoryIds.has(categoryId)) {
+        continue;
+      }
+
+      comparison.push({
+        budgetId: null,
+        budgetName: null,
+        scope: BudgetScope.CATEGORIES,
+        categories: [data.category],
+        budgeted: 0,
+        actual: data.amount,
+        variance: -data.amount,
+        percentageUsed: 100,
+        isOverBudget: true,
+      });
+    }
+
     return {
       success: true,
       data: {
         budgets: budgetsWithProgress,
         overallMonthlySpendingLimit: user.monthlyBudget,
         currency: user.mainCurrency,
+        comparison,
       },
     };
   } catch (error) {

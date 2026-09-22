@@ -11,7 +11,7 @@ import { BudgetCard } from "@/components/budgets/BudgetCard";
 import { BudgetProgress } from "@/components/budgets/BudgetProgress";
 import { EditBudgetDialog } from "@/components/budgets/EditBudgetDialog";
 import { ContextualEmptyState } from "@/components/onboarding/ContextualEmptyState";
-import { useBudgetsSummary, useBudgetVsActual } from "@/hooks/useBudgetQueries";
+import { useBudgetsSummary } from "@/hooks/useBudgetQueries";
 import { formatCurrency } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -47,7 +47,7 @@ export default function BudgetsPage() {
   const [periodFilter, setPeriodFilter] = useState<string>("all");
 
   const { data: budgetSummary, isLoading } = useBudgetsSummary();
-  const { data: comparisonData = [] } = useBudgetVsActual();
+  const comparisonData = budgetSummary?.comparison ?? [];
   const budgets = budgetSummary?.budgets ?? [];
 
   const handleEdit = (budget: BudgetWithProgress) => {

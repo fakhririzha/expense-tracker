@@ -1,37 +1,26 @@
 import { getExecutiveMetrics } from "@/actions/executive-actions";
 import { getBudgetSpendingSummary } from "@/actions/budget-actions";
+import { useSidebarMetricsPeriod } from "@/components/dashboard/SidebarMetricsPeriod";
+import {
+  clampSidebarPercentage,
+  sidebarMetricsKeys,
+  type SidebarMetricsSnapshot,
+} from "@/lib/sidebar-metrics";
 import { useQuery } from "@tanstack/react-query";
 import { startOfMonth } from "date-fns";
 
-export interface SidebarMetricsSnapshot {
-  retirementTarget: number | null;
-  retirementProgress: number | null;
-  retirementLeftPercent: number | null;
-  retirementAvailable: boolean;
-  monthlyBudget: number | null;
-  currentMonthExpenses: number | null;
-  monthlyBudgetLeftPercent: number | null;
-  monthlyBudgetAvailable: boolean;
-  displayCurrency: string;
-}
+export type { SidebarMetricsSnapshot } from "@/lib/sidebar-metrics";
+export { sidebarMetricsKeys } from "@/lib/sidebar-metrics";
 
-export const sidebarMetricsKeys = {
-  all: ["sidebarMetrics"] as const,
-  currentMonth: (year: number, month: number) =>
-    [...sidebarMetricsKeys.all, "currentMonth", { year, month }] as const,
-};
-
-function clampPercentage(value: number): number {
-  return Math.min(Math.max(value, 0), 100);
-}
-
-export function useSidebarMetrics() {
+export function useSidebarMetrics(options?: { enabled?: boolean }) {
+  const period = useSidebarMetricsPeriod();
   const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
+  const year = period?.year ?? now.getFullYear();
+  const month = period?.month ?? now.getMonth();
 
   return useQuery({
     queryKey: sidebarMetricsKeys.currentMonth(year, month),
+    enabled: options?.enabled ?? true,
     queryFn: async (): Promise<SidebarMetricsSnapshot> => {
       const startDate = startOfMonth(now);
 
@@ -57,7 +46,7 @@ export function useSidebarMetrics() {
 
       const retirementLeftPercent =
         retirementProgress !== null
-          ? clampPercentage(100 - retirementProgress)
+          ? clampSidebarPercentage(100 - retirementProgress)
           : null;
 
       const monthlyBudget = metrics?.monthlyBudget ?? null;
@@ -70,7 +59,7 @@ export function useSidebarMetrics() {
 
       const monthlyBudgetLeftPercent =
         monthlyBudget && monthlyBudget > 0 && currentMonthExpenses !== null
-          ? clampPercentage(100 - (currentMonthExpenses / monthlyBudget) * 100)
+          ? clampSidebarPercentage(100 - (currentMonthExpenses / monthlyBudget) * 100)
           : null;
 
       return {

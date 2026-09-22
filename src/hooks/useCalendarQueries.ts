@@ -17,6 +17,8 @@ export const calendarKeys = {
     [...calendarKeys.all, "upcoming", { days }] as const,
   monthSummary: (year: number, month: number) =>
     [...calendarKeys.all, "monthSummary", { year, month }] as const,
+  month: (year: number, month: number) =>
+    [...calendarKeys.all, "month", { year, month }] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -49,6 +51,19 @@ export function useUpcomingBills(days: number = 7) {
       const result = await getUpcomingBills({ days });
       if (!result.success) throw new Error(result.error);
       return result.data;
+    },
+  });
+}
+
+export function useCalendarMonth(year: number, month: number) {
+  return useQuery({
+    queryKey: calendarKeys.month(year, month),
+    queryFn: async () => {
+      const result = await getCalendarEvents({ year, month });
+      if (!result.success || !result.summary) {
+        throw new Error(result.error ?? "Failed to fetch calendar");
+      }
+      return { events: result.data, summary: result.summary };
     },
   });
 }

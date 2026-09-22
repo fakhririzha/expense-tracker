@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import {
+  getReportsOverview,
   getSpendingTrends,
   getCategoryBreakdown,
   getIncomeVsExpense,
@@ -19,11 +20,34 @@ export const reportKeys = {
     [...reportKeys.all, "incomeVsExpense", { months }] as const,
   monthlySummary: (year: number, month: number) =>
     [...reportKeys.all, "monthlySummary", { year, month }] as const,
+  overview: (params: { startDate?: Date; endDate?: Date; year: number; month: number }) =>
+    [...reportKeys.all, "overview", params] as const,
 };
 
 // ---------------------------------------------------------------------------
 // Queries
 // ---------------------------------------------------------------------------
+
+export function useReportsOverview(params: {
+  startDate: Date;
+  endDate: Date;
+  year: number;
+  month: number;
+  enabled?: boolean;
+}) {
+  const { enabled = true, startDate, endDate, year, month } = params;
+  return useQuery({
+    queryKey: reportKeys.overview({ startDate, endDate, year, month }),
+    queryFn: async () => {
+      const result = await getReportsOverview({ startDate, endDate, year, month });
+      if (!result.success || !result.data) {
+        throw new Error(result.error ?? "Failed to fetch reports");
+      }
+      return result.data;
+    },
+    enabled,
+  });
+}
 
 export function useSpendingTrends(params: {
   startDate: Date;

@@ -23,7 +23,7 @@ import {
   ArrowDownCircle,
 } from "lucide-react";
 import { TransactionType } from "@/generated/prisma/client/client";
-import { useCalendarEvents, useUpcomingBills, useMonthSummary } from "@/hooks/useCalendarQueries";
+import { useCalendarMonth, useUpcomingBills } from "@/hooks/useCalendarQueries";
 import { useQueryClient } from "@tanstack/react-query";
 import { calendarKeys } from "@/hooks/useCalendarQueries";
 
@@ -40,10 +40,10 @@ export default function CalendarPage() {
   const year = currentMonth.getFullYear();
   const month = currentMonth.getMonth() + 1;
 
-  const { data: events = [], isLoading: eventsLoading } = useCalendarEvents(year, month);
-  console.log(events);
+  const { data: calendarMonth, isLoading: eventsLoading } = useCalendarMonth(year, month);
+  const events = calendarMonth?.events ?? [];
+  const summary = calendarMonth?.summary;
   const { data: upcomingBills = [], isLoading: upcomingLoading } = useUpcomingBills(7);
-  const { data: summary } = useMonthSummary(year, month);
 
   const isLoading = eventsLoading || upcomingLoading;
 

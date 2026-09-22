@@ -357,49 +357,48 @@ async function buildGoalProgress(input: {
   mainCurrency: string;
   now: Date;
 }): Promise<InsightGoalProgress[]> {
-  const results: InsightGoalProgress[] = [];
+  const results = await Promise.all(
+    input.goals.map(async (goal) => {
+      if (!goal.targetDate || goal.targetAmount <= 0) {
+        return null;
+      }
 
-  for (const goal of input.goals) {
-    if (!goal.targetDate || goal.targetAmount <= 0) {
-      continue;
-    }
+      const progress = await computeGoalProgress({
+        targetAmount: goal.targetAmount,
+        mainCurrency: input.mainCurrency,
+        accounts: goal.accounts.map((link) => ({
+          id: link.account.id,
+          balance: link.account.balance,
+          currency: link.account.currency,
+        })),
+      });
 
-    const progress = await computeGoalProgress({
-      targetAmount: goal.targetAmount,
-      mainCurrency: input.mainCurrency,
-      accounts: goal.accounts.map((link) => ({
-        id: link.account.id,
-        balance: link.account.balance,
-        currency: link.account.currency,
-      })),
-    });
+      if (progress.isCompleted) {
+        return null;
+      }
 
-    if (progress.isCompleted) {
-      continue;
-    }
+      const completionRatio = Math.min(progress.currentAmount / goal.targetAmount, 1);
+      const totalDays = Math.max(
+        1,
+        getDaysBetween(goal.createdAt, goal.targetDate)
+      );
+      const elapsedDays = Math.min(
+        totalDays,
+        getDaysBetween(goal.createdAt, input.now)
+      );
+      const expectedRatio = Math.min(elapsedDays / totalDays, 1);
 
-    const completionRatio = Math.min(progress.currentAmount / goal.targetAmount, 1);
-    const totalDays = Math.max(
-      1,
-      getDaysBetween(goal.createdAt, goal.targetDate)
-    );
-    const elapsedDays = Math.min(
-      totalDays,
-      getDaysBetween(goal.createdAt, input.now)
-    );
-    const expectedRatio = Math.min(elapsedDays / totalDays, 1);
-    const gapRatio = Math.max(0, expectedRatio - completionRatio);
+      return {
+        id: goal.id,
+        name: input.goalNames.get(goal.id) ?? "Savings goal",
+        completionRatio,
+        expectedRatio,
+        gapRatio: Math.max(0, expectedRatio - completionRatio),
+      };
+    })
+  );
 
-    results.push({
-      id: goal.id,
-      name: input.goalNames.get(goal.id) ?? "Savings goal",
-      completionRatio,
-      expectedRatio,
-      gapRatio,
-    });
-  }
-
-  return results;
+  return results.filter((goal): goal is InsightGoalProgress => goal !== null);
 }
 
 function buildNetWorthMovement(
@@ -512,9 +511,11 @@ export async function getFinancialInsights(
       goals,
       recurringRules,
       subscriptions,
-      transactions,
+      expenseTransactions,
+      otherTransactions,
       netWorthSnapshots,
       portfolioResult,
+      activeDebtPlan,
     ] = await Promise.all([
       prisma.financialAccount.findMany({
         where: { userId: session.user.id, isActive: true },
@@ -619,6 +620,7 @@ export async function getFinancialInsights(
       prisma.transaction.findMany({
         where: {
           userId: session.user.id,
+          type: "EXPENSE",
           date: {
             gte: queryFloor,
             lte: now,
@@ -652,15 +654,32 @@ export async function getFinancialInsights(
                 select: {
                   id: true,
                   name: true,
-                  icon: true,
-                  color: true,
                 },
               },
             },
           },
         },
-        orderBy: {
-          date: "asc",
+      }),
+      prisma.transaction.findMany({
+        where: {
+          userId: session.user.id,
+          type: { not: "EXPENSE" },
+          date: {
+            gte: queryFloor,
+            lte: now,
+          },
+        },
+        select: {
+          id: true,
+          amount: true,
+          currency: true,
+          exchangeRate: true,
+          type: true,
+          paymentStatus: true,
+          date: true,
+          categoryId: true,
+          accountId: true,
+          toAccountId: true,
         },
       }),
       prisma.netWorthSnapshot.findMany({
@@ -677,7 +696,34 @@ export async function getFinancialInsights(
         session.user.id,
         user.mainCurrency
       ).catch(() => null),
+      prisma.debtPlan.findFirst({
+        where: { userId: session.user.id, isActive: true },
+        include: {
+          items: {
+            include: {
+              account: {
+                select: {
+                  id: true,
+                  nameEncrypted: true,
+                  currency: true,
+                  balance: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: { updatedAt: "desc" },
+      }),
     ]);
+
+    const transactions = [
+      ...expenseTransactions,
+      ...otherTransactions.map((transaction) => ({
+        ...transaction,
+        category: null,
+        splits: [],
+      })),
+    ];
 
     const decryptedBudgets = await decryptBudgetRecords(session.user.id, budgets);
     const mainCurrency = user.mainCurrency;
@@ -946,24 +992,6 @@ export async function getFinancialInsights(
     }
 
     let debtPayoffPlan: InsightDebtPayoffPlan | null = null;
-    const activeDebtPlan = await prisma.debtPlan.findFirst({
-      where: { userId: session.user.id, isActive: true },
-      include: {
-        items: {
-          include: {
-            account: {
-              select: {
-                id: true,
-                nameEncrypted: true,
-                currency: true,
-                balance: true,
-              },
-            },
-          },
-        },
-      },
-      orderBy: { updatedAt: "desc" },
-    });
 
     if (activeDebtPlan && activeDebtPlan.items.length > 0) {
       const debts = await Promise.all(

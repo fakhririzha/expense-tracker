@@ -20,12 +20,10 @@ import {
   useNetWorthTrend,
 } from "@/hooks/useNetWorthSnapshotQueries";
 import {
-  useCategoryBreakdown,
   useIncomeVsExpense,
-  useReportMonthlySummary,
-  useSpendingTrends,
+  useReportsOverview,
 } from "@/hooks/useReportQueries";
-import { useSubscriptions, useSubscriptionSummary } from "@/hooks/useSubscriptionQueries";
+import { useSubscriptionPageData } from "@/hooks/useSubscriptionQueries";
 import { formatCurrency } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SubscriptionSummaryCards } from "@/components/subscriptions/SubscriptionSummaryCards";
@@ -112,26 +110,17 @@ export default function ReportsPage() {
 
   // Keep report queries scoped to the active surface. This page hosts several
   // expensive aggregations, so hidden tabs should not fetch until selected.
-  const { data: spendingTrends = [], isLoading: trendsLoading } = useSpendingTrends({
+  const needsRangeReport = hasDateRange && (isOverviewTab || isSpendingTab || isCategoriesTab);
+  const { data: reportsOverview, isLoading: reportsLoading } = useReportsOverview({
     startDate,
     endDate,
-    groupBy,
-    enabled: hasDateRange && (isOverviewTab || isSpendingTab),
+    year: currentYear,
+    month: currentMonth,
+    enabled: needsRangeReport,
   });
-
-  const { data: expenseCategories = [], isLoading: expCatLoading } = useCategoryBreakdown({
-    startDate,
-    endDate,
-    type: "EXPENSE",
-    enabled: hasDateRange && (isOverviewTab || isCategoriesTab),
-  });
-
-  const { data: incomeCategories = [] } = useCategoryBreakdown({
-    startDate,
-    endDate,
-    type: "INCOME",
-    enabled: hasDateRange && (isOverviewTab || isCategoriesTab),
-  });
+  const spendingTrends = reportsOverview?.trendsByGroup[groupBy] ?? [];
+  const expenseCategories = reportsOverview?.expenseCategories ?? [];
+  const incomeCategories = reportsOverview?.incomeCategories ?? [];
 
   const { data: incomeVsExpense = [], isLoading: incomeVsExpenseLoading } = useIncomeVsExpense(
     Math.min(monthsDiff, 12),
@@ -148,26 +137,19 @@ export default function ReportsPage() {
     isNetWorthTab
   );
 
-  const { data: monthlySummary } = useReportMonthlySummary(
-    currentYear,
-    currentMonth,
-    hasDateRange && isOverviewTab
-  );
+  const monthlySummary = isOverviewTab ? reportsOverview?.monthlySummary : undefined;
   const {
-    data: subscriptionSummary,
-    isLoading: subscriptionSummaryLoading,
-  } = useSubscriptionSummary({ enabled: isSubscriptionsTab });
-  const {
-    data: activeSubscriptions = [],
-    isLoading: activeSubscriptionsLoading,
-  } = useSubscriptions(
-    { status: "ACTIVE" },
-    { enabled: isSubscriptionsTab }
+    data: subscriptionPage,
+    isLoading: subscriptionsLoading,
+  } = useSubscriptionPageData({ enabled: isSubscriptionsTab });
+  const subscriptionSummary = subscriptionPage?.summary;
+  const activeSubscriptions = (subscriptionPage?.subscriptions ?? []).filter(
+    (subscription) => subscription.effectiveStatus === "ACTIVE"
   );
 
-  const isLoading = trendsLoading || expCatLoading;
+  const isLoading = reportsLoading;
   const isNetWorthLoading = netWorthSummaryLoading || netWorthHistoryLoading;
-  const isSubscriptionsLoading = subscriptionSummaryLoading || activeSubscriptionsLoading;
+  const isSubscriptionsLoading = subscriptionsLoading;
 
   // Calculate overview stats
   const totalExpenses = expenseCategories.reduce((sum, c) => sum + c.amount, 0);

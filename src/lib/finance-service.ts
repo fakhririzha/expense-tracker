@@ -54,77 +54,204 @@ export class YahooFinanceError extends Error {
   }
 }
 
-// Cache asset prices for 5 minutes
-export const getAssetPrice = unstable_cache(
-  async (symbol: string): Promise<QuoteResult | null> => {
-    try {
-      const quote = await yahooFinance.quote(symbol);
-      
-      if (!quote) {
-        return null;
-      }
+const QUOTE_CACHE_SECONDS = 5 * 60;
+const QUOTE_TIMEOUT_MS = 8_000;
+const ASSET_PRICE_CACHE_TAG = "asset-price";
 
-      return {
-        symbol: quote.symbol,
-        shortName: quote.shortName,
-        longName: quote.longName,
-        regularMarketPrice: quote.regularMarketPrice ?? 0,
-        regularMarketChange: quote.regularMarketChange ?? 0,
-        regularMarketChangePercent: quote.regularMarketChangePercent ?? 0,
-        regularMarketPreviousClose: quote.regularMarketPreviousClose ?? 0,
-        regularMarketOpen: quote.regularMarketOpen,
-        regularMarketDayHigh: quote.regularMarketDayHigh,
-        regularMarketDayLow: quote.regularMarketDayLow,
-        regularMarketVolume: quote.regularMarketVolume,
-        currency: quote.currency,
-        marketCap: quote.marketCap,
-        fiftyTwoWeekHigh: quote.fiftyTwoWeekHigh,
-        fiftyTwoWeekLow: quote.fiftyTwoWeekLow,
-      };
-    } catch (error) {
-      console.error(`Error fetching price for ${symbol}:`, error);
-      // Return error info instead of null for better UX
-      return {
-        symbol,
-        regularMarketPrice: 0,
-        regularMarketChange: 0,
-        regularMarketChangePercent: 0,
-        regularMarketPreviousClose: 0,
-        error: error instanceof Error ? error.message : "Failed to fetch price",
-      };
-    }
+type YahooQuoteFields = {
+  symbol?: string;
+  shortName?: string;
+  longName?: string;
+  regularMarketPrice?: number | null;
+  regularMarketChange?: number | null;
+  regularMarketChangePercent?: number | null;
+  regularMarketPreviousClose?: number | null;
+  regularMarketOpen?: number | null;
+  regularMarketDayHigh?: number | null;
+  regularMarketDayLow?: number | null;
+  regularMarketVolume?: number | null;
+  currency?: string;
+  marketCap?: number | null;
+  fiftyTwoWeekHigh?: number | null;
+  fiftyTwoWeekLow?: number | null;
+};
+
+const quoteInFlight = new Map<string, Promise<QuoteResult | null>>();
+const quoteBatchInFlight = new Map<string, Promise<Record<string, QuoteResult>>>();
+
+function quoteCacheKey(symbol: string): string {
+  return symbol.trim().toUpperCase();
+}
+
+function mapYahooQuote(symbol: string, quote: YahooQuoteFields): QuoteResult {
+  return {
+    symbol: quote.symbol || symbol,
+    shortName: quote.shortName,
+    longName: quote.longName,
+    regularMarketPrice: quote.regularMarketPrice ?? 0,
+    regularMarketChange: quote.regularMarketChange ?? 0,
+    regularMarketChangePercent: quote.regularMarketChangePercent ?? 0,
+    regularMarketPreviousClose: quote.regularMarketPreviousClose ?? 0,
+    regularMarketOpen: quote.regularMarketOpen ?? undefined,
+    regularMarketDayHigh: quote.regularMarketDayHigh ?? undefined,
+    regularMarketDayLow: quote.regularMarketDayLow ?? undefined,
+    regularMarketVolume: quote.regularMarketVolume ?? undefined,
+    currency: quote.currency,
+    marketCap: quote.marketCap ?? undefined,
+    fiftyTwoWeekHigh: quote.fiftyTwoWeekHigh ?? undefined,
+    fiftyTwoWeekLow: quote.fiftyTwoWeekLow ?? undefined,
+  };
+}
+
+function assertUsableQuote(symbol: string, quote: YahooQuoteFields | null | undefined): QuoteResult {
+  const mapped = quote ? mapYahooQuote(symbol, quote) : null;
+  if (
+    !mapped ||
+    !Number.isFinite(mapped.regularMarketPrice) ||
+    mapped.regularMarketPrice <= 0
+  ) {
+    throw new Error(`Yahoo Finance returned no usable price for ${symbol}`);
+  }
+
+  return mapped;
+}
+
+function failedQuote(symbol: string, error: unknown): QuoteResult {
+  return {
+    symbol,
+    regularMarketPrice: 0,
+    regularMarketChange: 0,
+    regularMarketChangePercent: 0,
+    regularMarketPreviousClose: 0,
+    error: error instanceof Error ? error.message : "Failed to fetch price",
+  };
+}
+
+// Throws on failure so unstable_cache does not store an unusable price.
+const getAssetPriceCached = unstable_cache(
+  async (symbol: string): Promise<QuoteResult> => {
+    const quote = await yahooFinance.quote(symbol, undefined, {
+      fetchOptions: { signal: AbortSignal.timeout(QUOTE_TIMEOUT_MS) },
+    });
+    return assertUsableQuote(symbol, quote as YahooQuoteFields);
   },
   ["asset-price"],
-  { revalidate: 300 } // 5 minutes
+  { revalidate: QUOTE_CACHE_SECONDS, tags: [ASSET_PRICE_CACHE_TAG] }
 );
 
-// Get multiple asset prices at once
+/**
+ * Read one cached quote. Failed lookups are not cached.
+ */
+export async function getAssetPrice(symbol: string): Promise<QuoteResult | null> {
+  const cacheKey = quoteCacheKey(symbol);
+  const pending = quoteInFlight.get(cacheKey);
+  if (pending) {
+    return pending;
+  }
+
+  const request = getAssetPriceCached(cacheKey)
+    .catch((error: unknown) => {
+      console.error(`Error fetching price for ${symbol}:`, error);
+      return failedQuote(symbol, error);
+    })
+    .finally(() => {
+      quoteInFlight.delete(cacheKey);
+    });
+  quoteInFlight.set(cacheKey, request);
+  return request;
+}
+
+function distinctSymbols(symbols: string[]): string[] {
+  const seen = new Set<string>();
+  const distinct: string[] = [];
+
+  for (const symbol of symbols) {
+    const cacheKey = quoteCacheKey(symbol);
+    if (!cacheKey || seen.has(cacheKey)) {
+      continue;
+    }
+    seen.add(cacheKey);
+    distinct.push(symbol.trim());
+  }
+
+  return distinct;
+}
+
+async function fetchYahooQuoteBatch(symbols: string[]): Promise<Record<string, QuoteResult>> {
+  const quotes = await yahooFinance.quote(
+    symbols,
+    { return: "object" },
+    { fetchOptions: { signal: AbortSignal.timeout(QUOTE_TIMEOUT_MS) } }
+  );
+  const record: Record<string, QuoteResult> = {};
+
+  for (const symbol of symbols) {
+    const cacheKey = quoteCacheKey(symbol);
+    const quote = quotes[symbol] ?? quotes[cacheKey] ?? quotes[symbol.toUpperCase()];
+    record[cacheKey] = assertUsableQuote(symbol, quote as YahooQuoteFields);
+  }
+
+  return record;
+}
+
+function getCachedQuoteBatch(symbols: string[]): Promise<Record<string, QuoteResult>> {
+  const ordered = [...symbols].sort((left, right) =>
+    quoteCacheKey(left).localeCompare(quoteCacheKey(right))
+  );
+  const batchKey = ordered.map((symbol) => quoteCacheKey(symbol)).join(",");
+  const pending = quoteBatchInFlight.get(batchKey);
+  if (pending) {
+    return pending;
+  }
+
+  const request = unstable_cache(
+    () => fetchYahooQuoteBatch(ordered),
+    ["asset-price-batch", batchKey],
+    { revalidate: QUOTE_CACHE_SECONDS, tags: [ASSET_PRICE_CACHE_TAG] }
+  )().finally(() => {
+    quoteBatchInFlight.delete(batchKey);
+  });
+  quoteBatchInFlight.set(batchKey, request);
+  return request;
+}
+
+// One quote request for the distinct symbols. Cached batches do not sleep.
 export async function getMultipleAssetPrices(
   symbols: string[]
 ): Promise<Map<string, QuoteResult>> {
   const results = new Map<string, QuoteResult>();
-  
-  // Fetch in parallel with rate limiting
-  const batchSize = 5;
-  for (let i = 0; i < symbols.length; i += batchSize) {
-    const batch = symbols.slice(i, i + batchSize);
-    const promises = batch.map((symbol) => getAssetPrice(symbol));
-    const batchResults = await Promise.all(promises);
-    
-    batchResults.forEach((result, index) => {
-      if (result) {
-        results.set(batch[index], result);
+  const distinct = distinctSymbols(symbols);
+  if (distinct.length === 0) {
+    return results;
+  }
+
+  let fetched: Record<string, QuoteResult> | null = null;
+  try {
+    fetched = await getCachedQuoteBatch(distinct);
+  } catch (error) {
+    console.error("Error fetching quote batch:", error);
+    const individual = await Promise.all(
+      distinct.map(async (symbol) => [quoteCacheKey(symbol), await getAssetPrice(symbol)] as const)
+    );
+    fetched = {};
+    for (const [cacheKey, quote] of individual) {
+      if (quote) {
+        fetched[cacheKey] = quote;
       }
-    });
-    
-    // Small delay between batches to avoid rate limiting
-    if (i + batchSize < symbols.length) {
-      await new Promise((resolve) => setTimeout(resolve, 100));
     }
   }
-  
+
+  for (const symbol of symbols) {
+    const quote = fetched[quoteCacheKey(symbol)];
+    if (quote) {
+      results.set(symbol, quote);
+    }
+  }
+
   return results;
 }
+
+export const assetPriceCacheTag = ASSET_PRICE_CACHE_TAG;
 
 // Get historical data for charting
 export const getHistoricalData = unstable_cache(

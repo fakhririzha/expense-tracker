@@ -2,6 +2,7 @@
 
 import { isWithinInterval } from "date-fns";
 import { revalidatePath } from "next/cache";
+import { cache } from "react";
 import { z } from "zod";
 
 import { auth } from "@/auth";
@@ -585,7 +586,7 @@ async function syncRecurringRuleWithSubscription(
   });
 }
 
-export async function getSubscriptions(filters?: {
+async function loadSubscriptions(filters?: {
   status?: SubscriptionStatusFilter;
 }) {
   try {
@@ -647,6 +648,14 @@ export async function getSubscriptions(filters?: {
     console.error("Get subscriptions error:", error);
     return { success: false, error: "Failed to fetch subscriptions", data: [] as SubscriptionListItem[] };
   }
+}
+
+const loadSubscriptionsCached = cache(loadSubscriptions);
+
+export async function getSubscriptions(filters?: {
+  status?: SubscriptionStatusFilter;
+}) {
+  return loadSubscriptionsCached(filters);
 }
 
 export async function getSubscriptionById(id: string) {
@@ -805,6 +814,36 @@ export async function getSubscriptionSummary(): Promise<{
   } catch (error) {
     console.error("Get subscription summary error:", error);
     return { success: false, error: "Failed to fetch subscription summary" };
+  }
+}
+
+export async function getSubscriptionPageData() {
+  try {
+    const [subscriptionsResult, summaryResult] = await Promise.all([
+      getSubscriptions(),
+      getSubscriptionSummary(),
+    ]);
+
+    if (!subscriptionsResult.success) {
+      return { success: false as const, error: subscriptionsResult.error };
+    }
+    if (!summaryResult.success || !summaryResult.data) {
+      return {
+        success: false as const,
+        error: summaryResult.error || "Failed to fetch subscription summary",
+      };
+    }
+
+    return {
+      success: true as const,
+      data: {
+        subscriptions: subscriptionsResult.data,
+        summary: summaryResult.data,
+      },
+    };
+  } catch (error) {
+    console.error("Get subscription page data error:", error);
+    return { success: false as const, error: "Failed to fetch subscriptions" };
   }
 }
 
