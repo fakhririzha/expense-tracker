@@ -4,6 +4,7 @@ import { GoalWithProgress } from "@/actions/goal-actions";
 import { AddGoalDialog } from "@/components/goals/AddGoalDialog";
 import { EditGoalDialog } from "@/components/goals/EditGoalDialog";
 import { GoalCard } from "@/components/goals/GoalCard";
+import { GoalsPageSkeleton } from "@/components/goals/GoalsPageSkeleton";
 import { GoalSummary } from "@/components/goals/GoalSummary";
 import { ContextualEmptyState } from "@/components/onboarding/ContextualEmptyState";
 import {
@@ -13,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Target } from "lucide-react";
+import { Target } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useGoalsSummary } from "@/hooks/useGoalQueries";
 
@@ -80,13 +81,7 @@ export default function GoalsPage() {
     });
   }, [goalList, filterBy, sortBy]);
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-100">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
+  if (isLoading) return <GoalsPageSkeleton />;
 
   return (
     <div className="space-y-6">

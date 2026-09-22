@@ -1,5 +1,12 @@
 # FinHealth Changelog
 
+## v5.9.9
+
+- Made transaction category selection faster with searchable category menus, including split expenses.
+- Added clearer pointer and press feedback to FinHealth buttons.
+- Replaced generic dashboard loading indicators with layouts that mirror the pages they are loading.
+- Prevented the sidebar goal snapshot from flashing a hydration recovery error while its prefetched metrics become interactive.
+
 ## v5.9.8
 
 - Dashboard financial position appears while the monthly money plan and release notes finish loading.

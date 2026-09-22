@@ -11,6 +11,7 @@ import { useCategories } from "@/hooks/useCategoryQueries";
 import { ContextualEmptyState } from "@/components/onboarding/ContextualEmptyState";
 import { AddTransactionDialog } from "@/components/transactions/AddTransactionDialog";
 import { EditTransactionDialog } from "@/components/transactions/EditTransactionDialog";
+import { TransactionsPageSkeleton } from "@/components/transactions/TransactionsPageSkeleton";
 import {
   FilterOptions,
   TransactionFilters,
@@ -227,6 +228,10 @@ export function TransactionsPageClient() {
     ? pageSize
     : transactionPage?.pageSize ?? pageSize;
 
+  if (isLoading && !transactionPage) {
+    return <TransactionsPageSkeleton />;
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between max-md:flex-col max-md:gap-y-4">
@@ -247,11 +252,7 @@ export function TransactionsPageClient() {
         </div>
       </div>
 
-      {isLoading && !transactionPage ? (
-        <div className="flex h-64 items-center justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary"></div>
-        </div>
-      ) : hasNoTransactions ? (
+      {hasNoTransactions ? (
         <ContextualEmptyState
           title="Add your first transaction"
           description="Add your first income or expense to activate reports and insights."

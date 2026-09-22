@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/button";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { MoneyInput } from "@/components/ui/money-input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { TransactionCategoryCombobox } from "@/components/transactions/TransactionCategoryCombobox";
 import { formatCurrency } from "@/lib/utils";
 
 interface CategoryOption {
@@ -131,24 +131,16 @@ export function TransactionSplitEditor<T extends FieldValues>({
                   render={({ field: splitField }) => (
                     <FormItem>
                       <FormLabel>Category</FormLabel>
-                      <Select
-                        onValueChange={splitField.onChange}
-                        value={(splitField.value as string | undefined) ?? ""}
-                        disabled={disabled}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select category" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {categories.map((category) => (
-                            <SelectItem key={category.id} value={category.id}>
-                              {category.icon} {category.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <FormControl>
+                        <TransactionCategoryCombobox
+                          disabled={disabled}
+                          emptyMessage="No categories found."
+                          onChange={splitField.onChange}
+                          options={categories}
+                          placeholder="Select category"
+                          value={(splitField.value as string | undefined) ?? ""}
+                        />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
