@@ -16,18 +16,12 @@ import {
   type TransactionListQueryParams,
 } from "@/types/transaction-list";
 import { accountKeys } from "./useAccountQueries";
+import { transactionKeys } from "./query-keys";
 
 // ---------------------------------------------------------------------------
 // Query Key Factory
 // ---------------------------------------------------------------------------
-export const transactionKeys = {
-  all: ["transactions"] as const,
-  lists: () => [...transactionKeys.all, "list"] as const,
-  list: (filters: Record<string, unknown>) =>
-    [...transactionKeys.lists(), filters] as const,
-  summary: (startDate?: Date, endDate?: Date) =>
-    [...transactionKeys.all, "summary", { startDate, endDate }] as const,
-};
+export { transactionKeys } from "./query-keys";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -40,7 +34,7 @@ export type TransactionFilters = TransactionListQueryParams;
 
 export function useTransactions(filters: TransactionFilters = {}) {
   return useQuery({
-    queryKey: transactionKeys.list(filters as Record<string, unknown>),
+    queryKey: transactionKeys.list(filters),
     queryFn: async (): Promise<PaginatedTransactionsData> => {
       const result = await getTransactions(filters as Parameters<typeof getTransactions>[0]);
       if (!result.success) throw new Error(result.error);

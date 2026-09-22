@@ -11,16 +11,12 @@ import { forecastKeys } from "@/hooks/useCashFlowForecast";
 import { upcomingBankPressureKeys } from "@/hooks/useUpcomingBankPressure";
 import { type AccountTypeValue } from "@/lib/account-types";
 import { type AccountMutationConfirmation } from "@/lib/account-mutation-totp";
+import { accountKeys } from "./query-keys";
 
 // ---------------------------------------------------------------------------
 // Query Key Factory
 // ---------------------------------------------------------------------------
-export const accountKeys = {
-  all: ["accounts"] as const,
-  lists: () => [...accountKeys.all, "list"] as const,
-  list: (type?: string) => [...accountKeys.lists(), { type }] as const,
-  summary: () => [...accountKeys.all, "summary"] as const,
-};
+export { accountKeys } from "./query-keys";
 
 // ---------------------------------------------------------------------------
 // Queries
