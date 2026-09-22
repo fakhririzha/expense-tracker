@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { CreditCard, Landmark } from "lucide-react";
 
-import { getAccountsSummary } from "@/actions/account-actions";
+import { getLiabilityAccounts } from "@/actions/account-actions";
 import { DebtPayoffPlannerSection } from "@/components/liability/DebtPayoffPlannerSection";
 import { LiabilityPaymentDialog } from "@/components/liability/LiabilityPaymentDialog";
 import { LiabilityPaymentHistory } from "@/components/liability/LiabilityPaymentHistory";
@@ -21,13 +21,8 @@ export const metadata: Metadata = {
  * @returns The JSX for the Liabilities page containing summary cards (total debt, loan accounts, credit cards), a payment history section, and either an active liabilities list with per-account balances or a prompt to add liability accounts.
  */
 export default async function LiabilitiesPage() {
-  const summaryResult = await getAccountsSummary();
-  const summary = summaryResult.success ? summaryResult.data : null;
-
-  // Filter liability accounts
-  const liabilityAccounts = summary?.accounts?.filter(
-    (acc: { type: string }) => acc.type === "LOAN" || acc.type === "CREDIT_CARD"
-  ) || [];
+  const liabilityResult = await getLiabilityAccounts();
+  const liabilityAccounts = liabilityResult.success ? liabilityResult.data : [];
 
   const hasLiabilities = liabilityAccounts.length > 0;
   const totalDebt = liabilityAccounts.reduce(

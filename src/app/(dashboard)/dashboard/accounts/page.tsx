@@ -25,7 +25,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ACCOUNT_TYPE_LABELS, isDepositoAccountType } from "@/lib/account-types";
-import { useAccounts, useAccountsSummary } from "@/hooks/useAccountQueries";
+import { useAccountsPageData } from "@/hooks/useAccountQueries";
 import { formatCurrency } from "@/lib/utils";
 import { Pencil, Trash2, Wallet } from "lucide-react";
 import {
@@ -324,9 +324,12 @@ export default function AccountsPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState<{ id: string; name: string } | null>(null);
 
-  const { data: accounts = [], isLoading } = useAccounts();
-  const { data: summary } = useAccountsSummary();
-  const accountList = accounts as Account[];
+  const { data: accountsPage, isLoading } = useAccountsPageData();
+  const summary = accountsPage?.summary;
+  const accountList = useMemo(
+    () => (accountsPage?.accounts ?? []) as Account[],
+    [accountsPage?.accounts]
+  );
 
   const activeAccounts = useMemo(
     () => accountList.filter((account) => account.isActive),

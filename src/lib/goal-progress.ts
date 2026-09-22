@@ -49,24 +49,23 @@ export async function computeGoalProgress(input: {
   mainCurrency: string;
   accounts: GoalAccountBalanceInput[];
 }): Promise<GoalProgressResult> {
-  const contributions: GoalAccountContribution[] = [];
+  const contributions: GoalAccountContribution[] = await Promise.all(
+    input.accounts.map(async (account) => {
+      const { converted, rate } = await convertBalanceToMainCurrency(
+        account.balance,
+        account.currency,
+        input.mainCurrency
+      );
 
-  for (const account of input.accounts) {
-    const { converted, rate } = await convertBalanceToMainCurrency(
-      account.balance,
-      account.currency,
-      input.mainCurrency
-    );
-    const balanceInMain = Math.max(0, converted);
-
-    contributions.push({
-      id: account.id,
-      balance: account.balance,
-      currency: account.currency,
-      balanceInMain,
-      exchangeRate: rate,
-    });
-  }
+      return {
+        id: account.id,
+        balance: account.balance,
+        currency: account.currency,
+        balanceInMain: Math.max(0, converted),
+        exchangeRate: rate,
+      };
+    })
+  );
 
   const currentAmount = contributions.reduce(
     (sum, account) => sum + account.balanceInMain,

@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { decryptRequiredCompanion } from "@/lib/encrypted-companion-crypto";
 import prisma from "@/lib/db";
 import { decryptAccountName } from "@/lib/account-crypto";
+import { sumNormalizedAmountByType } from "@/lib/transaction-aggregates";
 import {
   startOfMonth,
   endOfMonth,
@@ -85,7 +86,12 @@ export async function getCalendarEvents(params: {
   month: number; // 1-12
   accountId?: string;
   type?: TransactionType;
-}): Promise<{ success: boolean; data: CalendarEvent[]; error?: string }> {
+}): Promise<{
+  success: boolean;
+  data: CalendarEvent[];
+  summary?: MonthSummary;
+  error?: string;
+}> {
   try {
     const session = await auth();
     if (!session?.user?.id) {
@@ -100,8 +106,8 @@ export async function getCalendarEvents(params: {
 
     const events: CalendarEvent[] = [];
 
-    // 1. Get active recurring rules with nextDueDate in the month
-    const recurringRules = await prisma.recurringRule.findMany({
+    const [recurringRules, user] = await Promise.all([
+      prisma.recurringRule.findMany({
       where: {
         userId: session.user.id,
         isActive: true,
@@ -112,7 +118,23 @@ export async function getCalendarEvents(params: {
         ...(accountId && { accountId }),
         ...(type && { type }),
       },
-    });
+      select: {
+        id: true,
+        name: true,
+        nameEncrypted: true,
+        amount: true,
+        currency: true,
+        type: true,
+        nextDueDate: true,
+        categoryId: true,
+        accountId: true,
+      },
+    }),
+      prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { mainCurrency: true },
+      }),
+    ]);
 
     // Get unique category IDs and account IDs from recurring rules
     const categoryIds = new Set(
@@ -141,9 +163,8 @@ export async function getCalendarEvents(params: {
         ? accounts
         : new Map<string, { id: string; name: string }>();
 
-    // Add recurring rules as events
-    for (const rule of recurringRules) {
-      events.push({
+    const recurringEvents = await Promise.all(
+      recurringRules.map(async (rule) => ({
         id: `recurring-${rule.id}`,
         name: await decryptRequiredCompanion(
           session.user.id,
@@ -155,14 +176,14 @@ export async function getCalendarEvents(params: {
         currency: rule.currency,
         type: rule.type,
         date: rule.nextDueDate,
-        category: rule.categoryId ? categoryMap.get(rule.categoryId) : null,
-        account: rule.accountId ? accountMap.get(rule.accountId) : null,
-        source: "recurring",
+        category: rule.categoryId ? categoryMap.get(rule.categoryId) ?? null : null,
+        account: rule.accountId ? accountMap.get(rule.accountId) ?? null : null,
+        source: "recurring" as const,
         recurringRuleId: rule.id,
-      });
-    }
+      }))
+    );
+    events.push(...recurringEvents);
 
-    // 2. Get scheduled transactions in the month
     const transactions = await prisma.transaction.findMany({
       where: {
         userId: session.user.id,
@@ -173,7 +194,15 @@ export async function getCalendarEvents(params: {
         ...(accountId && { accountId }),
         ...(type && { type }),
       },
-      include: {
+      select: {
+        id: true,
+        description: true,
+        amount: true,
+        exchangeRate: true,
+        currency: true,
+        type: true,
+        date: true,
+        recurringRuleId: true,
         category: {
           select: {
             id: true,
@@ -191,15 +220,27 @@ export async function getCalendarEvents(params: {
       },
     });
 
-    // Add transactions as events (avoid duplicates with recurring rules)
+    const missingAccountIds = [
+      ...new Set(
+        transactions
+          .map((transaction) => transaction.account.id)
+          .filter((id) => !accountMap.has(id))
+      ),
+    ];
+    if (missingAccountIds.length > 0) {
+      const transactionAccounts = await getAccountMap(session.user.id, missingAccountIds);
+      for (const [id, account] of transactionAccounts) {
+        accountMap.set(id, account);
+      }
+    }
+
     for (const tx of transactions) {
-      // Skip if this transaction is already represented by a recurring rule
       if (tx.recurringRuleId) {
         const existingRecurring = events.find(
-          (e) =>
-            e.source === "recurring" &&
-            e.recurringRuleId === tx.recurringRuleId &&
-            isSameDay(e.date, tx.date)
+          (event) =>
+            event.source === "recurring" &&
+            event.recurringRuleId === tx.recurringRuleId &&
+            isSameDay(event.date, tx.date)
         );
         if (existingRecurring) continue;
       }
@@ -212,19 +253,35 @@ export async function getCalendarEvents(params: {
         type: tx.type,
         date: tx.date,
         category: tx.category,
-        account: {
-          ...tx.account,
-          name: await decryptAccountName(session.user.id, tx.account.nameEncrypted),
-        },
+        account: accountMap.get(tx.account.id) ?? null,
         source: "transaction",
         recurringRuleId: tx.recurringRuleId || undefined,
       });
     }
 
-    // Sort events by date
     events.sort((a, b) => a.date.getTime() - b.date.getTime());
 
-    return { success: true, data: events };
+    let totalIncome = 0;
+    let totalExpenses = 0;
+    for (const tx of transactions) {
+      const amountInMainCurrency = tx.amount * tx.exchangeRate;
+      if (tx.type === "INCOME") {
+        totalIncome += amountInMainCurrency;
+      } else if (tx.type === "EXPENSE") {
+        totalExpenses += amountInMainCurrency;
+      }
+    }
+
+    return {
+      success: true,
+      data: events,
+      summary: {
+        totalIncome,
+        totalExpenses,
+        net: totalIncome - totalExpenses,
+        currency: user?.mainCurrency || "IDR",
+      },
+    };
   } catch (error) {
     console.error("Get calendar events error:", error);
     return { success: false, data: [], error: "Failed to fetch calendar events" };
@@ -328,7 +385,14 @@ export async function getUpcomingBills(params: {
         },
         ...(accountId && { accountId }),
       },
-      include: {
+      select: {
+        id: true,
+        description: true,
+        amount: true,
+        currency: true,
+        type: true,
+        date: true,
+        recurringRuleId: true,
         category: {
           select: {
             id: true,
@@ -346,8 +410,17 @@ export async function getUpcomingBills(params: {
       },
     });
 
+    const upcomingAccountIds = [
+      ...new Set(transactions.map((transaction) => transaction.account.id)),
+    ].filter((id) => !accountMap.has(id));
+    if (upcomingAccountIds.length > 0) {
+      const transactionAccounts = await getAccountMap(session.user.id, upcomingAccountIds);
+      for (const [id, account] of transactionAccounts) {
+        accountMap.set(id, account);
+      }
+    }
+
     for (const tx of transactions) {
-      // Skip if already represented by recurring rule
       if (tx.recurringRuleId) {
         const existingRecurring = events.find(
           (e) =>
@@ -366,16 +439,12 @@ export async function getUpcomingBills(params: {
         type: tx.type,
         date: tx.date,
         category: tx.category,
-        account: {
-          ...tx.account,
-          name: await decryptAccountName(session.user.id, tx.account.nameEncrypted),
-        },
+        account: accountMap.get(tx.account.id) ?? null,
         source: "transaction",
         recurringRuleId: tx.recurringRuleId || undefined,
       });
     }
 
-    // Sort by date
     events.sort((a, b) => a.date.getTime() - b.date.getTime());
 
     return { success: true, data: events };
@@ -566,33 +635,15 @@ export async function getMonthSummary(params: {
 
     const monthStart = startOfMonth(new Date(year, month - 1));
     const monthEnd = endOfMonth(monthStart);
-
-    // Get transactions for the month
-    const transactions = await prisma.transaction.findMany({
-      where: {
-        userId: session.user.id,
-        date: {
-          gte: monthStart,
-          lte: monthEnd,
-        },
-        type: {
-          in: ["INCOME", "EXPENSE"],
-        },
-        ...(accountId && { accountId }),
-      },
+    const totals = await sumNormalizedAmountByType({
+      userId: session.user.id,
+      types: ["INCOME", "EXPENSE"],
+      from: monthStart,
+      to: monthEnd,
+      accountId,
     });
-
-    let totalIncome = 0;
-    let totalExpenses = 0;
-
-    for (const tx of transactions) {
-      const amountInMainCurrency = tx.amount * tx.exchangeRate;
-      if (tx.type === "INCOME") {
-        totalIncome += amountInMainCurrency;
-      } else if (tx.type === "EXPENSE") {
-        totalExpenses += amountInMainCurrency;
-      }
-    }
+    const totalIncome = totals.get("INCOME") ?? 0;
+    const totalExpenses = totals.get("EXPENSE") ?? 0;
 
     return {
       success: true,

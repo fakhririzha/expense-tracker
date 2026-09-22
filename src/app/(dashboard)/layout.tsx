@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import { LogOut, UserRound } from "lucide-react";
 
 import { logout } from "@/actions/auth-actions";
 import { auth } from "@/auth";
+import { SidebarMetricsBoundary } from "@/components/dashboard/SidebarMetricsBoundary";
 import { MobileSidebar, Sidebar } from "@/components/dashboard/Sidebar";
 import { GuidedDashboardTourProvider } from "@/components/onboarding/GuidedDashboardTour";
 import { OnboardingBootstrap } from "@/components/onboarding/OnboardingBootstrap";
@@ -52,6 +54,8 @@ export default async function DashboardLayout({
   });
 
   const mainCurrency = user?.mainCurrency || "IDR";
+  const metricsNow = new Date();
+  const metricsNowIso = metricsNow.toISOString();
 
   return (
     <QueryProvider>
@@ -59,8 +63,11 @@ export default async function DashboardLayout({
         <GuidedDashboardTourProvider>
           <div className="min-h-screen bg-background flex font-sans">
 
-          {/* Sidebar Component */}
-          <Sidebar />
+          <Suspense fallback={<Sidebar pauseMetrics />}>
+            <SidebarMetricsBoundary userId={session.user.id} nowIso={metricsNowIso}>
+              <Sidebar />
+            </SidebarMetricsBoundary>
+          </Suspense>
 
           <div className="flex-1 flex flex-col min-w-0">
             {/* Top Navigation */}
@@ -70,7 +77,11 @@ export default async function DashboardLayout({
             >
               <div className="flex h-16 items-center justify-between px-4 md:px-8">
 
-                <MobileSidebar />
+                <Suspense fallback={<MobileSidebar pauseMetrics />}>
+                  <SidebarMetricsBoundary userId={session.user.id} nowIso={metricsNowIso}>
+                    <MobileSidebar />
+                  </SidebarMetricsBoundary>
+                </Suspense>
 
                 {/* Flex spacer for desktop so profile is on right */}
                 <div className="hidden md:block flex-1"></div>
