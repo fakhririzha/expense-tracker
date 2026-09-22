@@ -10,12 +10,9 @@ import { budgetKeys } from "./useBudgetQueries";
 import { recurringKeys } from "./useRecurringQueries";
 import { reportKeys } from "./useReportQueries";
 import { transactionKeys } from "./useTransactionQueries";
+import { categoryKeys } from "./query-keys";
 
-export const categoryKeys = {
-  all: ["categories"] as const,
-  list: (type?: "INCOME" | "EXPENSE" | "TRANSFER") =>
-    [...categoryKeys.all, "list", { type }] as const,
-};
+export { categoryKeys } from "./query-keys";
 
 export function useCategories(type?: "INCOME" | "EXPENSE" | "TRANSFER") {
   return useQuery({

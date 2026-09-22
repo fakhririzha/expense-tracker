@@ -25,6 +25,7 @@ import {
 import prisma from "@/lib/db";
 import { getExchangeRate } from "@/lib/finance-service";
 import { getCurrentPortfolioValuation } from "@/lib/investment-valuation-service";
+import { getAccountsForUser } from "@/server/accounts/account-query-service";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -404,34 +405,12 @@ export async function deleteAccount(
 }
 
 export async function getAccounts(type?: AccountTypeValue) {
-  try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return { success: false, error: "Unauthorized", data: [] };
-    }
-
-    const where: Record<string, unknown> = {
-      userId: session.user.id,
-    };
-
-    if (type) where.type = type;
-
-    const accounts = await prisma.financialAccount.findMany({
-      where,
-      include: { bankInterestSetting: true },
-      orderBy: { createdAt: "desc" },
-    });
-
-    const decryptedAccounts = await decryptAccountRecords(
-      session.user.id,
-      accounts
-    );
-
-    return { success: true, data: decryptedAccounts };
-  } catch (error) {
-    console.error("Get accounts error:", error);
-    return { success: false, error: "Failed to fetch accounts", data: [] };
+  const session = await auth();
+  if (!session?.user?.id) {
+    return { success: false as const, error: "Unauthorized", data: [] };
   }
+
+  return getAccountsForUser(session.user.id, type);
 }
 
 export async function getAccountsSummary() {

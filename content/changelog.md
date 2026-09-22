@@ -1,5 +1,9 @@
 # FinHealth Changelog
 
+## v5.9.6
+
+- Improved Transactions loading so your account, category, and transaction data is ready sooner when you open or filter your history.
+
 ## v5.9.5
 
 - Restored transaction history and other dashboard data that could fail to load after the mobile app update.

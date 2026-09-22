@@ -2,6 +2,10 @@
 
 import { auth } from "@/auth";
 import prisma from "@/lib/db";
+import {
+  getCategoriesForUser,
+  type CategoryListItem,
+} from "@/server/categories/category-query-service";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -15,20 +19,7 @@ const categorySchema = z.object({
 
 export type CategoryInput = z.infer<typeof categorySchema>;
 
-export interface CategoryListItem {
-  id: string;
-  name: string;
-  icon: string | null;
-  color: string | null;
-  type: "INCOME" | "EXPENSE";
-  isSystem: boolean;
-  userId: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-  transactionCount: number;
-  budgetCount: number;
-  recurringRuleCount: number;
-}
+export type { CategoryListItem } from "@/server/categories/category-query-service";
 
 function normalizeOptionalText(value?: string | null) {
   if (value === undefined) return undefined;
@@ -46,70 +37,12 @@ async function assertAuthenticatedUser() {
 }
 
 export async function getCategories(type?: "INCOME" | "EXPENSE") {
-  try {
-    const authResult = await assertAuthenticatedUser();
-    if (!authResult.success) {
-      return { success: false, error: authResult.error, data: [] as CategoryListItem[] };
-    }
-
-    const [categories, recurringCounts] = await Promise.all([
-      prisma.category.findMany({
-        where: {
-          userId: authResult.userId,
-          ...(type ? { type } : {}),
-        },
-        orderBy: [
-          { type: "asc" },
-          { name: "asc" },
-        ],
-        include: {
-          _count: {
-            select: {
-              transactions: true,
-              budgetCategories: true,
-            },
-          },
-        },
-      }),
-      prisma.recurringRule.groupBy({
-        by: ["categoryId"],
-        where: {
-          userId: authResult.userId,
-          categoryId: { not: null },
-        },
-        _count: {
-          categoryId: true,
-        },
-      }),
-    ]);
-
-    const recurringCountMap = new Map<string, number>(
-      recurringCounts
-        .filter((row) => row.categoryId !== null)
-        .map((row) => [row.categoryId as string, row._count.categoryId])
-    );
-
-    return {
-      success: true,
-      data: categories.map((category) => ({
-        id: category.id,
-        name: category.name,
-        icon: category.icon,
-        color: category.color,
-        type: category.type,
-        isSystem: category.isSystem,
-        userId: category.userId,
-        createdAt: category.createdAt,
-        updatedAt: category.updatedAt,
-        transactionCount: category._count.transactions,
-        budgetCount: category._count.budgetCategories,
-        recurringRuleCount: recurringCountMap.get(category.id) ?? 0,
-      })),
-    };
-  } catch (error) {
-    console.error("Get categories error:", error);
-    return { success: false, error: "Failed to fetch categories", data: [] as CategoryListItem[] };
+  const authResult = await assertAuthenticatedUser();
+  if (!authResult.success) {
+    return { success: false as const, error: authResult.error, data: [] as CategoryListItem[] };
   }
+
+  return getCategoriesForUser(authResult.userId, type);
 }
 
 export async function createCategory(data: CategoryInput) {
