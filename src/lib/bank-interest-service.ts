@@ -7,6 +7,7 @@ import {
 } from "@/lib/bank-interest";
 import prisma from "@/lib/db";
 import { getExchangeRate } from "@/lib/finance-service";
+import { createInterestExchangeRateResolver } from "@/lib/interest-exchange-rate";
 import { encryptUserField } from "@/lib/user-encryption";
 import { revalidatePath } from "next/cache";
 
@@ -59,8 +60,14 @@ export async function processBankInterest() {
         enabled: true,
         nextPostingDate: { lte: currentBoundary },
       },
-      select: { id: true },
+      select: {
+        id: true,
+        userId: true,
+        account: { select: { id: true, currency: true, type: true, isActive: true } },
+        user: { select: { mainCurrency: true } },
+      },
     });
+    const resolveExchangeRate = createInterestExchangeRateResolver(getExchangeRate);
 
     const results = {
       processedAccounts: 0,
@@ -72,6 +79,9 @@ export async function processBankInterest() {
 
     for (const dueSetting of dueSettings) {
       try {
+        const exchangeRate = dueSetting.account.isActive && dueSetting.account.type === "BANK"
+          ? await resolveExchangeRate(dueSetting.account.currency, dueSetting.user.mainCurrency)
+          : null;
         const processed = await prisma.$transaction(
           async (tx) => {
             const setting = await tx.bankInterestSetting.findUnique({
@@ -81,6 +91,7 @@ export async function processBankInterest() {
                 account: {
                   select: {
                     id: true,
+                    userId: true,
                     type: true,
                     isActive: true,
                     currency: true,
@@ -91,8 +102,22 @@ export async function processBankInterest() {
               },
             });
 
-            if (!setting?.enabled || !setting.nextPostingDate) {
+            if (
+              !setting?.enabled ||
+              !setting.nextPostingDate ||
+              setting.nextPostingDate > currentBoundary
+            ) {
               return { posted: 0, skipped: 0 };
+            }
+
+            if (
+              setting.userId !== dueSetting.userId ||
+              setting.account.userId !== setting.userId ||
+              setting.account.id !== dueSetting.account.id ||
+              setting.account.currency !== dueSetting.account.currency ||
+              setting.user.mainCurrency !== dueSetting.user.mainCurrency
+            ) {
+              throw new Error("Interest currency or owner changed; retry on the next run.");
             }
 
             if (setting.account.type !== "BANK" || !setting.account.isActive) {
@@ -102,20 +127,15 @@ export async function processBankInterest() {
               });
               return { posted: 0, skipped: 0 };
             }
+            if (exchangeRate === null) {
+              throw new Error("Interest account became eligible; retry on the next run.");
+            }
 
             const categoryId = await getBankInterestCategory(tx, setting.userId);
             const accountName = await decryptAccountName(
               setting.userId,
               setting.account.nameEncrypted
             );
-            const exchangeRate =
-              setting.account.currency === setting.user.mainCurrency
-                ? 1
-                : (await getExchangeRate(
-                    setting.account.currency,
-                    setting.user.mainCurrency
-                  )) ?? 1;
-
             let currentBalance = setting.account.balance;
             let currentDueDate = setting.nextPostingDate;
             let posted = 0;

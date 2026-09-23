@@ -1,5 +1,10 @@
 # FinHealth Changelog
 
+## v5.9.10
+
+- Bank and deposito interest posting no longer waits for exchange-rate providers while updating balances.
+- Interest with an unavailable exchange rate stays due for retry instead of being recorded with an assumed conversion rate.
+
 ## v5.9.9
 
 - Made transaction category selection faster with searchable category menus, including split expenses.
