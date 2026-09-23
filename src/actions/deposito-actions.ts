@@ -23,6 +23,7 @@ import {
   type DepositoTermModeValue,
 } from "@/lib/deposito";
 import { getExchangeRate } from "@/lib/finance-service";
+import { createInterestExchangeRateResolver } from "@/lib/interest-exchange-rate";
 import { isDepositoAccountType, isLiquidAccountType } from "@/lib/account-types";
 import { TransactionType, Prisma } from "@/generated/prisma/client/client";
 import { encryptUserField, decryptUserField } from "@/lib/user-encryption";
@@ -970,8 +971,12 @@ export async function processDepositoInterest(cronSecret: string) {
       },
       select: {
         id: true,
+        userId: true,
+        account: { select: { id: true, currency: true, type: true, isActive: true } },
+        user: { select: { mainCurrency: true } },
       },
     });
+    const resolveExchangeRate = createInterestExchangeRateResolver(getExchangeRate);
 
     const results = {
       processedDepositos: 0,
@@ -983,6 +988,9 @@ export async function processDepositoInterest(cronSecret: string) {
 
     for (const item of dueDepositos) {
       try {
+        const exchangeRate = item.account.isActive && isDepositoAccountType(item.account.type)
+          ? await resolveExchangeRate(item.account.currency, item.user.mainCurrency)
+          : null;
         const postingCount = await prisma.$transaction(
           async (tx) => {
             const deposito = await tx.depositoAccount.findUnique({
@@ -994,6 +1002,7 @@ export async function processDepositoInterest(cronSecret: string) {
                 account: {
                   select: {
                     id: true,
+                    userId: true,
                     nameEncrypted: true,
                     currency: true,
                     balance: true,
@@ -1013,8 +1022,23 @@ export async function processDepositoInterest(cronSecret: string) {
               },
             });
 
-            if (!deposito || deposito.status !== "ACTIVE" || !deposito.nextInterestDate) {
+            if (
+              !deposito ||
+              deposito.status !== "ACTIVE" ||
+              !deposito.nextInterestDate ||
+              deposito.nextInterestDate > todayUtc
+            ) {
               return { posted: 0, matured: false };
+            }
+
+            if (
+              deposito.userId !== item.userId ||
+              deposito.account.userId !== deposito.userId ||
+              deposito.account.id !== item.account.id ||
+              deposito.account.currency !== item.account.currency ||
+              deposito.user.mainCurrency !== item.user.mainCurrency
+            ) {
+              throw new Error("Interest currency or owner changed; retry on the next run.");
             }
 
             if (!deposito.account.isActive || !isDepositoAccountType(deposito.account.type)) {
@@ -1027,6 +1051,10 @@ export async function processDepositoInterest(cronSecret: string) {
                 },
               });
               return { posted: 0, matured: false };
+            }
+
+            if (exchangeRate === null) {
+              throw new Error("Interest account became eligible; retry on the next run.");
             }
 
             const categoryId = await getDepositoInterestCategory(tx, deposito.user.id);
@@ -1059,14 +1087,6 @@ export async function processDepositoInterest(cronSecret: string) {
                   frequency: deposito.interestFrequency,
                   taxRatePercent: deposito.taxRate,
                 });
-
-              const exchangeRate =
-                deposito.account.currency === deposito.user.mainCurrency
-                  ? 1
-                  : (await getExchangeRate(
-                      deposito.account.currency,
-                      deposito.user.mainCurrency
-                    )) ?? 1;
 
               const transactionDescription = `Deposito interest for ${accountName}`;
               const encryptedDescription = await encryptUserField(
