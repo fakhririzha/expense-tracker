@@ -174,23 +174,23 @@ export async function getOnboardingState() {
 
 function isAutoComplete(
   id: OnboardingChecklistId,
-  counts: {
-    accountCount: number;
-    transactionCount: number;
-    budgetCount: number;
-    recurringCount: number;
-    subscriptionCount: number;
+  records: {
+    accountExists: boolean;
+    transactionExists: boolean;
+    budgetExists: boolean;
+    recurringExists: boolean;
+    subscriptionExists: boolean;
   }
 ) {
   switch (id) {
     case "create_first_account":
-      return counts.accountCount > 0;
+      return records.accountExists;
     case "add_first_transaction":
-      return counts.transactionCount > 0;
+      return records.transactionExists;
     case "create_first_budget":
-      return counts.budgetCount > 0;
+      return records.budgetExists;
     case "add_recurring_or_subscription":
-      return counts.recurringCount > 0 || counts.subscriptionCount > 0;
+      return records.recurringExists || records.subscriptionExists;
     default:
       return false;
   }
@@ -203,34 +203,27 @@ export async function getOnboardingProgress() {
       return { success: false, error: authResult.error };
     }
 
-    const [
-      row,
-      accountCount,
-      transactionCount,
-      budgetCount,
-      recurringCount,
-      subscriptionCount,
-    ] = await Promise.all([
+    const [row, account, transaction, budget, recurring, subscription] = await Promise.all([
       getOnboardingRow(authResult.userId),
-      prisma.financialAccount.count({ where: { userId: authResult.userId } }),
-      prisma.transaction.count({ where: { userId: authResult.userId } }),
-      prisma.budget.count({ where: { userId: authResult.userId } }),
-      prisma.recurringRule.count({ where: { userId: authResult.userId } }),
-      prisma.subscription.count({ where: { userId: authResult.userId } }),
+      prisma.financialAccount.findFirst({ where: { userId: authResult.userId }, select: { id: true } }),
+      prisma.transaction.findFirst({ where: { userId: authResult.userId }, select: { id: true } }),
+      prisma.budget.findFirst({ where: { userId: authResult.userId }, select: { id: true } }),
+      prisma.recurringRule.findFirst({ where: { userId: authResult.userId }, select: { id: true } }),
+      prisma.subscription.findFirst({ where: { userId: authResult.userId }, select: { id: true } }),
     ]);
 
     const checklistState = normalizeChecklistState(row?.checklistState ?? null);
-    const counts = {
-      accountCount,
-      transactionCount,
-      budgetCount,
-      recurringCount,
-      subscriptionCount,
+    const records = {
+      accountExists: account !== null,
+      transactionExists: transaction !== null,
+      budgetExists: budget !== null,
+      recurringExists: recurring !== null,
+      subscriptionExists: subscription !== null,
     };
     const baseItems = ONBOARDING_CHECKLIST_ITEMS.map((item) => {
       const persisted = checklistState[item.id];
       const autoCompleted =
-        item.mode === "auto" ? isAutoComplete(item.id, counts) : false;
+        item.mode === "auto" ? isAutoComplete(item.id, records) : false;
       const status: OnboardingChecklistStatus = autoCompleted || persisted.completed
         ? "complete"
         : persisted.skipped

@@ -1,5 +1,11 @@
 # FinHealth Changelog
 
+## v5.9.11
+
+- Dashboard loads fewer unused account and setup details, and reuses its monthly spending total.
+- Transactions avoid repeated loading when correcting a page beyond the end of history.
+- Transaction permissions load together while pagination totals stay live.
+
 ## v5.9.10
 
 - Bank and deposito interest posting no longer waits for exchange-rate providers while updating balances.

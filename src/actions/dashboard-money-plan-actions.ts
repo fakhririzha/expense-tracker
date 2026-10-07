@@ -7,7 +7,6 @@ import {
   startOfMonth,
 } from "date-fns";
 
-import { getBudgetSpendingSummary } from "@/actions/budget-actions";
 import { getCashFlowForecast } from "@/actions/forecast-actions";
 import { getFinancialInsights } from "@/actions/insight-actions";
 import { auth } from "@/auth";
@@ -16,6 +15,8 @@ import {
   type DashboardMoneyPlan,
 } from "@/lib/dashboard-money-plan";
 import prisma from "@/lib/db";
+import { getDashboardMonthSpending } from "@/lib/dashboard-spending";
+import { getRequestNowIso } from "@/lib/server-request-clock";
 
 export async function getDashboardMoneyPlan(): Promise<{
   success: boolean;
@@ -28,7 +29,8 @@ export async function getDashboardMoneyPlan(): Promise<{
       return { success: false, error: "Unauthorized" };
     }
 
-    const now = new Date();
+    const nowIso = getRequestNowIso();
+    const now = new Date(nowIso);
     const periodStart = startOfMonth(now);
     const periodEnd = endOfMonth(now);
     const remainingCalendarDays =
@@ -44,7 +46,10 @@ export async function getDashboardMoneyPlan(): Promise<{
             monthlyBudget: true,
           },
         }),
-        getBudgetSpendingSummary(periodStart, now),
+        getDashboardMonthSpending(session.user.id, nowIso).catch((error: unknown) => {
+          console.error("Dashboard month spending error:", error);
+          return null;
+        }),
         getCashFlowForecast({
           horizonDays: forecastHorizon,
           includeFutureTransactions: true,
@@ -67,10 +72,7 @@ export async function getDashboardMoneyPlan(): Promise<{
         periodEnd,
         currency: user.mainCurrency,
         spendingLimit: user.monthlyBudget,
-        spentToDate:
-          spendingResult.success && spendingResult.data
-            ? spendingResult.data.totalSpent
-            : null,
+        spentToDate: spendingResult,
         forecast:
           forecastResult.success && forecastResult.data
             ? forecastResult.data

@@ -23,9 +23,10 @@ export { accountKeys } from "./query-keys";
 // Queries
 // ---------------------------------------------------------------------------
 
-export function useAccounts(type?: string) {
+export function useAccounts(type?: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: accountKeys.list(type),
+    enabled: options?.enabled ?? true,
     queryFn: async () => {
       const result = await getAccounts(
         type as AccountTypeValue | undefined

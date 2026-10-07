@@ -218,7 +218,7 @@ export function EditTransactionDialog({
 }: EditTransactionDialogProps) {
   const [categories, setCategories] = useState<Category[]>([]);
 
-  const { data: accountsData = [] } = useAccounts();
+  const { data: accountsData = [] } = useAccounts(undefined, { enabled: open });
   const updateMutation = useUpdateTransaction();
 
   const accounts = useMemo(

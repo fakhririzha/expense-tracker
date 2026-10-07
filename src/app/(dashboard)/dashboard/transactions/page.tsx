@@ -2,7 +2,7 @@ import { dehydrate, HydrationBoundary, QueryClient } from "@tanstack/react-query
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
-import { transactionKeys } from "@/hooks/query-keys";
+import { seedTransactionListCache } from "@/lib/transaction-list-cache";
 import { normalizeTransactionListQueryParams } from "@/lib/transaction-list-query-params";
 import { getTransactionsForUser } from "@/server/transactions/transaction-query-service";
 
@@ -28,10 +28,7 @@ export default async function TransactionsPage({
   const queryClient = new QueryClient();
 
   if (transactionResult.success) {
-    queryClient.setQueryData(
-      transactionKeys.list(queryParams),
-      transactionResult.data
-    );
+    seedTransactionListCache(queryClient, queryParams, transactionResult.data);
   }
 
   return (
