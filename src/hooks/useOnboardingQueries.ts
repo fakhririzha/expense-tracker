@@ -42,9 +42,10 @@ export function useOnboardingState() {
   });
 }
 
-export function useOnboardingProgress() {
+export function useOnboardingProgress(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: onboardingKeys.progress(),
+    enabled: options?.enabled ?? true,
     queryFn: async () => {
       const result = await getOnboardingProgress();
       if (!result.success) {

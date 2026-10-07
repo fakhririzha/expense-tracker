@@ -17,7 +17,8 @@ import {
   getTransactionUpdateBalanceDeltas,
   type TransactionBalanceEffect,
 } from "@/server/transactions/transaction-balance-effects";
-import { getBankInterestManagedTransactionIds } from "@/server/transactions/transaction-capabilities";
+import { deriveMobileTransactionCapabilities, getBankInterestManagedTransactionIds } from "@/server/transactions/transaction-capabilities";
+import type { CapableTransactionPage } from "@/server/transactions/transaction-query-types";
 import { validateNewTransactionAccounts } from "@/server/transactions/transaction-account-policy";
 import {
   haveTransactionCoordinatesChanged,
@@ -1143,7 +1144,7 @@ export async function getTransactionsForUser(
   userId: string,
   options?: TransactionListQueryParams
 ): Promise<
-  | { success: true; data: PaginatedTransactionsData }
+  | { success: true; data: CapableTransactionPage }
   | {
       success: false;
       error: string;
@@ -1290,12 +1291,11 @@ export async function getTransactionsForUser(
       return decryptAccountNameCached(account);
     };
 
-    const managedTransactionIds = await getManagedDepositoTransactionIds(
-      userId,
-      transactions.map((transaction) => transaction.id)
-    );
+    const transactionIds = transactions.map((transaction) => transaction.id);
+    const managedTransactionIdsPromise = getManagedDepositoTransactionIds(userId, transactionIds);
+    const bankInterestIdsPromise = getBankInterestManagedTransactionIds(userId, transactionIds);
 
-    const decryptedTransactions = await Promise.all(
+    const decryptedTransactionsPromise = Promise.all(
       transactions.map(async (transaction) => {
         const [
           description,
@@ -1340,7 +1340,6 @@ export async function getTransactionsForUser(
 
         return {
           ...transaction,
-          isManagedByDeposito: managedTransactionIds.has(transaction.id),
           account: {
             id: transaction.account.id,
             name: accountName,
@@ -1349,7 +1348,7 @@ export async function getTransactionsForUser(
           toAccount: transaction.toAccount
             ? {
                 id: transaction.toAccount.id,
-                name: toAccountName,
+                name: toAccountName ?? "",
                 type: transaction.toAccount.type,
               }
             : null,
@@ -1361,10 +1360,27 @@ export async function getTransactionsForUser(
       })
     );
 
+    const [managedTransactionIds, bankInterestIds, decryptedTransactions] = await Promise.all([
+      managedTransactionIdsPromise,
+      bankInterestIdsPromise,
+      decryptedTransactionsPromise,
+    ]);
+
     return {
       success: true,
       data: {
-        transactions: decryptedTransactions,
+        transactions: decryptedTransactions.map((transaction) => ({
+          ...transaction,
+          isManagedByDeposito: managedTransactionIds.has(transaction.id),
+          capabilities: deriveMobileTransactionCapabilities({
+            type: transaction.type,
+            accountType: transaction.account.type,
+            toAccountType: transaction.toAccount?.type,
+            hasSplits: transaction.splits.length > 0,
+            isManagedByDeposito: managedTransactionIds.has(transaction.id),
+            isManagedByBankInterest: bankInterestIds.has(transaction.id),
+          }),
+        })),
         total,
         page,
         pageSize,

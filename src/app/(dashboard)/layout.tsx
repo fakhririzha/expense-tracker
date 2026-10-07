@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { CurrencyProvider } from "@/contexts/CurrencyContext";
 import prisma from "@/lib/db";
+import { getRequestNowIso } from "@/lib/server-request-clock";
 import { ONBOARDING_TOUR_TARGETS } from "@/lib/onboarding/constants";
 import { getInitials } from "@/lib/utils";
 
@@ -53,8 +54,7 @@ export default async function DashboardLayout({
   });
 
   const mainCurrency = user?.mainCurrency || "IDR";
-  const metricsNow = new Date();
-  const metricsNowIso = metricsNow.toISOString();
+  const metricsNowIso = getRequestNowIso();
 
   return (
     <QueryProvider>

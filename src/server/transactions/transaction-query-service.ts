@@ -1,4 +1,4 @@
-import { Prisma, type AccountType } from "@/generated/prisma/client/client";
+import { Prisma } from "@/generated/prisma/client/client";
 import { decryptAccountName } from "@/lib/account-crypto";
 import { getManagedDepositoTransactionIds } from "@/lib/deposito-managed-transactions";
 import prisma from "@/lib/db";
@@ -6,7 +6,6 @@ import { isEncryptionConfigurationError } from "@/lib/encryption";
 import { decryptUserField } from "@/lib/user-encryption";
 import {
   deriveMobileTransactionCapabilities,
-  type TransactionCapabilities,
   getBankInterestManagedTransactionIds,
 } from "@/server/transactions/transaction-capabilities";
 import {
@@ -15,33 +14,12 @@ import {
 
 import type {
   PaginatedTransactionsData,
-  TransactionListItem,
   TransactionListQueryParams,
 } from "@/types/transaction-list";
 
-export type CapableTransactionListItem = Omit<
-  TransactionListItem,
-  "account" | "toAccount"
-> & {
-  account: {
-    id: string;
-    name: string;
-    type: AccountType;
-  };
-  toAccount: {
-    id: string;
-    name: string;
-    type: AccountType;
-  } | null;
-  capabilities: TransactionCapabilities;
-};
+import type { CapableTransactionPage } from "@/server/transactions/transaction-query-types";
 
-export type CapableTransactionPage = Omit<
-  PaginatedTransactionsData,
-  "transactions"
-> & {
-  transactions: CapableTransactionListItem[];
-};
+export type { CapableTransactionListItem, CapableTransactionPage } from "@/server/transactions/transaction-query-types";
 
 export async function getTransactionsForUser(
   userId: string,
@@ -50,35 +28,7 @@ export async function getTransactionsForUser(
   | { success: true; data: CapableTransactionPage }
   | { success: false; error: string; data: PaginatedTransactionsData }
 > {
-  const result = await getTransactionsFromService(userId, options);
-  if (!result.success) return result;
-
-  const transactionIds = result.data.transactions.map((transaction) => transaction.id);
-  const bankInterestIds = await getBankInterestManagedTransactionIds(
-    userId,
-    transactionIds
-  );
-
-  return {
-    success: true as const,
-    data: {
-      ...result.data,
-      transactions: result.data.transactions.map((transaction) => ({
-        ...transaction,
-        toAccount: transaction.toAccount
-          ? { ...transaction.toAccount, name: transaction.toAccount.name ?? "" }
-          : null,
-        capabilities: deriveMobileTransactionCapabilities({
-          type: transaction.type,
-          accountType: transaction.account.type,
-          toAccountType: transaction.toAccount?.type,
-          hasSplits: transaction.splits.length > 0,
-          isManagedByDeposito: transaction.isManagedByDeposito,
-          isManagedByBankInterest: bankInterestIds.has(transaction.id),
-        }),
-      })),
-    },
-  };
+  return getTransactionsFromService(userId, options);
 }
 
 async function decryptOptionalField(

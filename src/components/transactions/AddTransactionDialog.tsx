@@ -451,7 +451,7 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
   const [selectedOcrFields, setSelectedOcrFields] = useState<OcrFieldKey[]>([]);
   const ocrScanRequestIdRef = useRef(0);
 
-  const { data: accountsData = [] } = useAccounts();
+  const { data: accountsData = [] } = useAccounts(undefined, { enabled: open });
   const createMutation = useCreateTransaction();
 
   const accounts = accountsData.map(

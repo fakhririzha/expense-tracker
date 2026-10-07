@@ -15,6 +15,7 @@ import {
 import { Progress } from "@/components/ui/progress";
 import {
   useOnboardingProgress,
+  useOnboardingState,
   useUpdateChecklistState,
 } from "@/hooks/useOnboardingQueries";
 import type { OnboardingProgressItem } from "@/actions/onboarding-actions";
@@ -44,11 +45,20 @@ function getStatusIcon(status: "complete" | "skipped" | "incomplete") {
 }
 
 export function GettingStartedCard() {
-  const { data: progress, isLoading, isError } = useOnboardingProgress();
+  const { data: state, isError: isStateError } = useOnboardingState();
+  const { data: progress, isLoading, isError } = useOnboardingProgress({
+    enabled: !!state && !state.hasSkippedOnboarding,
+  });
   const updateChecklistMutation = useUpdateChecklistState();
   const [error, setError] = useState<string | null>(null);
 
-  if (isError || (!isLoading && !progress?.shouldShowChecklist)) {
+  if (
+    !state ||
+    state.hasSkippedOnboarding ||
+    isStateError ||
+    isError ||
+    (!isLoading && !progress?.shouldShowChecklist)
+  ) {
     return null;
   }
 

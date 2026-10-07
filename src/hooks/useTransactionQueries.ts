@@ -11,6 +11,7 @@ import { forecastKeys } from "@/hooks/useCashFlowForecast";
 import { financialInsightKeys } from "@/hooks/useFinancialInsightQueries";
 import { reportKeys } from "@/hooks/useReportQueries";
 import { sidebarMetricsKeys } from "@/hooks/useSidebarMetrics";
+import { seedTransactionListCache } from "@/lib/transaction-list-cache";
 import {
   type PaginatedTransactionsData,
   type TransactionListQueryParams,
@@ -33,11 +34,13 @@ export type TransactionFilters = TransactionListQueryParams;
 // ---------------------------------------------------------------------------
 
 export function useTransactions(filters: TransactionFilters = {}) {
+  const queryClient = useQueryClient();
   return useQuery({
     queryKey: transactionKeys.list(filters),
     queryFn: async (): Promise<PaginatedTransactionsData> => {
       const result = await getTransactions(filters as Parameters<typeof getTransactions>[0]);
       if (!result.success) throw new Error(result.error);
+      seedTransactionListCache(queryClient, filters, result.data);
       return result.data;
     },
     placeholderData: (previousData) => previousData,
